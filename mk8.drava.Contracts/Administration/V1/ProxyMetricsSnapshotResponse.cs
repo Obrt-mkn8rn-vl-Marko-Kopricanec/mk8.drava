@@ -15,7 +15,7 @@ public sealed record ProxyMetricsSnapshotResponse(long AcceptedConnections, long
     public IReadOnlyList<ProxyConfigLintFindingMetricSnapshotResponse> ConfigLintFindings { get; } = ApiResponseList.Copy(ConfigLintFindings);
     public IReadOnlyList<ProxyRouteDryRunFailureSnapshotResponse> RouteMatchDryRunFailures { get; } = ApiResponseList.Copy(RouteMatchDryRunFailures);
 
-    private static IReadOnlyDictionary<string, long> CopyDictionary(IReadOnlyDictionary<string, long> values)
+    private static ReadOnlyDictionary<string, long> CopyDictionary(IReadOnlyDictionary<string, long> values)
     {
         ArgumentNullException.ThrowIfNull(values);
         return new ReadOnlyDictionary<string, long>(new Dictionary<string, long>(values, StringComparer.Ordinal));

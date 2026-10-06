@@ -90,13 +90,13 @@ public sealed class ExchangeRequestBody : IDisposable
         switch (frame.FrameCase)
         {
             case ExchangeFrame.FrameOneofCase.Data:
-                AcceptData(frame.Data);
+                AcceptData(frame.Data ?? throw new InvalidDataException("Request data is missing."));
                 break;
             case ExchangeFrame.FrameOneofCase.Trailers:
-                await AcceptTrailersAsync(frame.Trailers, cancellationToken).ConfigureAwait(false);
+                await AcceptTrailersAsync(frame.Trailers ?? throw new InvalidDataException("Request trailers are missing."), cancellationToken).ConfigureAwait(false);
                 break;
             case ExchangeFrame.FrameOneofCase.Complete:
-                AcceptCompletion(frame.Complete, []);
+                AcceptCompletion(frame.Complete ?? throw new InvalidDataException("Request completion is missing."), []);
                 break;
             case ExchangeFrame.FrameOneofCase.UploadStopped when _stopRequested:
                 Stopped = true;
@@ -132,7 +132,7 @@ public sealed class ExchangeRequestBody : IDisposable
         FrameLimits.ValidateHeaders(trailers.Headers, trailers: true);
         if (!await _reader.MoveNext(cancellationToken).ConfigureAwait(false) || _reader.Current.FrameCase != ExchangeFrame.FrameOneofCase.Complete)
             throw new InvalidDataException("Trailers must be followed by an explicit completion.");
-        AcceptCompletion(_reader.Current.Complete, trailers.Headers);
+        AcceptCompletion(_reader.Current.Complete ?? throw new InvalidDataException("Request completion is missing."), trailers.Headers);
     }
 
     private void AcceptCompletion(Completion completion, IEnumerable<Header> trailers)

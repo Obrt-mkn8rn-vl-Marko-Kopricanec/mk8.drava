@@ -34,7 +34,7 @@ internal sealed class ProxyExchangeService(ProxyRequestPipeline pipeline, ProxyF
         if (!await requestStream.MoveNext(headDeadline.Token).ConfigureAwait(false) || requestStream.Current.FrameCase != ExchangeFrame.FrameOneofCase.Request)
             throw new InvalidDataException("The exchange must start with a request head.");
         headDeadline.CancelAfter(Timeout.InfiniteTimeSpan);
-        var head = requestStream.Current.Request;
+        var head = requestStream.Current.Request ?? throw new InvalidDataException("Request head is missing.");
         FrameLimits.ValidateRequest(head);
         if (!string.Equals(head.GatewayId, bootstrap.GatewayId, StringComparison.Ordinal) || head.GatewayGeneration != 1)
             throw new RpcException(new Status(StatusCode.PermissionDenied, "Presentation identity or generation is not authorized."));

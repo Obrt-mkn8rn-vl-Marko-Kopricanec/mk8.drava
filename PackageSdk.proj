@@ -1,0 +1,16 @@
+<Project DefaultTargets="PackSdk">
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <PackageOutputPath Condition="'$(PackageOutputPath)' == ''">$(MSBuildThisFileDirectory)artifacts/packages</PackageOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <SdkPackageProject Include="mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+    <SdkPackageProject Include="mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
+    <SdkPackageProject Include="mk8.drava.Transport/mk8.drava.Transport.csproj" />
+    <SdkPackageProject Include="mk8.drava.Registration/mk8.drava.Registration.csproj" />
+  </ItemGroup>
+  <Target Name="PackSdk">
+    <MSBuild Projects="@(SdkPackageProject)" Targets="Restore" Properties="Configuration=$(Configuration);RestoreLockedMode=true" />
+    <MSBuild Projects="@(SdkPackageProject)" Targets="Pack" Properties="Configuration=$(Configuration);PackageOutputPath=$(PackageOutputPath)" />
+  </Target>
+</Project>

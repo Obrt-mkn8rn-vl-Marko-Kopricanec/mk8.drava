@@ -31,16 +31,16 @@ public sealed class ExchangeAdapterTests
         foreach (var value in bytes) await decoder.WriteAsync(new byte[] { value }, CancellationToken.None).ConfigureAwait(true);
         await decoder.CompleteAsync(CancellationToken.None).ConfigureAwait(true);
         Assert.False(stopped);
-        var heads = writer.Frames.Where(static frame => frame.Response is not null).Select(static frame => frame.Response).ToArray();
+        var heads = writer.Frames.Where(static frame => frame.Response is not null).Select(static frame => Assert.IsType<ResponseHead>(frame.Response)).ToArray();
         Assert.Equal([103u, 200u], heads.Select(static head => head.StatusCode));
         Assert.DoesNotContain(heads[1].Headers, static header => string.Equals(header.Name, "Transfer-Encoding", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(heads[1].Headers, static header => string.Equals(header.Name, "Connection", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal("abcde", Encoding.UTF8.GetString(writer.Frames.Where(static frame => frame.Data is not null).SelectMany(static frame => frame.Data.Payload.ToByteArray()).ToArray()));
+        Assert.Equal("abcde", Encoding.UTF8.GetString(writer.Frames.Where(static frame => frame.Data is not null).SelectMany(static frame => Assert.IsType<DataFrame>(frame.Data).Payload.ToByteArray()).ToArray()));
         Assert.Collection(writer.Frames.Where(static frame => frame.Trailers is not null),
-            frame => Assert.Collection(frame.Trailers.Headers, header => Assert.Equal("0", header.Value)));
+            frame => Assert.Collection(Assert.IsType<TrailerFrame>(frame.Trailers).Headers, header => Assert.Equal("0", header.Value)));
         using var digest = new BodyDigest();
         digest.Append("abcde"u8);
-        digest.Verify(writer.Frames[^1].Complete);
+        digest.Verify(Assert.IsType<Completion>(writer.Frames[^1].Complete));
     }
 
     [Theory]
@@ -63,8 +63,8 @@ public sealed class ExchangeAdapterTests
         using var decoder = new ExchangeResponseWriter(writer, "HEAD", static _ => ValueTask.CompletedTask);
         await decoder.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 321\r\n\r\n"u8.ToArray(), CancellationToken.None).ConfigureAwait(true);
         await decoder.CompleteAsync(CancellationToken.None).ConfigureAwait(true);
-        Assert.Collection(writer.Frames[0].Response.Headers, header => Assert.Equal("321", header.Value));
-        Assert.Equal(0ul, writer.Frames[^1].Complete.BodyBytes);
+        Assert.Collection(Assert.IsType<ResponseHead>(writer.Frames[0].Response).Headers, header => Assert.Equal("321", header.Value));
+        Assert.Equal(0ul, Assert.IsType<Completion>(writer.Frames[^1].Complete).BodyBytes);
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public sealed class ExchangeAdapterTests
         await stream.WriteAsync("HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\n\r\n"u8.ToArray(), CancellationToken.None).ConfigureAwait(true);
         await stream.CompleteAsync(CancellationToken.None).ConfigureAwait(true);
         Assert.NotNull(writer.Frames[0].StopUpload);
-        Assert.Equal(413u, writer.Frames[1].Response.StatusCode);
+        Assert.Equal(413u, Assert.IsType<ResponseHead>(writer.Frames[1].Response).StatusCode);
         Assert.NotNull(writer.Frames[^1].Complete);
     }
 

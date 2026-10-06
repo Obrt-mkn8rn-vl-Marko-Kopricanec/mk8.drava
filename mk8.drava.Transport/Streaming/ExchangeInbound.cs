@@ -52,14 +52,15 @@ public sealed class ExchangeInbound : IAsyncStreamReader<ExchangeFrame>
                 var frame = _reader.Current;
                 if (frame.FrameCase == ExchangeFrame.FrameOneofCase.Consumed)
                 {
-                    if (frame.Consumed.Direction != Consumed.Types.Direction.Response) throw new InvalidDataException("Invalid consumption direction.");
-                    _writer.ResponseWindow.Return(frame.Consumed.Frames);
+                    var consumed = frame.Consumed ?? throw new InvalidDataException("Consumption frame is missing.");
+                    if (consumed.Direction != Consumed.Types.Direction.Response) throw new InvalidDataException("Invalid consumption direction.");
+                    _writer.ResponseWindow.Return(consumed.Frames);
                     continue;
                 }
                 if (requestEnded) throw new InvalidDataException("Frames follow upload completion.");
                 if (frame.FrameCase == ExchangeFrame.FrameOneofCase.Data)
                 {
-                    FrameLimits.ValidateData(frame.Data);
+                    FrameLimits.ValidateData(frame.Data ?? throw new InvalidDataException("Data frame is missing."));
                     if (Interlocked.Increment(ref _requestFrames) > _maximum) throw new InvalidDataException("Request exceeded its credit window.");
                 }
                 else if (frame.FrameCase is ExchangeFrame.FrameOneofCase.Complete or ExchangeFrame.FrameOneofCase.UploadStopped or ExchangeFrame.FrameOneofCase.Reset)

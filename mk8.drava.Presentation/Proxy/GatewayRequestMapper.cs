@@ -17,7 +17,7 @@ public static class GatewayRequestMapper
         {
             Version = FrameLimits.Version, ExchangeId = Guid.NewGuid().ToString("N"), GatewayId = bootstrap.GatewayId,
             GatewayGeneration = generation, Method = request.Method, RawTarget = context.Features.Get<IHttpRequestFeature>()?.RawTarget ?? "",
-            Authority = request.Host.Value, Scheme = request.Scheme, ClientProtocol = request.Protocol,
+            Authority = request.Host.Value ?? "", Scheme = request.Scheme, ClientProtocol = request.Protocol,
             PeerAddress = context.Connection.RemoteIpAddress?.ToString() ?? "", PeerPort = (uint)context.Connection.RemotePort,
             HasBody = context.Features.Get<IHttpRequestBodyDetectionFeature>()?.CanHaveBody ?? false,
             WantsUpgrade = context.Features.Get<IHttpUpgradeFeature>()?.IsUpgradableRequest ?? false,

@@ -1,0 +1,898 @@
+#nullable enable
+Mk8.Drava.Transport.Clients.ApplicationChannel
+Mk8.Drava.Transport.Clients.ApplicationChannel.ApplicationChannel(Mk8.Drava.Configuration.IpcEndpoint! endpoint) -> void
+Mk8.Drava.Transport.Clients.ApplicationChannel.Credentials.get -> Grpc.Core.Metadata!
+Mk8.Drava.Transport.Clients.ApplicationChannel.Dispose() -> void
+Mk8.Drava.Transport.Clients.ApplicationChannel.Invoker.get -> Grpc.Core.CallInvoker!
+Mk8.Drava.Transport.Discovery.DiscoveryCandidate
+Mk8.Drava.Transport.Discovery.DiscoveryCandidate.<Clone>$() -> Mk8.Drava.Transport.Discovery.DiscoveryCandidate!
+Mk8.Drava.Transport.Discovery.DiscoveryCandidate.Address.get -> string!
+Mk8.Drava.Transport.Discovery.DiscoveryCandidate.DiscoveryCandidate(string! address, int port) -> void
+Mk8.Drava.Transport.Discovery.DiscoveryCandidate.Equals(Mk8.Drava.Transport.Discovery.DiscoveryCandidate? other) -> bool
+Mk8.Drava.Transport.Discovery.DiscoveryCandidate.Port.get -> int
+Mk8.Drava.Transport.Discovery.GatewaySiteAdvertisement
+Mk8.Drava.Transport.Discovery.GatewaySiteAdvertisement.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Mk8.Drava.Transport.Discovery.GatewaySiteAdvertisement.GatewaySiteAdvertisement(Mk8.Drava.Configuration.GatewayBootstrap! bootstrap) -> void
+Mk8.Drava.Transport.Discovery.SiteDiscovery
+Mk8.Drava.Transport.Protocol.BodyDigest
+Mk8.Drava.Transport.Protocol.BodyDigest.Append(System.ReadOnlySpan<byte> data) -> void
+Mk8.Drava.Transport.Protocol.BodyDigest.BodyDigest() -> void
+Mk8.Drava.Transport.Protocol.BodyDigest.Bytes.get -> ulong
+Mk8.Drava.Transport.Protocol.BodyDigest.Complete() -> Mk8.Drava.Transport.Protocol.V1.Completion!
+Mk8.Drava.Transport.Protocol.BodyDigest.Dispose() -> void
+Mk8.Drava.Transport.Protocol.BodyDigest.Verify(Mk8.Drava.Transport.Protocol.V1.Completion! completion) -> void
+Mk8.Drava.Transport.Protocol.FrameLimits
+Mk8.Drava.Transport.Protocol.PresentationPlanDigest
+Mk8.Drava.Transport.Protocol.V1.ApplicationControl
+Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlBase
+Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlBase.ApplicationControlBase() -> void
+Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient
+Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.ApplicationControlClient() -> void
+Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.ApplicationControlClient(Grpc.Core.CallInvoker! callInvoker) -> void
+Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.ApplicationControlClient(Grpc.Core.ChannelBase! channel) -> void
+Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.ApplicationControlClient(Grpc.Core.ClientBase.ClientBaseConfiguration! configuration) -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.ChallengeReply() -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.ChallengeReply(Mk8.Drava.Transport.Protocol.V1.ChallengeReply! other) -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Clone() -> Mk8.Drava.Transport.Protocol.V1.ChallengeReply!
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Equals(Mk8.Drava.Transport.Protocol.V1.ChallengeReply? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.ExpiresUnixSeconds.get -> long
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.ExpiresUnixSeconds.set -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.MergeFrom(Mk8.Drava.Transport.Protocol.V1.ChallengeReply? other) -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Nonce.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Nonce.set -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.SiteId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.SiteId.set -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeReply.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.ChallengeRequest() -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.ChallengeRequest(Mk8.Drava.Transport.Protocol.V1.ChallengeRequest! other) -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.Clone() -> Mk8.Drava.Transport.Protocol.V1.ChallengeRequest!
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.EnrollmentCertificateDer.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.EnrollmentCertificateDer.set -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.Equals(Mk8.Drava.Transport.Protocol.V1.ChallengeRequest? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.MergeFrom(Mk8.Drava.Transport.Protocol.V1.ChallengeRequest? other) -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.Completion
+Mk8.Drava.Transport.Protocol.V1.Completion.BodyBytes.get -> ulong
+Mk8.Drava.Transport.Protocol.V1.Completion.BodyBytes.set -> void
+Mk8.Drava.Transport.Protocol.V1.Completion.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.Completion.Clone() -> Mk8.Drava.Transport.Protocol.V1.Completion!
+Mk8.Drava.Transport.Protocol.V1.Completion.Completion() -> void
+Mk8.Drava.Transport.Protocol.V1.Completion.Completion(Mk8.Drava.Transport.Protocol.V1.Completion! other) -> void
+Mk8.Drava.Transport.Protocol.V1.Completion.Equals(Mk8.Drava.Transport.Protocol.V1.Completion? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.Completion.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.Completion.MergeFrom(Mk8.Drava.Transport.Protocol.V1.Completion? other) -> void
+Mk8.Drava.Transport.Protocol.V1.Completion.Sha256.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.Completion.Sha256.set -> void
+Mk8.Drava.Transport.Protocol.V1.Completion.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.Consumed
+Mk8.Drava.Transport.Protocol.V1.Consumed.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.Consumed.Clone() -> Mk8.Drava.Transport.Protocol.V1.Consumed!
+Mk8.Drava.Transport.Protocol.V1.Consumed.Consumed() -> void
+Mk8.Drava.Transport.Protocol.V1.Consumed.Consumed(Mk8.Drava.Transport.Protocol.V1.Consumed! other) -> void
+Mk8.Drava.Transport.Protocol.V1.Consumed.Direction.get -> Mk8.Drava.Transport.Protocol.V1.Consumed.Types.Direction
+Mk8.Drava.Transport.Protocol.V1.Consumed.Direction.set -> void
+Mk8.Drava.Transport.Protocol.V1.Consumed.Equals(Mk8.Drava.Transport.Protocol.V1.Consumed? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.Consumed.Frames.get -> uint
+Mk8.Drava.Transport.Protocol.V1.Consumed.Frames.set -> void
+Mk8.Drava.Transport.Protocol.V1.Consumed.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.Consumed.MergeFrom(Mk8.Drava.Transport.Protocol.V1.Consumed? other) -> void
+Mk8.Drava.Transport.Protocol.V1.Consumed.Types
+Mk8.Drava.Transport.Protocol.V1.Consumed.Types.Direction
+Mk8.Drava.Transport.Protocol.V1.Consumed.Types.Direction.Request = 0 -> Mk8.Drava.Transport.Protocol.V1.Consumed.Types.Direction
+Mk8.Drava.Transport.Protocol.V1.Consumed.Types.Direction.Response = 1 -> Mk8.Drava.Transport.Protocol.V1.Consumed.Types.Direction
+Mk8.Drava.Transport.Protocol.V1.Consumed.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.AcmeQuery = 12 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.AuditQuery = 11 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.BackupCreate = 15 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.BackupQuery = 16 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.CacheClear = 9 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.CacheQuery = 8 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.ConfigurationLint = 6 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.ConfigurationNormalize = 3 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.ConfigurationQuery = 2 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.ConfigurationReload = 5 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.ConfigurationValidate = 4 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.ControlUnspecified = 0 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.DiagnosticsQuery = 10 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.InstanceRevoke = 23 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.MetricsExport = 14 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.MetricsQuery = 13 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.NodeRevoke = 22 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.PolicyQuery = 19 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.PolicyRollback = 21 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.PolicyUpdate = 20 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.RegistryQuery = 18 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.RestoreValidate = 17 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.RouteDryRun = 7 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlOperation.RuntimeStatus = 1 -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlReply
+Mk8.Drava.Transport.Protocol.V1.ControlReply.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.ControlReply.Clone() -> Mk8.Drava.Transport.Protocol.V1.ControlReply!
+Mk8.Drava.Transport.Protocol.V1.ControlReply.ContentType.get -> string!
+Mk8.Drava.Transport.Protocol.V1.ControlReply.ContentType.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlReply.ControlReply() -> void
+Mk8.Drava.Transport.Protocol.V1.ControlReply.ControlReply(Mk8.Drava.Transport.Protocol.V1.ControlReply! other) -> void
+Mk8.Drava.Transport.Protocol.V1.ControlReply.Equals(Mk8.Drava.Transport.Protocol.V1.ControlReply? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.ControlReply.JsonPayload.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.ControlReply.JsonPayload.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlReply.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.ControlReply.MergeFrom(Mk8.Drava.Transport.Protocol.V1.ControlReply? other) -> void
+Mk8.Drava.Transport.Protocol.V1.ControlReply.SafeReason.get -> string!
+Mk8.Drava.Transport.Protocol.V1.ControlReply.SafeReason.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlReply.StatusCode.get -> uint
+Mk8.Drava.Transport.Protocol.V1.ControlReply.StatusCode.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlReply.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.AdministratorCredential.get -> string!
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.AdministratorCredential.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.Clone() -> Mk8.Drava.Transport.Protocol.V1.ControlRequest!
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.ControlRequest() -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.ControlRequest(Mk8.Drava.Transport.Protocol.V1.ControlRequest! other) -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.Equals(Mk8.Drava.Transport.Protocol.V1.ControlRequest? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.JsonPayload.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.JsonPayload.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.MergeFrom(Mk8.Drava.Transport.Protocol.V1.ControlRequest? other) -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.Operation.get -> Mk8.Drava.Transport.Protocol.V1.ControlOperation
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.Operation.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.PeerAddress.get -> string!
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.PeerAddress.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.RequestId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.RequestId.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.ControlRequest.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.DataFrame
+Mk8.Drava.Transport.Protocol.V1.DataFrame.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.DataFrame.Clone() -> Mk8.Drava.Transport.Protocol.V1.DataFrame!
+Mk8.Drava.Transport.Protocol.V1.DataFrame.DataFrame() -> void
+Mk8.Drava.Transport.Protocol.V1.DataFrame.DataFrame(Mk8.Drava.Transport.Protocol.V1.DataFrame! other) -> void
+Mk8.Drava.Transport.Protocol.V1.DataFrame.Equals(Mk8.Drava.Transport.Protocol.V1.DataFrame? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.DataFrame.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.DataFrame.MergeFrom(Mk8.Drava.Transport.Protocol.V1.DataFrame? other) -> void
+Mk8.Drava.Transport.Protocol.V1.DataFrame.Payload.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.DataFrame.Payload.set -> void
+Mk8.Drava.Transport.Protocol.V1.DataFrame.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.DravaReflection
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.ClearFrame() -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Clone() -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Complete.get -> Mk8.Drava.Transport.Protocol.V1.Completion?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Complete.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Consumed.get -> Mk8.Drava.Transport.Protocol.V1.Consumed?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Consumed.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Data.get -> Mk8.Drava.Transport.Protocol.V1.DataFrame?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Data.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Equals(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.ExchangeFrame() -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.ExchangeFrame(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame! other) -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameCase.get -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.Complete = 5 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.Consumed = 11 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.Data = 3 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.HalfClose = 7 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.None = 0 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.Request = 1 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.Reset = 6 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.Response = 2 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.StopUpload = 8 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.Trailers = 4 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.UploadAllowed = 10 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase.UploadStopped = 9 -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.HalfClose.get -> Mk8.Drava.Transport.Protocol.V1.HalfClose?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.HalfClose.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.MergeFrom(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame? other) -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Request.get -> Mk8.Drava.Transport.Protocol.V1.RequestHead?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Request.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Reset.get -> Mk8.Drava.Transport.Protocol.V1.Reset?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Reset.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Response.get -> Mk8.Drava.Transport.Protocol.V1.ResponseHead?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Response.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.StopUpload.get -> Mk8.Drava.Transport.Protocol.V1.StopUpload?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.StopUpload.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Trailers.get -> Mk8.Drava.Transport.Protocol.V1.TrailerFrame?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Trailers.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.UploadAllowed.get -> Mk8.Drava.Transport.Protocol.V1.UploadAllowed?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.UploadAllowed.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.UploadStopped.get -> Mk8.Drava.Transport.Protocol.V1.UploadStopped?
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.UploadStopped.set -> void
+Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.Clone() -> Mk8.Drava.Transport.Protocol.V1.GatewayIdentity!
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.Equals(Mk8.Drava.Transport.Protocol.V1.GatewayIdentity? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.GatewayId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.GatewayId.set -> void
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.GatewayIdentity() -> void
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.GatewayIdentity(Mk8.Drava.Transport.Protocol.V1.GatewayIdentity! other) -> void
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.MergeFrom(Mk8.Drava.Transport.Protocol.V1.GatewayIdentity? other) -> void
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.HalfClose
+Mk8.Drava.Transport.Protocol.V1.HalfClose.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.HalfClose.Clone() -> Mk8.Drava.Transport.Protocol.V1.HalfClose!
+Mk8.Drava.Transport.Protocol.V1.HalfClose.Equals(Mk8.Drava.Transport.Protocol.V1.HalfClose? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.HalfClose.HalfClose() -> void
+Mk8.Drava.Transport.Protocol.V1.HalfClose.HalfClose(Mk8.Drava.Transport.Protocol.V1.HalfClose! other) -> void
+Mk8.Drava.Transport.Protocol.V1.HalfClose.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.HalfClose.MergeFrom(Mk8.Drava.Transport.Protocol.V1.HalfClose? other) -> void
+Mk8.Drava.Transport.Protocol.V1.HalfClose.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.Header
+Mk8.Drava.Transport.Protocol.V1.Header.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.Header.Clone() -> Mk8.Drava.Transport.Protocol.V1.Header!
+Mk8.Drava.Transport.Protocol.V1.Header.Equals(Mk8.Drava.Transport.Protocol.V1.Header? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.Header.Header() -> void
+Mk8.Drava.Transport.Protocol.V1.Header.Header(Mk8.Drava.Transport.Protocol.V1.Header! other) -> void
+Mk8.Drava.Transport.Protocol.V1.Header.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.Header.MergeFrom(Mk8.Drava.Transport.Protocol.V1.Header? other) -> void
+Mk8.Drava.Transport.Protocol.V1.Header.Name.get -> string!
+Mk8.Drava.Transport.Protocol.V1.Header.Name.set -> void
+Mk8.Drava.Transport.Protocol.V1.Header.Value.get -> string!
+Mk8.Drava.Transport.Protocol.V1.Header.Value.set -> void
+Mk8.Drava.Transport.Protocol.V1.Header.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.NodeRelay
+Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayBase
+Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayBase.NodeRelayBase() -> void
+Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient
+Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient.NodeRelayClient() -> void
+Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient.NodeRelayClient(Grpc.Core.CallInvoker! callInvoker) -> void
+Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient.NodeRelayClient(Grpc.Core.ChannelBase! channel) -> void
+Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient.NodeRelayClient(Grpc.Core.ClientBase.ClientBaseConfiguration! configuration) -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Applied.get -> bool
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Applied.set -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Clone() -> Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment!
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.ContentSha256.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.ContentSha256.set -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Equals(Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.GatewayId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.GatewayId.set -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Generation.get -> ulong
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Generation.set -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.MergeFrom(Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment? other) -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.PlanAcknowledgment() -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.PlanAcknowledgment(Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment! other) -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.SafeReason.get -> string!
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.SafeReason.set -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Address.get -> string!
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Address.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Clone() -> Mk8.Drava.Transport.Protocol.V1.PresentationListener!
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Equals(Mk8.Drava.Transport.Protocol.V1.PresentationListener? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Id.get -> string!
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Id.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.MergeFrom(Mk8.Drava.Transport.Protocol.V1.PresentationListener? other) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Port.get -> uint
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Port.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.PresentationListener() -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.PresentationListener(Mk8.Drava.Transport.Protocol.V1.PresentationListener! other) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Protocols.get -> Google.Protobuf.Collections.RepeatedField<string!>!
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Registration.get -> bool
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Registration.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Tls.get -> bool
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.Tls.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationListener.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Certificates.get -> Google.Protobuf.Collections.RepeatedField<Mk8.Drava.Transport.Protocol.V1.ServingCertificate!>!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Clone() -> Mk8.Drava.Transport.Protocol.V1.PresentationPlan!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ContentSha256.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ContentSha256.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.EnrollmentCaDer.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.EnrollmentCaDer.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Equals(Mk8.Drava.Transport.Protocol.V1.PresentationPlan? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.GatewayId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.GatewayId.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Generation.get -> ulong
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Generation.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Listeners.get -> Google.Protobuf.Collections.RepeatedField<Mk8.Drava.Transport.Protocol.V1.PresentationListener!>!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.MergeFrom(Mk8.Drava.Transport.Protocol.V1.PresentationPlan? other) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.PresentationPlan() -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.PresentationPlan(Mk8.Drava.Transport.Protocol.V1.PresentationPlan! other) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.SiteId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.SiteId.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ValidUntilUnixSeconds.get -> long
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ValidUntilUnixSeconds.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.ProxyExchange
+Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeBase
+Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeBase.ProxyExchangeBase() -> void
+Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient
+Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient.ProxyExchangeClient() -> void
+Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient.ProxyExchangeClient(Grpc.Core.CallInvoker! callInvoker) -> void
+Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient.ProxyExchangeClient(Grpc.Core.ChannelBase! channel) -> void
+Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient.ProxyExchangeClient(Grpc.Core.ClientBase.ClientBaseConfiguration! configuration) -> void
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.Clone() -> Mk8.Drava.Transport.Protocol.V1.RegistrationReply!
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.Equals(Mk8.Drava.Transport.Protocol.V1.RegistrationReply? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.JsonPayload.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.JsonPayload.set -> void
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.MergeFrom(Mk8.Drava.Transport.Protocol.V1.RegistrationReply? other) -> void
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.RegistrationReply() -> void
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.RegistrationReply(Mk8.Drava.Transport.Protocol.V1.RegistrationReply! other) -> void
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.SafeReason.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.SafeReason.set -> void
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.StatusCode.get -> uint
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.StatusCode.set -> void
+Mk8.Drava.Transport.Protocol.V1.RegistrationReply.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.ClearFrame() -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Clone() -> Mk8.Drava.Transport.Protocol.V1.RelayFrame!
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Complete.get -> Mk8.Drava.Transport.Protocol.V1.Completion?
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Complete.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Data.get -> Mk8.Drava.Transport.Protocol.V1.DataFrame?
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Data.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Equals(Mk8.Drava.Transport.Protocol.V1.RelayFrame? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameCase.get -> Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase.Complete = 3 -> Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase.Data = 2 -> Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase.HalfClose = 5 -> Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase.None = 0 -> Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase.Open = 1 -> Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase.Reset = 4 -> Mk8.Drava.Transport.Protocol.V1.RelayFrame.FrameOneofCase
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.HalfClose.get -> Mk8.Drava.Transport.Protocol.V1.HalfClose?
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.HalfClose.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.MergeFrom(Mk8.Drava.Transport.Protocol.V1.RelayFrame? other) -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Open.get -> Mk8.Drava.Transport.Protocol.V1.RelayOpen?
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Open.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.RelayFrame() -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.RelayFrame(Mk8.Drava.Transport.Protocol.V1.RelayFrame! other) -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Reset.get -> Mk8.Drava.Transport.Protocol.V1.Reset?
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.Reset.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayFrame.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.BootId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.BootId.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.Clone() -> Mk8.Drava.Transport.Protocol.V1.RelayOpen!
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.Equals(Mk8.Drava.Transport.Protocol.V1.RelayOpen? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.ExchangeId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.ExchangeId.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.InstanceId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.InstanceId.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.MergeFrom(Mk8.Drava.Transport.Protocol.V1.RelayOpen? other) -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.NodeId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.NodeId.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.RelayOpen() -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.RelayOpen(Mk8.Drava.Transport.Protocol.V1.RelayOpen! other) -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.SiteId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.SiteId.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.RelayOpen.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Authority.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Authority.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ClearContentLength() -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ClientProtocol.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ClientProtocol.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Clone() -> Mk8.Drava.Transport.Protocol.V1.RequestHead!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ContentLength.get -> long
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ContentLength.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Equals(Mk8.Drava.Transport.Protocol.V1.RequestHead? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ExchangeId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ExchangeId.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.GatewayGeneration.get -> ulong
+Mk8.Drava.Transport.Protocol.V1.RequestHead.GatewayGeneration.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.GatewayId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.GatewayId.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.HasBody.get -> bool
+Mk8.Drava.Transport.Protocol.V1.RequestHead.HasBody.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.HasContentLength.get -> bool
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Headers.get -> Google.Protobuf.Collections.RepeatedField<Mk8.Drava.Transport.Protocol.V1.Header!>!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ListenerId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.ListenerId.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.MergeFrom(Mk8.Drava.Transport.Protocol.V1.RequestHead? other) -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Method.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Method.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.PeerAddress.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.PeerAddress.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.PeerPort.get -> uint
+Mk8.Drava.Transport.Protocol.V1.RequestHead.PeerPort.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.RawTarget.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.RawTarget.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.RequestHead() -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.RequestHead(Mk8.Drava.Transport.Protocol.V1.RequestHead! other) -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Scheme.get -> string!
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Scheme.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.StreamWindowFrames.get -> uint
+Mk8.Drava.Transport.Protocol.V1.RequestHead.StreamWindowFrames.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.RequestHead.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.WantsUpgrade.get -> bool
+Mk8.Drava.Transport.Protocol.V1.RequestHead.WantsUpgrade.set -> void
+Mk8.Drava.Transport.Protocol.V1.RequestHead.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.Reset
+Mk8.Drava.Transport.Protocol.V1.Reset.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.Reset.Clone() -> Mk8.Drava.Transport.Protocol.V1.Reset!
+Mk8.Drava.Transport.Protocol.V1.Reset.Code.get -> string!
+Mk8.Drava.Transport.Protocol.V1.Reset.Code.set -> void
+Mk8.Drava.Transport.Protocol.V1.Reset.Equals(Mk8.Drava.Transport.Protocol.V1.Reset? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.Reset.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.Reset.MergeFrom(Mk8.Drava.Transport.Protocol.V1.Reset? other) -> void
+Mk8.Drava.Transport.Protocol.V1.Reset.Reset() -> void
+Mk8.Drava.Transport.Protocol.V1.Reset.Reset(Mk8.Drava.Transport.Protocol.V1.Reset! other) -> void
+Mk8.Drava.Transport.Protocol.V1.Reset.SafeReason.get -> string!
+Mk8.Drava.Transport.Protocol.V1.Reset.SafeReason.set -> void
+Mk8.Drava.Transport.Protocol.V1.Reset.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.ResponseHead
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.Clone() -> Mk8.Drava.Transport.Protocol.V1.ResponseHead!
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.Equals(Mk8.Drava.Transport.Protocol.V1.ResponseHead? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.Headers.get -> Google.Protobuf.Collections.RepeatedField<Mk8.Drava.Transport.Protocol.V1.Header!>!
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.Informational.get -> bool
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.Informational.set -> void
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.MergeFrom(Mk8.Drava.Transport.Protocol.V1.ResponseHead? other) -> void
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.ResponseHead() -> void
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.ResponseHead(Mk8.Drava.Transport.Protocol.V1.ResponseHead! other) -> void
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.StatusCode.get -> uint
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.StatusCode.set -> void
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.Upgrade.get -> bool
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.Upgrade.set -> void
+Mk8.Drava.Transport.Protocol.V1.ResponseHead.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.ServiceRegistry
+Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryBase
+Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryBase.ServiceRegistryBase() -> void
+Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient
+Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.ServiceRegistryClient() -> void
+Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.ServiceRegistryClient(Grpc.Core.CallInvoker! callInvoker) -> void
+Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.ServiceRegistryClient(Grpc.Core.ChannelBase! channel) -> void
+Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.ServiceRegistryClient(Grpc.Core.ClientBase.ClientBaseConfiguration! configuration) -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.CertificateId.get -> string!
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.CertificateId.set -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.Clone() -> Mk8.Drava.Transport.Protocol.V1.ServingCertificate!
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.Equals(Mk8.Drava.Transport.Protocol.V1.ServingCertificate? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.HostNames.get -> Google.Protobuf.Collections.RepeatedField<string!>!
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.MergeFrom(Mk8.Drava.Transport.Protocol.V1.ServingCertificate? other) -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.NotAfterUnixSeconds.get -> long
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.NotAfterUnixSeconds.set -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.Pfx.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.Pfx.set -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.PfxPassword.get -> string!
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.PfxPassword.set -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.ServingCertificate() -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.ServingCertificate(Mk8.Drava.Transport.Protocol.V1.ServingCertificate! other) -> void
+Mk8.Drava.Transport.Protocol.V1.ServingCertificate.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.Clone() -> Mk8.Drava.Transport.Protocol.V1.SignedCommand!
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.EnrollmentCertificateDer.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.EnrollmentCertificateDer.set -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.Equals(Mk8.Drava.Transport.Protocol.V1.SignedCommand? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.JsonPayload.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.JsonPayload.set -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.MergeFrom(Mk8.Drava.Transport.Protocol.V1.SignedCommand? other) -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.Nonce.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.Nonce.set -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.Signature.get -> Google.Protobuf.ByteString!
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.Signature.set -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.SignedCommand() -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.SignedCommand(Mk8.Drava.Transport.Protocol.V1.SignedCommand! other) -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.Version.get -> uint
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.Version.set -> void
+Mk8.Drava.Transport.Protocol.V1.SignedCommand.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.StopUpload
+Mk8.Drava.Transport.Protocol.V1.StopUpload.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.StopUpload.Clone() -> Mk8.Drava.Transport.Protocol.V1.StopUpload!
+Mk8.Drava.Transport.Protocol.V1.StopUpload.Equals(Mk8.Drava.Transport.Protocol.V1.StopUpload? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.StopUpload.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.StopUpload.MergeFrom(Mk8.Drava.Transport.Protocol.V1.StopUpload? other) -> void
+Mk8.Drava.Transport.Protocol.V1.StopUpload.StopUpload() -> void
+Mk8.Drava.Transport.Protocol.V1.StopUpload.StopUpload(Mk8.Drava.Transport.Protocol.V1.StopUpload! other) -> void
+Mk8.Drava.Transport.Protocol.V1.StopUpload.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.Clone() -> Mk8.Drava.Transport.Protocol.V1.TrailerFrame!
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.Equals(Mk8.Drava.Transport.Protocol.V1.TrailerFrame? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.Headers.get -> Google.Protobuf.Collections.RepeatedField<Mk8.Drava.Transport.Protocol.V1.Header!>!
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.MergeFrom(Mk8.Drava.Transport.Protocol.V1.TrailerFrame? other) -> void
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.TrailerFrame() -> void
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.TrailerFrame(Mk8.Drava.Transport.Protocol.V1.TrailerFrame! other) -> void
+Mk8.Drava.Transport.Protocol.V1.TrailerFrame.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed.Clone() -> Mk8.Drava.Transport.Protocol.V1.UploadAllowed!
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed.Equals(Mk8.Drava.Transport.Protocol.V1.UploadAllowed? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed.MergeFrom(Mk8.Drava.Transport.Protocol.V1.UploadAllowed? other) -> void
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed.UploadAllowed() -> void
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed.UploadAllowed(Mk8.Drava.Transport.Protocol.V1.UploadAllowed! other) -> void
+Mk8.Drava.Transport.Protocol.V1.UploadAllowed.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Protocol.V1.UploadStopped
+Mk8.Drava.Transport.Protocol.V1.UploadStopped.CalculateSize() -> int
+Mk8.Drava.Transport.Protocol.V1.UploadStopped.Clone() -> Mk8.Drava.Transport.Protocol.V1.UploadStopped!
+Mk8.Drava.Transport.Protocol.V1.UploadStopped.Equals(Mk8.Drava.Transport.Protocol.V1.UploadStopped? other) -> bool
+Mk8.Drava.Transport.Protocol.V1.UploadStopped.MergeFrom(Google.Protobuf.CodedInputStream! input) -> void
+Mk8.Drava.Transport.Protocol.V1.UploadStopped.MergeFrom(Mk8.Drava.Transport.Protocol.V1.UploadStopped? other) -> void
+Mk8.Drava.Transport.Protocol.V1.UploadStopped.UploadStopped() -> void
+Mk8.Drava.Transport.Protocol.V1.UploadStopped.UploadStopped(Mk8.Drava.Transport.Protocol.V1.UploadStopped! other) -> void
+Mk8.Drava.Transport.Protocol.V1.UploadStopped.WriteTo(Google.Protobuf.CodedOutputStream! output) -> void
+Mk8.Drava.Transport.Registration.RegistrationJson
+Mk8.Drava.Transport.Registration.RegistrationProof
+Mk8.Drava.Transport.Registration.SiteRegistrationChannel
+Mk8.Drava.Transport.Registration.SiteRegistrationChannel.Dispose() -> void
+Mk8.Drava.Transport.Registration.SiteRegistrationChannel.LocalAddress.get -> System.Net.IPAddress?
+Mk8.Drava.Transport.Registration.SiteRegistrationChannel.SiteRegistrationChannel(Mk8.Drava.Configuration.RegistrationSiteTrust! trust, Mk8.Drava.Transport.Discovery.DiscoveryCandidate! candidate) -> void
+Mk8.Drava.Transport.Registration.SiteRegistrationChannel.SubmitAsync(Mk8.Drava.Contracts.Registration.V1.RegistrationCommand! command, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Mk8.Drava.Contracts.Registration.V1.RegistrationStatus!>
+Mk8.Drava.Transport.Registration.SiteRegistrationChannel.VerifySiteAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.CompleteAsync() -> System.Threading.Tasks.Task!
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.Dispose() -> void
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.ExchangeClientWriter(Grpc.Core.IClientStreamWriter<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>! writer, int window, System.Threading.CancellationToken exchangeCancellation) -> void
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.RequestWindow.get -> Mk8.Drava.Transport.Streaming.FrameWindow!
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.WriteAsync(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame! message) -> System.Threading.Tasks.Task!
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.WriteAsync(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame! message, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.WriteOptions.get -> Grpc.Core.WriteOptions?
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.WriteOptions.set -> void
+Mk8.Drava.Transport.Streaming.ExchangeInbound
+Mk8.Drava.Transport.Streaming.ExchangeInbound.AllowClientCompletion() -> void
+Mk8.Drava.Transport.Streaming.ExchangeInbound.Current.get -> Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!
+Mk8.Drava.Transport.Streaming.ExchangeInbound.ExchangeInbound(Grpc.Core.IAsyncStreamReader<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>! reader, Mk8.Drava.Transport.Streaming.ExchangeServerWriter! writer, int window) -> void
+Mk8.Drava.Transport.Streaming.ExchangeInbound.MoveNext(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+Mk8.Drava.Transport.Streaming.ExchangeInbound.PumpAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Mk8.Drava.Transport.Streaming.ExchangeInbound.RequestConsumedAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Mk8.Drava.Transport.Streaming.ExchangeServerWriter
+Mk8.Drava.Transport.Streaming.ExchangeServerWriter.Dispose() -> void
+Mk8.Drava.Transport.Streaming.ExchangeServerWriter.ExchangeServerWriter(Grpc.Core.IServerStreamWriter<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>! writer, int window, System.Threading.CancellationToken exchangeCancellation) -> void
+Mk8.Drava.Transport.Streaming.ExchangeServerWriter.ResponseWindow.get -> Mk8.Drava.Transport.Streaming.FrameWindow!
+Mk8.Drava.Transport.Streaming.ExchangeServerWriter.WriteAsync(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame! message) -> System.Threading.Tasks.Task!
+Mk8.Drava.Transport.Streaming.ExchangeServerWriter.WriteAsync(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame! message, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Mk8.Drava.Transport.Streaming.ExchangeServerWriter.WriteOptions.get -> Grpc.Core.WriteOptions?
+Mk8.Drava.Transport.Streaming.ExchangeServerWriter.WriteOptions.set -> void
+Mk8.Drava.Transport.Streaming.FrameWindow
+Mk8.Drava.Transport.Streaming.FrameWindow.Dispose() -> void
+Mk8.Drava.Transport.Streaming.FrameWindow.FrameWindow(int maximum) -> void
+Mk8.Drava.Transport.Streaming.FrameWindow.Return(uint frames) -> void
+Mk8.Drava.Transport.Streaming.FrameWindow.TakeAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+const Mk8.Drava.Transport.Protocol.FrameLimits.MaximumFrameBytes = 32768 -> int
+const Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderBytes = 32768 -> int
+const Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderCount = 128 -> int
+const Mk8.Drava.Transport.Protocol.FrameLimits.MaximumResetBytes = 256 -> int
+const Mk8.Drava.Transport.Protocol.FrameLimits.MaximumTargetBytes = 8192 -> int
+const Mk8.Drava.Transport.Protocol.FrameLimits.Version = 1 -> uint
+const Mk8.Drava.Transport.Protocol.V1.ChallengeReply.ExpiresUnixSecondsFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ChallengeReply.NonceFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.ChallengeReply.SiteIdFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.ChallengeReply.VersionFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.EnrollmentCertificateDerFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.VersionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.Completion.BodyBytesFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.Completion.Sha256FieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.Consumed.DirectionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.Consumed.FramesFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlReply.ContentTypeFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlReply.JsonPayloadFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlReply.SafeReasonFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlReply.StatusCodeFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlRequest.AdministratorCredentialFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlRequest.JsonPayloadFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlRequest.OperationFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlRequest.PeerAddressFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlRequest.RequestIdFieldNumber = 6 -> int
+const Mk8.Drava.Transport.Protocol.V1.ControlRequest.VersionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.DataFrame.PayloadFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.CompleteFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.ConsumedFieldNumber = 11 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.DataFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.HalfCloseFieldNumber = 7 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.RequestFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.ResetFieldNumber = 6 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.ResponseFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.StopUploadFieldNumber = 8 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.TrailersFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.UploadAllowedFieldNumber = 10 -> int
+const Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.UploadStoppedFieldNumber = 9 -> int
+const Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.GatewayIdFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.VersionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.Header.NameFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.Header.ValueFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.AppliedFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.ContentSha256FieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.GatewayIdFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.GenerationFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.SafeReasonFieldNumber = 6 -> int
+const Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.VersionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationListener.AddressFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationListener.IdFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationListener.PortFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationListener.ProtocolsFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationListener.RegistrationFieldNumber = 6 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationListener.TlsFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.CertificatesFieldNumber = 7 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ContentSha256FieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.EnrollmentCaDerFieldNumber = 8 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.GatewayIdFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.GenerationFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ListenersFieldNumber = 6 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.SiteIdFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ValidUntilUnixSecondsFieldNumber = 9 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.VersionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.RegistrationReply.JsonPayloadFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.RegistrationReply.SafeReasonFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.RegistrationReply.StatusCodeFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayFrame.CompleteFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayFrame.DataFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayFrame.HalfCloseFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayFrame.OpenFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayFrame.ResetFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayOpen.BootIdFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayOpen.ExchangeIdFieldNumber = 6 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayOpen.InstanceIdFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayOpen.NodeIdFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayOpen.SiteIdFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.RelayOpen.VersionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.AuthorityFieldNumber = 7 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.ClientProtocolFieldNumber = 9 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.ContentLengthFieldNumber = 13 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.ExchangeIdFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.GatewayGenerationFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.GatewayIdFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.HasBodyFieldNumber = 14 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.HeadersFieldNumber = 12 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.ListenerIdFieldNumber = 16 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.MethodFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.PeerAddressFieldNumber = 10 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.PeerPortFieldNumber = 11 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.RawTargetFieldNumber = 6 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.SchemeFieldNumber = 8 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.StreamWindowFramesFieldNumber = 17 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.VersionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.RequestHead.WantsUpgradeFieldNumber = 15 -> int
+const Mk8.Drava.Transport.Protocol.V1.Reset.CodeFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.Reset.SafeReasonFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ResponseHead.HeadersFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ResponseHead.InformationalFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.ResponseHead.StatusCodeFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.ResponseHead.UpgradeFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.ServingCertificate.CertificateIdFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.ServingCertificate.HostNamesFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.ServingCertificate.NotAfterUnixSecondsFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.ServingCertificate.PfxFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.ServingCertificate.PfxPasswordFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.SignedCommand.EnrollmentCertificateDerFieldNumber = 2 -> int
+const Mk8.Drava.Transport.Protocol.V1.SignedCommand.JsonPayloadFieldNumber = 4 -> int
+const Mk8.Drava.Transport.Protocol.V1.SignedCommand.NonceFieldNumber = 3 -> int
+const Mk8.Drava.Transport.Protocol.V1.SignedCommand.SignatureFieldNumber = 5 -> int
+const Mk8.Drava.Transport.Protocol.V1.SignedCommand.VersionFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Protocol.V1.TrailerFrame.HeadersFieldNumber = 1 -> int
+const Mk8.Drava.Transport.Registration.RegistrationProof.MaximumCertificateBytes = 16384 -> int
+const Mk8.Drava.Transport.Registration.RegistrationProof.MaximumPayloadBytes = 16384 -> int
+override Mk8.Drava.Transport.Discovery.DiscoveryCandidate.Equals(object? obj) -> bool
+override Mk8.Drava.Transport.Discovery.DiscoveryCandidate.GetHashCode() -> int
+override Mk8.Drava.Transport.Discovery.DiscoveryCandidate.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.NewInstance(Grpc.Core.ClientBase.ClientBaseConfiguration! configuration) -> Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient!
+override Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.ChallengeReply.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.ChallengeReply.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.Completion.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.Completion.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.Completion.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.Consumed.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.Consumed.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.Consumed.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.ControlReply.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.ControlReply.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.ControlReply.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.ControlRequest.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.ControlRequest.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.ControlRequest.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.DataFrame.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.DataFrame.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.DataFrame.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.HalfClose.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.HalfClose.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.HalfClose.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.Header.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.Header.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.Header.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient.NewInstance(Grpc.Core.ClientBase.ClientBaseConfiguration! configuration) -> Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient!
+override Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.PresentationListener.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.PresentationListener.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.PresentationListener.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.PresentationPlan.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient.NewInstance(Grpc.Core.ClientBase.ClientBaseConfiguration! configuration) -> Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient!
+override Mk8.Drava.Transport.Protocol.V1.RegistrationReply.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.RegistrationReply.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.RegistrationReply.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.RelayFrame.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.RelayFrame.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.RelayFrame.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.RelayOpen.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.RelayOpen.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.RelayOpen.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.RequestHead.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.RequestHead.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.RequestHead.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.Reset.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.Reset.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.Reset.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.ResponseHead.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.ResponseHead.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.ResponseHead.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.NewInstance(Grpc.Core.ClientBase.ClientBaseConfiguration! configuration) -> Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient!
+override Mk8.Drava.Transport.Protocol.V1.ServingCertificate.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.ServingCertificate.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.ServingCertificate.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.SignedCommand.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.SignedCommand.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.SignedCommand.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.StopUpload.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.StopUpload.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.StopUpload.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.TrailerFrame.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.TrailerFrame.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.TrailerFrame.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.UploadAllowed.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.UploadAllowed.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.UploadAllowed.ToString() -> string!
+override Mk8.Drava.Transport.Protocol.V1.UploadStopped.Equals(object? other) -> bool
+override Mk8.Drava.Transport.Protocol.V1.UploadStopped.GetHashCode() -> int
+override Mk8.Drava.Transport.Protocol.V1.UploadStopped.ToString() -> string!
+static Mk8.Drava.Transport.Discovery.DiscoveryCandidate.operator !=(Mk8.Drava.Transport.Discovery.DiscoveryCandidate? left, Mk8.Drava.Transport.Discovery.DiscoveryCandidate? right) -> bool
+static Mk8.Drava.Transport.Discovery.DiscoveryCandidate.operator ==(Mk8.Drava.Transport.Discovery.DiscoveryCandidate? left, Mk8.Drava.Transport.Discovery.DiscoveryCandidate? right) -> bool
+static Mk8.Drava.Transport.Discovery.SiteDiscovery.FindAsync(string! siteId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Mk8.Drava.Transport.Discovery.DiscoveryCandidate!>!>
+static Mk8.Drava.Transport.Protocol.FrameLimits.ValidateData(Mk8.Drava.Transport.Protocol.V1.DataFrame! data) -> void
+static Mk8.Drava.Transport.Protocol.FrameLimits.ValidateHeaders(System.Collections.Generic.IEnumerable<Mk8.Drava.Transport.Protocol.V1.Header!>! headers, bool trailers) -> void
+static Mk8.Drava.Transport.Protocol.FrameLimits.ValidateRequest(Mk8.Drava.Transport.Protocol.V1.RequestHead! head) -> void
+static Mk8.Drava.Transport.Protocol.FrameLimits.ValidateResponse(Mk8.Drava.Transport.Protocol.V1.ResponseHead! head) -> void
+static Mk8.Drava.Transport.Protocol.PresentationPlanDigest.Compute(Mk8.Drava.Transport.Protocol.V1.PresentationPlan! plan) -> byte[]!
+static Mk8.Drava.Transport.Protocol.PresentationPlanDigest.Verify(Mk8.Drava.Transport.Protocol.V1.PresentationPlan! plan) -> bool
+static Mk8.Drava.Transport.Protocol.V1.ApplicationControl.BindService(Grpc.Core.ServiceBinderBase! serviceBinder, Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlBase? serviceImpl) -> void
+static Mk8.Drava.Transport.Protocol.V1.ApplicationControl.BindService(Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlBase? serviceImpl) -> Grpc.Core.ServerServiceDefinition!
+static Mk8.Drava.Transport.Protocol.V1.ApplicationControl.Descriptor.get -> Google.Protobuf.Reflection.ServiceDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ChallengeReply.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.ChallengeReply!>!
+static Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ChallengeRequest.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.ChallengeRequest!>!
+static Mk8.Drava.Transport.Protocol.V1.Completion.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.Completion.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.Completion!>!
+static Mk8.Drava.Transport.Protocol.V1.Consumed.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.Consumed.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.Consumed!>!
+static Mk8.Drava.Transport.Protocol.V1.ControlReply.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ControlReply.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.ControlReply!>!
+static Mk8.Drava.Transport.Protocol.V1.ControlRequest.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ControlRequest.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.ControlRequest!>!
+static Mk8.Drava.Transport.Protocol.V1.DataFrame.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.DataFrame.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.DataFrame!>!
+static Mk8.Drava.Transport.Protocol.V1.DravaReflection.Descriptor.get -> Google.Protobuf.Reflection.FileDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ExchangeFrame.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>!
+static Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.GatewayIdentity.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.GatewayIdentity!>!
+static Mk8.Drava.Transport.Protocol.V1.HalfClose.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.HalfClose.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.HalfClose!>!
+static Mk8.Drava.Transport.Protocol.V1.Header.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.Header.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.Header!>!
+static Mk8.Drava.Transport.Protocol.V1.NodeRelay.BindService(Grpc.Core.ServiceBinderBase! serviceBinder, Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayBase? serviceImpl) -> void
+static Mk8.Drava.Transport.Protocol.V1.NodeRelay.BindService(Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayBase? serviceImpl) -> Grpc.Core.ServerServiceDefinition!
+static Mk8.Drava.Transport.Protocol.V1.NodeRelay.Descriptor.get -> Google.Protobuf.Reflection.ServiceDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment!>!
+static Mk8.Drava.Transport.Protocol.V1.PresentationListener.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.PresentationListener.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.PresentationListener!>!
+static Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.PresentationPlan!>!
+static Mk8.Drava.Transport.Protocol.V1.ProxyExchange.BindService(Grpc.Core.ServiceBinderBase! serviceBinder, Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeBase? serviceImpl) -> void
+static Mk8.Drava.Transport.Protocol.V1.ProxyExchange.BindService(Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeBase? serviceImpl) -> Grpc.Core.ServerServiceDefinition!
+static Mk8.Drava.Transport.Protocol.V1.ProxyExchange.Descriptor.get -> Google.Protobuf.Reflection.ServiceDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.RegistrationReply.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.RegistrationReply.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.RegistrationReply!>!
+static Mk8.Drava.Transport.Protocol.V1.RelayFrame.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.RelayFrame.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.RelayFrame!>!
+static Mk8.Drava.Transport.Protocol.V1.RelayOpen.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.RelayOpen.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.RelayOpen!>!
+static Mk8.Drava.Transport.Protocol.V1.RequestHead.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.RequestHead.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.RequestHead!>!
+static Mk8.Drava.Transport.Protocol.V1.Reset.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.Reset.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.Reset!>!
+static Mk8.Drava.Transport.Protocol.V1.ResponseHead.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ResponseHead.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.ResponseHead!>!
+static Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.BindService(Grpc.Core.ServiceBinderBase! serviceBinder, Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryBase? serviceImpl) -> void
+static Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.BindService(Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryBase? serviceImpl) -> Grpc.Core.ServerServiceDefinition!
+static Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.Descriptor.get -> Google.Protobuf.Reflection.ServiceDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ServingCertificate.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.ServingCertificate.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.ServingCertificate!>!
+static Mk8.Drava.Transport.Protocol.V1.SignedCommand.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.SignedCommand.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.SignedCommand!>!
+static Mk8.Drava.Transport.Protocol.V1.StopUpload.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.StopUpload.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.StopUpload!>!
+static Mk8.Drava.Transport.Protocol.V1.TrailerFrame.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.TrailerFrame.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.TrailerFrame!>!
+static Mk8.Drava.Transport.Protocol.V1.UploadAllowed.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.UploadAllowed.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.UploadAllowed!>!
+static Mk8.Drava.Transport.Protocol.V1.UploadStopped.Descriptor.get -> Google.Protobuf.Reflection.MessageDescriptor!
+static Mk8.Drava.Transport.Protocol.V1.UploadStopped.Parser.get -> Google.Protobuf.MessageParser<Mk8.Drava.Transport.Protocol.V1.UploadStopped!>!
+static Mk8.Drava.Transport.Registration.RegistrationJson.Decode(System.ReadOnlyMemory<byte> bytes) -> Mk8.Drava.Contracts.Registration.V1.RegistrationCommand!
+static Mk8.Drava.Transport.Registration.RegistrationJson.DecodeStatus(System.ReadOnlySpan<byte> bytes) -> Mk8.Drava.Contracts.Registration.V1.RegistrationStatus!
+static Mk8.Drava.Transport.Registration.RegistrationJson.Encode(Mk8.Drava.Contracts.Registration.V1.RegistrationCommand! command) -> byte[]!
+static Mk8.Drava.Transport.Registration.RegistrationJson.EncodeStatus(Mk8.Drava.Contracts.Registration.V1.RegistrationStatus! status) -> byte[]!
+static Mk8.Drava.Transport.Registration.RegistrationProof.Digest(string! siteId, uint version, System.ReadOnlySpan<byte> nonce, System.ReadOnlySpan<byte> payload) -> byte[]!
+static Mk8.Drava.Transport.Registration.RegistrationProof.IsP256(System.Security.Cryptography.ECDsa! key) -> bool
+static Mk8.Drava.Transport.Registration.RegistrationProof.Sign(System.Security.Cryptography.ECDsa! privateKey, string! siteId, uint version, System.ReadOnlySpan<byte> nonce, System.ReadOnlySpan<byte> payload) -> byte[]!
+static Mk8.Drava.Transport.Registration.RegistrationProof.Verify(System.Security.Cryptography.ECDsa! publicKey, string! siteId, uint version, System.ReadOnlySpan<byte> nonce, System.ReadOnlySpan<byte> payload, System.ReadOnlySpan<byte> signature) -> bool
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlBase.AcknowledgePlan(Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment! request, Grpc.Core.ServerCallContext! context) -> System.Threading.Tasks.Task<Mk8.Drava.Transport.Protocol.V1.ControlReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlBase.Execute(Mk8.Drava.Transport.Protocol.V1.ControlRequest! request, Grpc.Core.ServerCallContext! context) -> System.Threading.Tasks.Task<Mk8.Drava.Transport.Protocol.V1.ControlReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlBase.GatewayPlan(Mk8.Drava.Transport.Protocol.V1.GatewayIdentity! request, Grpc.Core.ServerCallContext! context) -> System.Threading.Tasks.Task<Mk8.Drava.Transport.Protocol.V1.PresentationPlan!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.AcknowledgePlan(Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment! request, Grpc.Core.CallOptions options) -> Mk8.Drava.Transport.Protocol.V1.ControlReply!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.AcknowledgePlan(Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Mk8.Drava.Transport.Protocol.V1.ControlReply!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.AcknowledgePlanAsync(Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment! request, Grpc.Core.CallOptions options) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.ControlReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.AcknowledgePlanAsync(Mk8.Drava.Transport.Protocol.V1.PlanAcknowledgment! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.ControlReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.Execute(Mk8.Drava.Transport.Protocol.V1.ControlRequest! request, Grpc.Core.CallOptions options) -> Mk8.Drava.Transport.Protocol.V1.ControlReply!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.Execute(Mk8.Drava.Transport.Protocol.V1.ControlRequest! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Mk8.Drava.Transport.Protocol.V1.ControlReply!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.ExecuteAsync(Mk8.Drava.Transport.Protocol.V1.ControlRequest! request, Grpc.Core.CallOptions options) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.ControlReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.ExecuteAsync(Mk8.Drava.Transport.Protocol.V1.ControlRequest! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.ControlReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.GatewayPlan(Mk8.Drava.Transport.Protocol.V1.GatewayIdentity! request, Grpc.Core.CallOptions options) -> Mk8.Drava.Transport.Protocol.V1.PresentationPlan!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.GatewayPlan(Mk8.Drava.Transport.Protocol.V1.GatewayIdentity! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Mk8.Drava.Transport.Protocol.V1.PresentationPlan!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.GatewayPlanAsync(Mk8.Drava.Transport.Protocol.V1.GatewayIdentity! request, Grpc.Core.CallOptions options) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.PresentationPlan!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ApplicationControl.ApplicationControlClient.GatewayPlanAsync(Mk8.Drava.Transport.Protocol.V1.GatewayIdentity! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.PresentationPlan!>!
+virtual Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayBase.Relay(Grpc.Core.IAsyncStreamReader<Mk8.Drava.Transport.Protocol.V1.RelayFrame!>! requestStream, Grpc.Core.IServerStreamWriter<Mk8.Drava.Transport.Protocol.V1.RelayFrame!>! responseStream, Grpc.Core.ServerCallContext! context) -> System.Threading.Tasks.Task!
+virtual Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient.Relay(Grpc.Core.CallOptions options) -> Grpc.Core.AsyncDuplexStreamingCall<Mk8.Drava.Transport.Protocol.V1.RelayFrame!, Mk8.Drava.Transport.Protocol.V1.RelayFrame!>!
+virtual Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient.Relay(Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Grpc.Core.AsyncDuplexStreamingCall<Mk8.Drava.Transport.Protocol.V1.RelayFrame!, Mk8.Drava.Transport.Protocol.V1.RelayFrame!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeBase.Exchange(Grpc.Core.IAsyncStreamReader<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>! requestStream, Grpc.Core.IServerStreamWriter<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>! responseStream, Grpc.Core.ServerCallContext! context) -> System.Threading.Tasks.Task!
+virtual Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient.Exchange(Grpc.Core.CallOptions options) -> Grpc.Core.AsyncDuplexStreamingCall<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!, Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ProxyExchange.ProxyExchangeClient.Exchange(Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Grpc.Core.AsyncDuplexStreamingCall<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!, Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryBase.Challenge(Mk8.Drava.Transport.Protocol.V1.ChallengeRequest! request, Grpc.Core.ServerCallContext! context) -> System.Threading.Tasks.Task<Mk8.Drava.Transport.Protocol.V1.ChallengeReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryBase.Submit(Mk8.Drava.Transport.Protocol.V1.SignedCommand! request, Grpc.Core.ServerCallContext! context) -> System.Threading.Tasks.Task<Mk8.Drava.Transport.Protocol.V1.RegistrationReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.Challenge(Mk8.Drava.Transport.Protocol.V1.ChallengeRequest! request, Grpc.Core.CallOptions options) -> Mk8.Drava.Transport.Protocol.V1.ChallengeReply!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.Challenge(Mk8.Drava.Transport.Protocol.V1.ChallengeRequest! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Mk8.Drava.Transport.Protocol.V1.ChallengeReply!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.ChallengeAsync(Mk8.Drava.Transport.Protocol.V1.ChallengeRequest! request, Grpc.Core.CallOptions options) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.ChallengeReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.ChallengeAsync(Mk8.Drava.Transport.Protocol.V1.ChallengeRequest! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.ChallengeReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.Submit(Mk8.Drava.Transport.Protocol.V1.SignedCommand! request, Grpc.Core.CallOptions options) -> Mk8.Drava.Transport.Protocol.V1.RegistrationReply!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.Submit(Mk8.Drava.Transport.Protocol.V1.SignedCommand! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Mk8.Drava.Transport.Protocol.V1.RegistrationReply!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.SubmitAsync(Mk8.Drava.Transport.Protocol.V1.SignedCommand! request, Grpc.Core.CallOptions options) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.RegistrationReply!>!
+virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.SubmitAsync(Mk8.Drava.Transport.Protocol.V1.SignedCommand! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.RegistrationReply!>!

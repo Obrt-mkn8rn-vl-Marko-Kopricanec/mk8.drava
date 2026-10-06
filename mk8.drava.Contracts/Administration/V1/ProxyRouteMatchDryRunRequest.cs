@@ -28,7 +28,7 @@ public sealed record ProxyRouteMatchDryRunRequest
     public string? ListenerName { get; }
     public string? Protocol { get; }
 
-    private static IReadOnlyDictionary<string, string?>? CopyHeaders(IReadOnlyDictionary<string, string?>? headers)
+    private static ReadOnlyDictionary<string, string?>? CopyHeaders(IReadOnlyDictionary<string, string?>? headers)
     {
         return headers is null ? null : new ReadOnlyDictionary<string, string?>(new Dictionary<string, string?>(headers, StringComparer.OrdinalIgnoreCase));
     }

@@ -32,8 +32,9 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
         switch (frame.FrameCase)
         {
             case ExchangeFrame.FrameOneofCase.Consumed:
-                if (frame.Consumed.Direction != Consumed.Types.Direction.Request) throw new InvalidDataException("Invalid credit direction.");
-                writer.RequestWindow.Return(frame.Consumed.Frames);
+                var consumed = frame.Consumed ?? throw new InvalidDataException("Consumption frame is missing.");
+                if (consumed.Direction != Consumed.Types.Direction.Request) throw new InvalidDataException("Invalid credit direction.");
+                writer.RequestWindow.Return(consumed.Frames);
                 break;
             case ExchangeFrame.FrameOneofCase.UploadAllowed:
                 if (_finalHead || _uploadAllowed || _uploadStopped) throw new InvalidDataException("Unexpected upload allowance.");
@@ -46,19 +47,20 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
                 await stopUpload().ConfigureAwait(false);
                 break;
             case ExchangeFrame.FrameOneofCase.Response:
-                await HeadAsync(frame.Response).ConfigureAwait(false);
+                await HeadAsync(frame.Response ?? throw new InvalidDataException("Response head is missing.")).ConfigureAwait(false);
                 break;
             case ExchangeFrame.FrameOneofCase.Data:
-                await DataAsync(frame.Data, digest).ConfigureAwait(false);
+                await DataAsync(frame.Data ?? throw new InvalidDataException("Response data is missing."), digest).ConfigureAwait(false);
                 break;
             case ExchangeFrame.FrameOneofCase.Trailers:
                 if (!_finalHead || _trailers is not null) throw new InvalidDataException("Unexpected response trailers.");
-                FrameLimits.ValidateHeaders(frame.Trailers.Headers, trailers: true);
-                _trailers = frame.Trailers;
+                var trailers = frame.Trailers ?? throw new InvalidDataException("Response trailers are missing.");
+                FrameLimits.ValidateHeaders(trailers.Headers, trailers: true);
+                _trailers = trailers;
                 break;
             case ExchangeFrame.FrameOneofCase.Complete:
                 if (!_finalHead) throw new InvalidDataException("Response completion has no final head.");
-                digest.Verify(frame.Complete);
+                digest.Verify(frame.Complete ?? throw new InvalidDataException("Response completion is missing."));
                 ApplyTrailers(_trailers);
                 _complete = true;
                 await writer.CompleteAsync().ConfigureAwait(false);

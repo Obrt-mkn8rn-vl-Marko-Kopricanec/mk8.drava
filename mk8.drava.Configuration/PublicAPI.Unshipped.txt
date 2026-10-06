@@ -1,0 +1,145 @@
+#nullable enable
+Mk8.Drava.Configuration.ApplicationBootstrap
+Mk8.Drava.Configuration.ApplicationBootstrap.<Clone>$() -> Mk8.Drava.Configuration.ApplicationBootstrap!
+Mk8.Drava.Configuration.ApplicationBootstrap.ApplicationBootstrap() -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.Controller.get -> Mk8.Drava.Configuration.ControllerBootstrap?
+Mk8.Drava.Configuration.ApplicationBootstrap.Controller.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.Equals(Mk8.Drava.Configuration.ApplicationBootstrap? other) -> bool
+Mk8.Drava.Configuration.ApplicationBootstrap.GatewayId.get -> string!
+Mk8.Drava.Configuration.ApplicationBootstrap.GatewayId.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.HttpPort.get -> int
+Mk8.Drava.Configuration.ApplicationBootstrap.HttpPort.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.HttpsPort.get -> int
+Mk8.Drava.Configuration.ApplicationBootstrap.HttpsPort.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.IngressAddress.get -> string!
+Mk8.Drava.Configuration.ApplicationBootstrap.IngressAddress.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.Listen.get -> Mk8.Drava.Configuration.IpcEndpoint!
+Mk8.Drava.Configuration.ApplicationBootstrap.Listen.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.MaxConcurrentExchanges.get -> int
+Mk8.Drava.Configuration.ApplicationBootstrap.MaxConcurrentExchanges.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.NodeId.get -> string!
+Mk8.Drava.Configuration.ApplicationBootstrap.NodeId.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.SchemaVersion.get -> int
+Mk8.Drava.Configuration.ApplicationBootstrap.SchemaVersion.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.SiteId.get -> string!
+Mk8.Drava.Configuration.ApplicationBootstrap.SiteId.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.StateDirectory.get -> string!
+Mk8.Drava.Configuration.ApplicationBootstrap.StateDirectory.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.Validate() -> void
+Mk8.Drava.Configuration.BootstrapFile
+Mk8.Drava.Configuration.ControllerBootstrap
+Mk8.Drava.Configuration.ControllerBootstrap.<Clone>$() -> Mk8.Drava.Configuration.ControllerBootstrap!
+Mk8.Drava.Configuration.ControllerBootstrap.CertificateAuthorityPath.get -> string!
+Mk8.Drava.Configuration.ControllerBootstrap.CertificateAuthorityPath.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.ControllerBootstrap() -> void
+Mk8.Drava.Configuration.ControllerBootstrap.DnsServerAddress.get -> string!
+Mk8.Drava.Configuration.ControllerBootstrap.DnsServerAddress.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.DnsServerPort.get -> int
+Mk8.Drava.Configuration.ControllerBootstrap.DnsServerPort.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.Domain.get -> string!
+Mk8.Drava.Configuration.ControllerBootstrap.Domain.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.EnrollmentRootFingerprint.get -> string!
+Mk8.Drava.Configuration.ControllerBootstrap.EnrollmentRootFingerprint.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.Equals(Mk8.Drava.Configuration.ControllerBootstrap? other) -> bool
+Mk8.Drava.Configuration.ControllerBootstrap.PublicAddresses.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Mk8.Drava.Configuration.ControllerBootstrap.PublicAddresses.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.RegistrationPort.get -> int
+Mk8.Drava.Configuration.ControllerBootstrap.RegistrationPort.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.Validate() -> void
+Mk8.Drava.Configuration.GatewayBootstrap
+Mk8.Drava.Configuration.GatewayBootstrap.<Clone>$() -> Mk8.Drava.Configuration.GatewayBootstrap!
+Mk8.Drava.Configuration.GatewayBootstrap.Application.get -> Mk8.Drava.Configuration.IpcEndpoint!
+Mk8.Drava.Configuration.GatewayBootstrap.Application.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.BindAddress.get -> string!
+Mk8.Drava.Configuration.GatewayBootstrap.BindAddress.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.DiscoveryEnabled.get -> bool
+Mk8.Drava.Configuration.GatewayBootstrap.DiscoveryEnabled.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.EnrollmentRootFingerprint.get -> string!
+Mk8.Drava.Configuration.GatewayBootstrap.EnrollmentRootFingerprint.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.Equals(Mk8.Drava.Configuration.GatewayBootstrap? other) -> bool
+Mk8.Drava.Configuration.GatewayBootstrap.FrameBytes.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.FrameBytes.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.GatewayBootstrap() -> void
+Mk8.Drava.Configuration.GatewayBootstrap.GatewayId.get -> string!
+Mk8.Drava.Configuration.GatewayBootstrap.GatewayId.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.HttpPort.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.HttpPort.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.HttpsPort.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.HttpsPort.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.MaxConcurrentExchanges.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.MaxConcurrentExchanges.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.MaxHeaderBytes.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.MaxHeaderBytes.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.MaxRequestBodyBytes.get -> long
+Mk8.Drava.Configuration.GatewayBootstrap.MaxRequestBodyBytes.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.RegistrationPort.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.RegistrationPort.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.SchemaVersion.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.SchemaVersion.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.SiteId.get -> string!
+Mk8.Drava.Configuration.GatewayBootstrap.SiteId.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.StateDirectory.get -> string!
+Mk8.Drava.Configuration.GatewayBootstrap.StateDirectory.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.StreamWindowFrames.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.StreamWindowFrames.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.Validate() -> void
+Mk8.Drava.Configuration.IpcEndpoint
+Mk8.Drava.Configuration.IpcEndpoint.<Clone>$() -> Mk8.Drava.Configuration.IpcEndpoint!
+Mk8.Drava.Configuration.IpcEndpoint.ClientCertificatePath.get -> string!
+Mk8.Drava.Configuration.IpcEndpoint.ClientCertificatePath.init -> void
+Mk8.Drava.Configuration.IpcEndpoint.Equals(Mk8.Drava.Configuration.IpcEndpoint? other) -> bool
+Mk8.Drava.Configuration.IpcEndpoint.HttpsAddress.get -> string!
+Mk8.Drava.Configuration.IpcEndpoint.HttpsAddress.init -> void
+Mk8.Drava.Configuration.IpcEndpoint.IdentityTokenPath.get -> string!
+Mk8.Drava.Configuration.IpcEndpoint.IdentityTokenPath.init -> void
+Mk8.Drava.Configuration.IpcEndpoint.IpcEndpoint() -> void
+Mk8.Drava.Configuration.IpcEndpoint.NamedPipeName.get -> string!
+Mk8.Drava.Configuration.IpcEndpoint.NamedPipeName.init -> void
+Mk8.Drava.Configuration.IpcEndpoint.TrustedCertificatePath.get -> string!
+Mk8.Drava.Configuration.IpcEndpoint.TrustedCertificatePath.init -> void
+Mk8.Drava.Configuration.IpcEndpoint.UnixSocketPath.get -> string!
+Mk8.Drava.Configuration.IpcEndpoint.UnixSocketPath.init -> void
+Mk8.Drava.Configuration.IpcEndpoint.Validate() -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust
+Mk8.Drava.Configuration.RegistrationSiteTrust.<Clone>$() -> Mk8.Drava.Configuration.RegistrationSiteTrust!
+Mk8.Drava.Configuration.RegistrationSiteTrust.Domain.get -> string!
+Mk8.Drava.Configuration.RegistrationSiteTrust.Domain.init -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust.Equals(Mk8.Drava.Configuration.RegistrationSiteTrust? other) -> bool
+Mk8.Drava.Configuration.RegistrationSiteTrust.NodeCertificatePath.get -> string!
+Mk8.Drava.Configuration.RegistrationSiteTrust.NodeCertificatePath.init -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust.RegistrationSiteTrust() -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust.RootCertificatePath.get -> string!
+Mk8.Drava.Configuration.RegistrationSiteTrust.RootCertificatePath.init -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust.RootFingerprint.get -> string!
+Mk8.Drava.Configuration.RegistrationSiteTrust.RootFingerprint.init -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust.SiteId.get -> string!
+Mk8.Drava.Configuration.RegistrationSiteTrust.SiteId.init -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust.Validate() -> void
+override Mk8.Drava.Configuration.ApplicationBootstrap.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.ApplicationBootstrap.GetHashCode() -> int
+override Mk8.Drava.Configuration.ApplicationBootstrap.ToString() -> string!
+override Mk8.Drava.Configuration.ControllerBootstrap.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.ControllerBootstrap.GetHashCode() -> int
+override Mk8.Drava.Configuration.ControllerBootstrap.ToString() -> string!
+override Mk8.Drava.Configuration.GatewayBootstrap.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.GatewayBootstrap.GetHashCode() -> int
+override Mk8.Drava.Configuration.GatewayBootstrap.ToString() -> string!
+override Mk8.Drava.Configuration.IpcEndpoint.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.IpcEndpoint.GetHashCode() -> int
+override Mk8.Drava.Configuration.IpcEndpoint.ToString() -> string!
+override Mk8.Drava.Configuration.RegistrationSiteTrust.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.RegistrationSiteTrust.GetHashCode() -> int
+override Mk8.Drava.Configuration.RegistrationSiteTrust.ToString() -> string!
+static Mk8.Drava.Configuration.ApplicationBootstrap.operator !=(Mk8.Drava.Configuration.ApplicationBootstrap? left, Mk8.Drava.Configuration.ApplicationBootstrap? right) -> bool
+static Mk8.Drava.Configuration.ApplicationBootstrap.operator ==(Mk8.Drava.Configuration.ApplicationBootstrap? left, Mk8.Drava.Configuration.ApplicationBootstrap? right) -> bool
+static Mk8.Drava.Configuration.BootstrapFile.LoadAsync<T>(string! path, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T!>!
+static Mk8.Drava.Configuration.BootstrapFile.Serialize<T>(T value) -> string!
+static Mk8.Drava.Configuration.ControllerBootstrap.operator !=(Mk8.Drava.Configuration.ControllerBootstrap? left, Mk8.Drava.Configuration.ControllerBootstrap? right) -> bool
+static Mk8.Drava.Configuration.ControllerBootstrap.operator ==(Mk8.Drava.Configuration.ControllerBootstrap? left, Mk8.Drava.Configuration.ControllerBootstrap? right) -> bool
+static Mk8.Drava.Configuration.GatewayBootstrap.operator !=(Mk8.Drava.Configuration.GatewayBootstrap? left, Mk8.Drava.Configuration.GatewayBootstrap? right) -> bool
+static Mk8.Drava.Configuration.GatewayBootstrap.operator ==(Mk8.Drava.Configuration.GatewayBootstrap? left, Mk8.Drava.Configuration.GatewayBootstrap? right) -> bool
+static Mk8.Drava.Configuration.IpcEndpoint.operator !=(Mk8.Drava.Configuration.IpcEndpoint? left, Mk8.Drava.Configuration.IpcEndpoint? right) -> bool
+static Mk8.Drava.Configuration.IpcEndpoint.operator ==(Mk8.Drava.Configuration.IpcEndpoint? left, Mk8.Drava.Configuration.IpcEndpoint? right) -> bool
+static Mk8.Drava.Configuration.RegistrationSiteTrust.RequireLabel(string! value) -> void
+static Mk8.Drava.Configuration.RegistrationSiteTrust.operator !=(Mk8.Drava.Configuration.RegistrationSiteTrust? left, Mk8.Drava.Configuration.RegistrationSiteTrust? right) -> bool
+static Mk8.Drava.Configuration.RegistrationSiteTrust.operator ==(Mk8.Drava.Configuration.RegistrationSiteTrust? left, Mk8.Drava.Configuration.RegistrationSiteTrust? right) -> bool

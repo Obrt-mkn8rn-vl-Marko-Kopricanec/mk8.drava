@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><RootNamespace>Mk8.Drava.Transport</RootNamespace></PropertyGroup>
+  <PropertyGroup><RootNamespace>Mk8.Drava.Transport</RootNamespace><IsPackable>true</IsPackable></PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../mk8.drava.BuildTools/mk8.drava.BuildTools.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
     <ProjectReference Include="../mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
     <PackageReference Include="Grpc.Net.Client" />
@@ -8,6 +9,10 @@
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
     <PackageReference Include="Haukcode.Mdns" />
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     <Protobuf Include="../mk8.drava.Contracts/Proxy/V1/drava.proto" Link="Protocol/drava.proto" GrpcServices="Both" />
   </ItemGroup>
+  <Import Project="ProtocolNullability.targets" />
 </Project>

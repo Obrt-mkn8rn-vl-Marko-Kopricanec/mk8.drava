@@ -79,6 +79,7 @@ public sealed class ProjectBoundaryTests
         {
             if (!string.Equals(Path.GetDirectoryName(Path.GetDirectoryName(file)), root, StringComparison.Ordinal)) continue;
             result.Add(Path.GetFileNameWithoutExtension(file), XDocument.Load(file).Descendants("ProjectReference")
+                .Where(static reference => !string.Equals((string?)reference.Attribute("ReferenceOutputAssembly"), "false", StringComparison.OrdinalIgnoreCase))
                 .Select(static reference => Path.GetFileNameWithoutExtension((string?)reference.Attribute("Include") ?? "")).ToArray());
         }
         return result;
