@@ -896,3 +896,15 @@ virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.Su
 virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.Submit(Mk8.Drava.Transport.Protocol.V1.SignedCommand! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Mk8.Drava.Transport.Protocol.V1.RegistrationReply!
 virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.SubmitAsync(Mk8.Drava.Transport.Protocol.V1.SignedCommand! request, Grpc.Core.CallOptions options) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.RegistrationReply!>!
 virtual Mk8.Drava.Transport.Protocol.V1.ServiceRegistry.ServiceRegistryClient.SubmitAsync(Mk8.Drava.Transport.Protocol.V1.SignedCommand! request, Grpc.Core.Metadata? headers = null, System.DateTime? deadline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Grpc.Core.AsyncUnaryCall<Mk8.Drava.Transport.Protocol.V1.RegistrationReply!>!
+Mk8.Drava.Transport.Relay.ControllerCertificateRole
+Mk8.Drava.Transport.Relay.RelayCapabilityJson
+Mk8.Drava.Transport.Relay.RelayCapabilityProof
+const Mk8.Drava.Transport.Relay.RelayCapabilityProof.MaximumPayloadBytes = 16384 -> int
+static Mk8.Drava.Transport.Relay.ControllerCertificateRole.Identity(string! siteId, string! controllerEpoch) -> System.Uri!
+static Mk8.Drava.Transport.Relay.ControllerCertificateRole.Validate(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate, System.Security.Cryptography.X509Certificates.X509Certificate2! root, string! siteId, string! controllerEpoch, System.TimeProvider! clock) -> void
+static Mk8.Drava.Transport.Relay.RelayCapabilityJson.Decode(System.ReadOnlyMemory<byte> bytes) -> Mk8.Drava.Contracts.Relay.V1.RelayCapability!
+static Mk8.Drava.Transport.Relay.RelayCapabilityJson.Encode(Mk8.Drava.Contracts.Relay.V1.RelayCapability! capability) -> byte[]!
+static Mk8.Drava.Transport.Relay.RelayCapabilityJson.Validate(Mk8.Drava.Contracts.Relay.V1.RelayCapability! capability) -> void
+static Mk8.Drava.Transport.Relay.RelayCapabilityProof.Digest(string! siteId, System.ReadOnlySpan<byte> payload) -> byte[]!
+static Mk8.Drava.Transport.Relay.RelayCapabilityProof.Sign(System.Security.Cryptography.ECDsa! privateKey, string! siteId, System.ReadOnlySpan<byte> payload) -> byte[]!
+static Mk8.Drava.Transport.Relay.RelayCapabilityProof.Verify(System.Security.Cryptography.ECDsa! publicKey, string! siteId, System.ReadOnlySpan<byte> payload, System.ReadOnlySpan<byte> signature) -> bool

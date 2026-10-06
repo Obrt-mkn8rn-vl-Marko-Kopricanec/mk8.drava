@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Acme;
 using Mk8.Drava.Transport.Registration;
+using Mk8.Drava.Transport.Relay;
 
 namespace Mk8.Drava.Application.INF.Publication;
 
@@ -70,6 +71,13 @@ public sealed class LocalSiteCertificateAuthority : IDisposable
         foreach (var address in addresses) names.AddIpAddress(IPAddress.Parse(address));
         // A node uses the same enrolled key for its constrained private relay; fingerprint grants remain controller-owned.
         return Issue(nodeId, names, client: true, server: true);
+    }
+
+    public X509Certificate2 IssueController(string siteId, string controllerEpoch)
+    {
+        var names = new SubjectAlternativeNameBuilder();
+        names.AddUri(ControllerCertificateRole.Identity(siteId, controllerEpoch));
+        return Issue("controller", names, client: true, server: false);
     }
 
     public void Dispose() => _issuer.Dispose();

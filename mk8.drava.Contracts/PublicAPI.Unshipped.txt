@@ -2627,3 +2627,44 @@ Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Provenance.init -> v
 Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.ServiceId.get -> string!
 Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.ServiceId.init -> void
 Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.ServicePolicyResponse() -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.<Clone>$() -> Mk8.Drava.Contracts.Relay.V1.RelayCapability!
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Advertisement.get -> Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement!
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Advertisement.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.AgentBootId.get -> string!
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.AgentBootId.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.CapabilityId.get -> string!
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.CapabilityId.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.ControllerEpoch.get -> string!
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.ControllerEpoch.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Equals(Mk8.Drava.Contracts.Relay.V1.RelayCapability? other) -> bool
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.ExchangeId.get -> string!
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.ExchangeId.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.ExpiresAtUnixMilliseconds.get -> long
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.ExpiresAtUnixMilliseconds.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Identity.get -> Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity!
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Identity.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.IssuedAtUnixMilliseconds.get -> long
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.IssuedAtUnixMilliseconds.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.MaximumBytesPerDirection.get -> long
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.MaximumBytesPerDirection.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.MaximumDurationSeconds.get -> int
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.MaximumDurationSeconds.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Purpose.get -> Mk8.Drava.Contracts.Relay.V1.RelayPurpose
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Purpose.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.RelayCapability() -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.TlsServerName.get -> string!
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.TlsServerName.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.ValidateBackendCertificate.get -> bool
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.ValidateBackendCertificate.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Version.get -> uint
+Mk8.Drava.Contracts.Relay.V1.RelayCapability.Version.init -> void
+Mk8.Drava.Contracts.Relay.V1.RelayPurpose
+Mk8.Drava.Contracts.Relay.V1.RelayPurpose.Exchange = 1 -> Mk8.Drava.Contracts.Relay.V1.RelayPurpose
+Mk8.Drava.Contracts.Relay.V1.RelayPurpose.Readiness = 2 -> Mk8.Drava.Contracts.Relay.V1.RelayPurpose
+Mk8.Drava.Contracts.Relay.V1.RelayPurpose.Unspecified = 0 -> Mk8.Drava.Contracts.Relay.V1.RelayPurpose
+override Mk8.Drava.Contracts.Relay.V1.RelayCapability.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Relay.V1.RelayCapability.GetHashCode() -> int
+override Mk8.Drava.Contracts.Relay.V1.RelayCapability.ToString() -> string!
+static Mk8.Drava.Contracts.Relay.V1.RelayCapability.operator !=(Mk8.Drava.Contracts.Relay.V1.RelayCapability? left, Mk8.Drava.Contracts.Relay.V1.RelayCapability? right) -> bool
+static Mk8.Drava.Contracts.Relay.V1.RelayCapability.operator ==(Mk8.Drava.Contracts.Relay.V1.RelayCapability? left, Mk8.Drava.Contracts.Relay.V1.RelayCapability? right) -> bool
