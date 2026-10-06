@@ -51,6 +51,8 @@ internal static partial class ProxyServiceCollectionExtensions
     {
         services.AddSingleton<IRouteMatcher, SingleUpstreamRouteMatcher>();
         services.AddSingleton<IUpstreamSelector, RoundRobinUpstreamSelector>();
+        services.AddSingleton<Mk8.Drava.Application.BLL.Registry.DestinationAvailabilityStore>();
+        services.AddSingleton<IUpstreamReservationSelector, PolicyUpstreamSelector>();
         services.AddSingleton<UpstreamConnectionFactory>();
         services.AddSingleton<UpstreamConnectionPool>();
         services.AddSingleton<IUpstreamConnectionPruner>(static services => services.GetRequiredService<UpstreamConnectionPool>());
@@ -256,7 +258,7 @@ internal static partial class ProxyServiceCollectionExtensions
     {
         Configuration = services.GetRequiredService<IProxyActiveConfigurationSnapshotReader>(),
         RouteMatcher = services.GetRequiredService<IRouteMatcher>(),
-        Selector = services.GetRequiredService<IUpstreamSelector>(),
+        Selector = services.GetRequiredService<IUpstreamReservationSelector>(),
         Health = services.GetRequiredService<UpstreamHealthStore>(),
         Circuits = services.GetRequiredService<CircuitBreakerStore>(),
         ForwardedHeaders = services.GetRequiredService<ForwardedHeadersPolicy>(),

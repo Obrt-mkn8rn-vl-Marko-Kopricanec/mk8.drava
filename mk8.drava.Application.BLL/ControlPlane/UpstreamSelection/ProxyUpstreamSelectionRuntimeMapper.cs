@@ -6,6 +6,6 @@ public static class ProxyUpstreamSelectionRuntimeMapper
     public static UpstreamSelectionRoute ToSelectionRoute(RuntimeRoute route)
     {
         ArgumentNullException.ThrowIfNull(route);
-        return new UpstreamSelectionRoute(route.Name, route.HealthCheck.Enabled, route.Upstreams);
+        return new UpstreamSelectionRoute(route.Name, route.HealthCheck.Enabled, route.Upstreams) { Policy = route.Balancing ?? UpstreamBalancingPolicy.FromName(route.LoadBalancingPolicy) };
     }
 }

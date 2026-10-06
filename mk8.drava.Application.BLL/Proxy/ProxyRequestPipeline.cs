@@ -12,12 +12,14 @@ using Mk8.Drava.Application.BLL.ControlPlane.RuntimeGuards;
 using Mk8.Drava.Application.BLL.ControlPlane.Timeouts;
 using Mk8.Drava.Application.BLL.ControlPlane.Upgrades;
 using Mk8.Drava.Application.BLL.ControlPlane.UpstreamSelection;
+using System.Runtime.CompilerServices;
 
 namespace Mk8.Drava.Application.BLL.Proxy;
 
 // The same policy owner serves every public client protocol. Socket/framing work stays in the executor.
 public sealed class ProxyRequestPipeline(ProxyPipelineServices services)
 {
+    private readonly ConditionalWeakTable<RuntimeRoute, UpstreamSelectionRoute> _selectionRoutes = new();
     public async ValueTask ExecuteAsync(ProxyRequest request, IProxyExchangeExecutor executor, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -26,7 +28,7 @@ public sealed class ProxyRequestPipeline(ProxyPipelineServices services)
         var listener = FindListener(snapshot, request.ListenerId);
         if (listener is null) throw new InvalidDataException("Unrecognized presentation listener.");
         var context = new ProxyRequestContext(services.RequestIds.Create(), listener.Name,
-            ProxyRequestContextRuntimeMapper.ToTransport(listener), request.Peer.Endpoint, snapshot.Version, services.Clock);
+            ProxyRequestContextRuntimeMapper.ToTransport(listener), request.Peer.Endpoint, snapshot.Version, services.Clock, request.ClientProtocol);
         context.SetRequest(request.Head.Method, request.Head.Host, request.Head.Target, ProxyExternalRequestIdPolicy.Extract(request.Head));
         services.Metrics.RequestReceived();
         try
@@ -130,16 +132,18 @@ public sealed class ProxyRequestPipeline(ProxyPipelineServices services)
         var attempts = retryAllowed ? plan.MaxAttempts : 1;
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            var selection = services.Selector.Select(ProxyUpstreamSelectionRuntimeMapper.ToSelectionRoute(forwarding.Route));
-            if (selection is null)
+            using var reservation = Reserve(forwarding.Route, forwarding.Head);
+            if (reservation is null)
             {
                 await FailureAsync(ProxyFailureKind.NoHealthyUpstream, context, executor, cancellationToken).ConfigureAwait(false);
                 return;
             }
+            var selection = reservation.Selection;
             context.SetUpstream(ProxyRequestContextRuntimeMapper.ToRequestUpstream(selection.Upstream));
             var suppress = attempt < attempts;
             var result = await executor.ForwardAsync(forwarding with { Upstream = selection.Upstream, SuppressFailureResponse = suppress }, cancellationToken).ConfigureAwait(false);
             ProxyUpstreamAttemptRecorder.Record(selection, result, services.Health, services.Circuits);
+            reservation.Dispose();
             if (result is ForwardingResult.FailureResult { ResponseStarted: true })
                 throw new IOException("Upstream forwarding failed after the response started.");
             var decision = retryAllowed ? ProxyRetryPolicy.EvaluateAttempt(ProxyRetryRuntimeMapper.ToOutcomeInput(forwarding.Route.Retry), result, attempt, attempts) : ProxyRetryAttemptDecision.Stop;
@@ -173,18 +177,33 @@ public sealed class ProxyRequestPipeline(ProxyPipelineServices services)
             await FailureAsync(ProxyFailureKind.UpgradeValidationFailed, context, executor, cancellationToken).ConfigureAwait(false);
             return;
         }
-        var selection = services.Selector.Select(ProxyUpstreamSelectionRuntimeMapper.ToSelectionRoute(route));
-        if (selection is null)
+        using var reservation = Reserve(route, request.Head);
+        if (reservation is null)
         {
             await FailureAsync(ProxyFailureKind.NoHealthyUpstream, context, executor, cancellationToken).ConfigureAwait(false);
             return;
         }
+        var selection = reservation.Selection;
         context.SetUpstream(ProxyRequestContextRuntimeMapper.ToRequestUpstream(selection.Upstream));
         var result = await executor.UpgradeAsync(new ProxyForwardingContext(request.Head, route, selection.Upstream, listener,
             timeouts, snapshot.ConnectionLimits, snapshot.Limits, target, forwarded, context.RequestId, false), accepted.Upgrade, cancellationToken).ConfigureAwait(false);
         ProxyUpstreamAttemptRecorder.Record(selection, result, services.Health, services.Circuits);
         context.RecordForwardingResult(result, keepClientConnectionOpen: false);
         if (result is ForwardingResult.TunnelCompletedResult tunnel) context.RecordTunnelCompletion(tunnel);
+    }
+
+    private UpstreamReservation? Reserve(RuntimeRoute route, Http1RequestHead head)
+    {
+        var selection = _selectionRoutes.GetValue(route, ProxyUpstreamSelectionRuntimeMapper.ToSelectionRoute);
+        string? key = null;
+        if (selection.Policy.AffinityHeader is { } header)
+            foreach (var field in head.Headers)
+                if (string.Equals(field.Name, header, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (key is not null) throw new InvalidDataException("Affinity header must occur once.");
+                    key = field.Value;
+                }
+        return services.Selector.Reserve(selection, key);
     }
 
     private async ValueTask FailureAsync(ProxyFailureKind kind, ProxyRequestContext context, IProxyExchangeExecutor executor, CancellationToken cancellationToken)

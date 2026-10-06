@@ -1,3 +1,5 @@
+using Mk8.Drava.Application.BLL.Registry;
+
 namespace Mk8.Drava.Application.BLL.Configuration;
 public sealed record RuntimeUpstream
 {
@@ -5,7 +7,7 @@ public sealed record RuntimeUpstream
     {
     }
 
-    public RuntimeUpstream(string RouteName, string Name, string Scheme, string Protocol, string Address, int Port, int Weight, RuntimeUpstreamTlsOptions Tls, RuntimeCircuitBreakerPolicy CircuitBreaker)
+    public RuntimeUpstream(string RouteName, string Name, string Scheme, string Protocol, string Address, int Port, int Weight, RuntimeUpstreamTlsOptions Tls, RuntimeCircuitBreakerPolicy CircuitBreaker, RegisteredUpstreamIdentity? Membership = null)
     {
         RuntimeUpstreamFacts.Validate(RouteName, Name, Scheme, Protocol, Address, Port, Weight);
         ArgumentNullException.ThrowIfNull(Tls);
@@ -19,6 +21,7 @@ public sealed record RuntimeUpstream
         this.Weight = Weight;
         this.Tls = Tls;
         this.CircuitBreaker = CircuitBreaker;
+        this.Membership = Membership;
     }
 
     public string RouteName { get; }
@@ -32,6 +35,7 @@ public sealed record RuntimeUpstream
     public string Endpoint => $"{Address}:{Port}";
     public string UriEndpoint => $"{Scheme}://{Address}:{Port}";
     public string EffectiveSniHost => string.IsNullOrWhiteSpace(Tls.SniHost) ? Address : Tls.SniHost!;
-    public string Identity => $"{RouteName}|{Name}|{Scheme}|{Protocol}|{Address}|{Port}|{EffectiveSniHost}|{Tls.ValidateCertificate}";
+    public string Identity => $"{RouteName}|{Name}|{Scheme}|{Protocol}|{Address}|{Port}|{EffectiveSniHost}|{Tls.ValidateCertificate}" + (Membership is null ? "" : "|membership=" + Membership.Partition);
+    public RegisteredUpstreamIdentity? Membership { get; }
     public RuntimeCircuitBreakerPolicy CircuitBreaker { get; }
 }

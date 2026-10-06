@@ -17,7 +17,7 @@ public sealed class ProxyPipelineServices
 {
     public required IProxyActiveConfigurationSnapshotReader Configuration { get; init; }
     public required IRouteMatcher RouteMatcher { get; init; }
-    public required IUpstreamSelector Selector { get; init; }
+    public required IUpstreamReservationSelector Selector { get; init; }
     public required UpstreamHealthStore Health { get; init; }
     public required CircuitBreakerStore Circuits { get; init; }
     public required ForwardedHeadersPolicy ForwardedHeaders { get; init; }

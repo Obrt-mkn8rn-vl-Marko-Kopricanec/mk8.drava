@@ -1,3 +1,5 @@
+using Mk8.Drava.Application.BLL.ControlPlane.UpstreamSelection;
+
 namespace Mk8.Drava.Application.BLL.Configuration;
 public sealed record RuntimeRoute
 {
@@ -5,7 +7,7 @@ public sealed record RuntimeRoute
     {
     }
 
-    public RuntimeRoute(string Name, string Host, string PathPrefix, RuntimeRouteAction Action, string LoadBalancingPolicy, RuntimeHealthCheckOptions HealthCheck, IReadOnlyList<RuntimeUpstream> Upstreams, RuntimeHttpsRedirectPolicy HttpsRedirect, RuntimeCanonicalHostPolicy CanonicalHost, RuntimeHeaderPolicy HeaderPolicy, RuntimePathRewritePolicy PathRewrite, RuntimeRedirectPolicy Redirect, RuntimeStaticResponse StaticResponse, RuntimeMaintenancePolicy Maintenance, RuntimeCachePolicy Cache, RuntimeRouteResolvedOptions ResolvedOptions, string SiteName, RuntimeRetryPolicy Retry)
+    public RuntimeRoute(string Name, string Host, string PathPrefix, RuntimeRouteAction Action, string LoadBalancingPolicy, RuntimeHealthCheckOptions HealthCheck, IReadOnlyList<RuntimeUpstream> Upstreams, RuntimeHttpsRedirectPolicy HttpsRedirect, RuntimeCanonicalHostPolicy CanonicalHost, RuntimeHeaderPolicy HeaderPolicy, RuntimePathRewritePolicy PathRewrite, RuntimeRedirectPolicy Redirect, RuntimeStaticResponse StaticResponse, RuntimeMaintenancePolicy Maintenance, RuntimeCachePolicy Cache, RuntimeRouteResolvedOptions ResolvedOptions, string SiteName, RuntimeRetryPolicy Retry, UpstreamBalancingPolicy? Balancing = null)
     {
         RuntimeRouteFacts.Validate(Name, Host, PathPrefix, Action, LoadBalancingPolicy, SiteName);
         ArgumentNullException.ThrowIfNull(Upstreams);
@@ -38,6 +40,7 @@ public sealed record RuntimeRoute
         this.ResolvedOptions = ResolvedOptions;
         this.SiteName = SiteName;
         this.Retry = Retry;
+        this.Balancing = Balancing;
     }
 
     public string Name { get; }
@@ -58,9 +61,10 @@ public sealed record RuntimeRoute
     public RuntimeRouteResolvedOptions ResolvedOptions { get; }
     public string SiteName { get; }
     public RuntimeRetryPolicy Retry { get; }
+    public UpstreamBalancingPolicy? Balancing { get; }
 
     public RuntimeRoute WithUpstreams(IReadOnlyList<RuntimeUpstream> upstreams)
     {
-        return new RuntimeRoute(Name, Host, PathPrefix, Action, LoadBalancingPolicy, HealthCheck, upstreams, HttpsRedirect, CanonicalHost, HeaderPolicy, PathRewrite, Redirect, StaticResponse, Maintenance, Cache, ResolvedOptions, SiteName, Retry);
+        return new RuntimeRoute(Name, Host, PathPrefix, Action, LoadBalancingPolicy, HealthCheck, upstreams, HttpsRedirect, CanonicalHost, HeaderPolicy, PathRewrite, Redirect, StaticResponse, Maintenance, Cache, ResolvedOptions, SiteName, Retry, Balancing);
     }
 }

@@ -15,4 +15,5 @@ public sealed record UpstreamSelectionRoute
     public string Name { get; }
     public bool HealthCheckEnabled { get; }
     public IReadOnlyList<RuntimeUpstream> Upstreams { get; }
+    public UpstreamBalancingPolicy Policy { get; init; } = new(BalancingAlgorithm.WeightedRoundRobin);
 }

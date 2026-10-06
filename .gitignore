@@ -23,6 +23,6 @@ Desktop.ini
 **/bin/
 **/obj/
 **/artifacts/
-/TestResults/
+**/TestResults/
 *.user
 *.suo
