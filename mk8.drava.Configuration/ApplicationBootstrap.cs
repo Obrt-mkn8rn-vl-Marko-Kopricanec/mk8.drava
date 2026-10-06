@@ -12,6 +12,7 @@ public sealed record ApplicationBootstrap
     public int HttpPort { get; init; } = 80;
     public int HttpsPort { get; init; } = 443;
     public int MaxConcurrentExchanges { get; init; } = 256;
+    public ControllerBootstrap? Controller { get; init; }
 
     public void Validate()
     {
@@ -23,5 +24,8 @@ public sealed record ApplicationBootstrap
             throw new InvalidDataException("Invalid public listener ports.");
         if (MaxConcurrentExchanges is < 1 or > 4096) throw new InvalidDataException("Invalid Application exchange admission limit.");
         Listen.Validate();
+        Controller?.Validate();
+        if (Controller is not null && (Controller.RegistrationPort == HttpPort || Controller.RegistrationPort == HttpsPort))
+            throw new InvalidDataException("Registration and serving ports must be distinct.");
     }
 }

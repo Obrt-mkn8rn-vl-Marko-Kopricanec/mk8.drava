@@ -1,10 +1,13 @@
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Mk8.Drava.Application.Hosting;
 using Mk8.Drava.Application.Transport;
 using Mk8.Drava.Application.BLL.Configuration;
+using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Configuration.Paths;
 using Mk8.Drava.Application.BLL.Proxy;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
+using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application;
@@ -13,15 +16,40 @@ internal static class Program
 {
     public static async Task Main(string[] args)
     {
-        if (args.Length != 2 || !string.Equals(args[0], "--bootstrap", StringComparison.Ordinal))
+        if (args.Length == 5 && string.Equals(args[0], "--initialize-ca", StringComparison.Ordinal) && string.Equals(args[3], "--site", StringComparison.Ordinal))
+        {
+            if (!string.Equals(args[1], "--path", StringComparison.Ordinal)) throw new ArgumentException("Issuer initialization requires --path.", nameof(args));
+            var fingerprint = await LocalSiteCertificateAuthority.InitializeAsync(args[2], args[4], TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
+            Console.WriteLine(fingerprint);
+            return;
+        }
+        if (args.Length != 2 || !string.Equals(args[0], "--bootstrap", StringComparison.Ordinal) || !Path.IsPathFullyQualified(args[1]))
             throw new ArgumentException("Use --bootstrap with an absolute Application bootstrap file.", nameof(args));
         var bootstrap = await BootstrapFile.LoadAsync<ApplicationBootstrap>(args[1], CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
-        using var lifetime = PrivateApplicationState.Open(bootstrap);
+        using var privateState = PrivateApplicationState.Open(bootstrap);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.Configuration["Mdrava:DataDirectory"] = bootstrap.StateDirectory;
         builder.Services.AddSingleton(bootstrap);
         builder.Services.AddProxyApplication(builder.Configuration);
+        var availability = new DestinationAvailabilityStore(TimeProvider.System);
+        builder.Services.RemoveAll<DestinationAvailabilityStore>();
+        builder.Services.AddSingleton(availability);
+        var registration = bootstrap.Controller is null ? null : await RegistrationRuntime.OpenAsync(bootstrap, availability, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            ConfigureServices(builder, bootstrap, registration);
+            ConfigurePrivateListener(builder, bootstrap);
+            await RunHostAsync(builder, registration).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (registration is not null) await registration.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private static void ConfigureServices(WebApplicationBuilder builder, ApplicationBootstrap bootstrap, RegistrationRuntime? registration)
+    {
         builder.Services.AddSingleton<IMdravaDataDirectoryProvider>(new ApplicationDataDirectoryProvider(bootstrap.StateDirectory));
         builder.Services.AddSingleton(_ => new IpcIdentityInterceptor(bootstrap));
         builder.Services.AddSingleton(_ => new ExchangeAdmission(bootstrap));
@@ -29,11 +57,26 @@ internal static class Program
             services.GetRequiredService<ProxyForwarder>(), services.GetRequiredService<UpgradeForwarder>(), bootstrap, services.GetRequiredService<ExchangeAdmission>()));
         builder.Services.AddGrpc(options => { options.Interceptors.Add<IpcIdentityInterceptor>(); options.MaxReceiveMessageSize = 8 * 1024 * 1024; options.MaxSendMessageSize = 8 * 1024 * 1024; });
         builder.Services.AddGrpc().AddServiceOptions<ProxyExchangeService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
-        ConfigurePrivateListener(builder, bootstrap);
+        if (registration is null) return;
+        builder.Services.AddSingleton(registration.Registry);
+        builder.Services.AddSingleton(registration.Handler);
+        builder.Services.AddSingleton(registration.Plans);
+        builder.Services.AddSingleton(services => new RegistrationService(services.GetRequiredService<Mk8.Drava.Application.INF.Registry.SignedRegistrationHandler>()));
+        builder.Services.AddSingleton(services => new ControlService(services.GetRequiredService<ServingPlanState>()));
+        builder.Services.AddGrpc().AddServiceOptions<RegistrationService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
+    }
+
+    private static async Task RunHostAsync(WebApplicationBuilder builder, RegistrationRuntime? registration)
+    {
         var app = builder.Build();
         await using var appLifetime = app.ConfigureAwait(false);
         await RuntimeInitializer.InitializeAsync(app.Services, CancellationToken.None).ConfigureAwait(false);
         app.MapGrpcService<ProxyExchangeService>();
+        if (registration is not null)
+        {
+            app.MapGrpcService<RegistrationService>();
+            app.MapGrpcService<ControlService>();
+        }
         await app.RunAsync().ConfigureAwait(false);
     }
 

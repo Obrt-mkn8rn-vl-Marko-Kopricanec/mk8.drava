@@ -16,6 +16,7 @@ public sealed record GatewayBootstrap
     public long MaxRequestBodyBytes { get; init; } = 100L * 1024 * 1024;
     public int FrameBytes { get; init; } = 32 * 1024;
     public int StreamWindowFrames { get; init; } = 4;
+    public string EnrollmentRootFingerprint { get; init; } = "";
 
     public void Validate()
     {
@@ -26,5 +27,11 @@ public sealed record GatewayBootstrap
         if (MaxConcurrentExchanges is < 1 or > 4096 || MaxHeaderBytes is < 1024 or > 65536 || MaxRequestBodyBytes < 0 || FrameBytes is < 1024 or > 32768 || StreamWindowFrames is < 1 or > 8) throw new InvalidDataException("Invalid Gateway resource bounds.");
         if (!Path.IsPathFullyQualified(StateDirectory)) throw new InvalidDataException("Gateway state directory must be absolute.");
         Application.Validate();
+        if (EnrollmentRootFingerprint.Length != 0)
+        {
+            if (EnrollmentRootFingerprint.Length != 64) throw new InvalidDataException("Invalid enrollment root fingerprint.");
+            foreach (var character in EnrollmentRootFingerprint)
+                if (character is not (>= '0' and <= '9') and not (>= 'A' and <= 'F')) throw new InvalidDataException("Invalid enrollment root fingerprint encoding.");
+        }
     }
 }
