@@ -14,8 +14,8 @@ namespace Mk8.Drava.IntegrationTests;
 internal sealed class TwoProcessProxy : IAsyncDisposable
 {
     private readonly string _directory;
-    private readonly DevelopmentProcess _application;
-    private readonly DevelopmentProcess _gateway;
+    private DevelopmentProcess _application;
+    private DevelopmentProcess _gateway;
     public int Port { get; }
     public IpcEndpoint Ipc { get; }
     public HttpClient Client { get; }
@@ -26,6 +26,19 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public string RootCertificatePath => Path.Combine(_directory, "site-root.der");
     public string NodeCertificatePath => Path.Combine(_directory, "node.pfx");
     public Task WritePolicyAsync(string json) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "noconf.json"), json);
+
+    public async Task RestartAsync()
+    {
+        await _gateway.DisposeAsync().ConfigureAwait(false);
+        await _application.DisposeAsync().ConfigureAwait(false);
+        var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "noconf-tests", Path.GetFileName(_directory))).FullName;
+        await File.WriteAllTextAsync(Path.Combine(evidence, "gateway-before-restart.log"), _gateway.CapturedLog).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-restart.log"), _application.CapturedLog).ConfigureAwait(false);
+        var root = FindRoot();
+        _application = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), Path.Combine(_directory, "application.json"));
+        _gateway = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Gateway", "bin", "Release", "net10.0", "mk8.drava.Gateway.dll"), Path.Combine(_directory, "gateway.json"));
+        await WaitUntilBoundAsync().ConfigureAwait(false);
+    }
     public Task WriteManualRouteAsync(int upstreamPort, int? listenerPort = null) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "sites", "service.json"), JsonSerializer.Serialize(new
     {
         name = "test", host = "app.test", listeners = new[] { new { name = "http", address = "127.0.0.1", port = listenerPort ?? Port } },

@@ -2491,3 +2491,139 @@ static Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.operator 
 static Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.operator ==(Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest? left, Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest? right) -> bool
 static Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.operator !=(Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? left, Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? right) -> bool
 static Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.operator ==(Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? left, Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? right) -> bool
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.CertificateFingerprint.get -> string!
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.CertificateFingerprint.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.EndpointAddresses.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.EndpointAddresses.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.MaximumPort.get -> int
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.MaximumPort.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.MinimumPort.get -> int
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.MinimumPort.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.NodeGrantResponse() -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.NodeId.get -> string!
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.NodeId.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.NotAfterUtc.get -> System.DateTimeOffset
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.NotAfterUtc.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.OwnerId.get -> string!
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.OwnerId.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.Revoked.get -> bool
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.Revoked.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.ServicePrefix.get -> string!
+Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse.ServicePrefix.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeRevokeRequest
+Mk8.Drava.Contracts.Administration.V1.NodeRevokeRequest.NodeId.get -> string!
+Mk8.Drava.Contracts.Administration.V1.NodeRevokeRequest.NodeId.init -> void
+Mk8.Drava.Contracts.Administration.V1.NodeRevokeRequest.NodeRevokeRequest() -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyQueryRequest
+Mk8.Drava.Contracts.Administration.V1.PolicyQueryRequest.AfterServiceId.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyQueryRequest.AfterServiceId.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyQueryRequest.IncludeHistory.get -> bool
+Mk8.Drava.Contracts.Administration.V1.PolicyQueryRequest.IncludeHistory.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyQueryRequest.Limit.get -> int
+Mk8.Drava.Contracts.Administration.V1.PolicyQueryRequest.Limit.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyQueryRequest.PolicyQueryRequest() -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.AcceptedAtUtc.get -> System.DateTimeOffset
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.AcceptedAtUtc.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.Actor.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.Actor.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.Digest.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.Digest.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.PolicyRevisionResponse() -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.Revision.get -> long
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.Revision.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.Source.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse.Source.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRollbackRequest
+Mk8.Drava.Contracts.Administration.V1.PolicyRollbackRequest.ExpectedRevision.get -> long
+Mk8.Drava.Contracts.Administration.V1.PolicyRollbackRequest.ExpectedRevision.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRollbackRequest.PolicyRollbackRequest() -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyRollbackRequest.TargetRevision.get -> long
+Mk8.Drava.Contracts.Administration.V1.PolicyRollbackRequest.TargetRevision.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.AcceptedRevision.get -> long
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.AcceptedRevision.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.AppliedRevision.get -> long
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.AppliedRevision.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.CanonicalJson.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.CanonicalJson.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.Digest.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.Digest.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.Failure.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.Failure.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.History.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Contracts.Administration.V1.PolicyRevisionResponse!>!
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.History.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.NextServiceId.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.NextServiceId.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.PolicyStateResponse() -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.RegistryRevision.get -> long
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.RegistryRevision.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.RuntimeVersion.get -> int
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.RuntimeVersion.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.Services.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse!>!
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.Services.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.Source.get -> string!
+Mk8.Drava.Contracts.Administration.V1.PolicyStateResponse.Source.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyUpdateRequest
+Mk8.Drava.Contracts.Administration.V1.PolicyUpdateRequest.ExpectedRevision.get -> long
+Mk8.Drava.Contracts.Administration.V1.PolicyUpdateRequest.ExpectedRevision.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyUpdateRequest.ImportFile.get -> bool
+Mk8.Drava.Contracts.Administration.V1.PolicyUpdateRequest.ImportFile.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyUpdateRequest.Policy.get -> System.Text.Json.JsonElement
+Mk8.Drava.Contracts.Administration.V1.PolicyUpdateRequest.Policy.init -> void
+Mk8.Drava.Contracts.Administration.V1.PolicyUpdateRequest.PolicyUpdateRequest() -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Address.get -> string!
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Address.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Draining.get -> bool
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Draining.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Identity.get -> Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity!
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Identity.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.LeaseValid.get -> bool
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.LeaseValid.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Port.get -> int
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Port.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Protocol.get -> string!
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Protocol.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.PublicationValid.get -> bool
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.PublicationValid.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.ReadinessValid.get -> bool
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.ReadinessValid.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.RegisteredInstanceResponse() -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Revoked.get -> bool
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Revoked.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Scheme.get -> string!
+Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse.Scheme.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryQueryRequest
+Mk8.Drava.Contracts.Administration.V1.RegistryQueryRequest.AfterId.get -> string!
+Mk8.Drava.Contracts.Administration.V1.RegistryQueryRequest.AfterId.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryQueryRequest.Kind.get -> string!
+Mk8.Drava.Contracts.Administration.V1.RegistryQueryRequest.Kind.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryQueryRequest.Limit.get -> int
+Mk8.Drava.Contracts.Administration.V1.RegistryQueryRequest.Limit.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryQueryRequest.RegistryQueryRequest() -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.Instances.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Contracts.Administration.V1.RegisteredInstanceResponse!>!
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.Instances.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.NextId.get -> string!
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.NextId.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.Nodes.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Contracts.Administration.V1.NodeGrantResponse!>!
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.Nodes.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.RegistryStateResponse() -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.Revision.get -> long
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.Revision.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.StorageHealthy.get -> bool
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.StorageHealthy.init -> void
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.TombstoneCount.get -> int
+Mk8.Drava.Contracts.Administration.V1.RegistryStateResponse.TombstoneCount.init -> void
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Algorithm.get -> string!
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Algorithm.init -> void
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Host.get -> string!
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Host.init -> void
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Provenance.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Provenance.init -> void
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.ServiceId.get -> string!
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.ServiceId.init -> void
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.ServicePolicyResponse() -> void

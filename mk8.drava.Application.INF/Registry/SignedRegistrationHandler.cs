@@ -85,7 +85,7 @@ public sealed class SignedRegistrationHandler
         if (!_registry.State.Instances.TryGetValue(identity.InstanceId, out var current) || current.Identity != identity)
             throw new InvalidDataException("Unknown or superseded instance boot.");
         var status = _availability.Status(identity);
-        var phase = current.Draining ? RegistrationPhase.Draining : status.Revoked ? RegistrationPhase.Revoked : !status.LeaseValid ? RegistrationPhase.LeaseExpired :
+        var phase = _registry.State.IsTombstoned(identity) ? RegistrationPhase.Revoked : current.Draining ? RegistrationPhase.Draining : status.Revoked ? RegistrationPhase.Revoked : !status.LeaseValid ? RegistrationPhase.LeaseExpired :
             !status.ReadinessValid ? RegistrationPhase.Checking : status.PublicationValid ? RegistrationPhase.Ready :
             status.Publication is { RouteRevision: > 0, CertificateVerified: false } ? RegistrationPhase.CertificatePending :
             status.Publication is { RouteRevision: > 0, DnsVerified: false } ? RegistrationPhase.DnsPending : RegistrationPhase.Checking;

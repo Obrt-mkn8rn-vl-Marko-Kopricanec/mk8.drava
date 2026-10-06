@@ -8,7 +8,7 @@ public sealed class RegistryCoordinator : IDisposable
     private readonly SemaphoreSlim _writer = new(1, 1);
     private RegistryState _state = RegistryState.Empty;
     private bool _initialized;
-    private bool _storageHealthy = true;
+    private int _storageHealthy = 1;
 
     public RegistryCoordinator(IRegistryRepository repository, DestinationAvailabilityStore availability, TimeProvider clock)
     {
@@ -21,6 +21,13 @@ public sealed class RegistryCoordinator : IDisposable
     }
 
     public RegistryState State => Volatile.Read(ref _state);
+    public bool StorageHealthy => _initialized && Volatile.Read(ref _storageHealthy) == 1;
+
+    public void FailStorage()
+    {
+        Interlocked.Exchange(ref _storageHealthy, 0);
+        _availability.FailClosed();
+    }
 
     public async ValueTask InitializeAsync(CancellationToken cancellationToken)
     {
@@ -62,15 +69,14 @@ public sealed class RegistryCoordinator : IDisposable
             RequireInitialized();
             var grant = Authorize(authenticatedFingerprint, intent);
             if (intent.Draining) throw new InvalidDataException("Register cannot undo or initiate draining.");
-            foreach (var tombstone in State.Tombstones)
-                if (string.Equals(tombstone, intent.Identity.Partition, StringComparison.Ordinal)) throw new InvalidDataException("This instance boot is revoked.");
+            if (State.IsTombstoned(intent.Identity)) throw new InvalidDataException("This instance boot is revoked.");
             EnsureServiceOwnership(intent);
             var tombstones = new List<string>(State.Tombstones);
             if (State.Instances.TryGetValue(intent.Identity.InstanceId, out var previous))
             {
                 EnsureStableInstance(previous, intent);
                 if (previous.Identity == intent.Identity && previous.Draining) throw new InvalidDataException("A draining boot cannot register again.");
-                if (previous.Identity != intent.Identity) tombstones.Add(previous.Identity.Partition);
+                if (previous.Identity != intent.Identity && !State.IsTombstoned(previous.Identity)) tombstones.Add(previous.Identity.Partition);
                 if (previous == intent)
                 {
                     _availability.Renew(intent, grant.NotAfterUtc, lease);
@@ -130,7 +136,33 @@ public sealed class RegistryCoordinator : IDisposable
             if (!State.Grants.TryGetValue(nodeId, out var grant)) throw new InvalidDataException("Unknown enrollment.");
             _availability.RevokeNode(nodeId);
             var grants = new Dictionary<string, NodeGrant>(State.Grants, StringComparer.Ordinal) { [nodeId] = grant.Revoke() };
-            await CommitAsync(new RegistryState(checked(State.Revision + 1), grants, State.Instances, State.Tombstones), "revoke-node", administrator, nodeId, cancellationToken).ConfigureAwait(false);
+            var instances = new Dictionary<string, InstanceIntent>(State.Instances, StringComparer.Ordinal);
+            var tombstones = new List<string>(State.Tombstones);
+            foreach (var intent in State.Instances.Values)
+                if (string.Equals(intent.Identity.NodeId, nodeId, StringComparison.Ordinal))
+                {
+                    instances[intent.Identity.InstanceId] = intent.Drain();
+                    if (!State.IsTombstoned(intent.Identity)) tombstones.Add(intent.Identity.Partition);
+                }
+            await CommitAsync(new RegistryState(checked(State.Revision + 1), grants, instances, tombstones), "revoke-node", administrator, nodeId, cancellationToken).ConfigureAwait(false);
+        }
+        finally { _writer.Release(); }
+    }
+
+    public async ValueTask RevokeInstanceAsync(RegisteredUpstreamIdentity identity, string administrator, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        RegistryNames.RequireLabel(administrator);
+        await _writer.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            RequireInitialized();
+            var intent = FindCurrent(identity);
+            _availability.Revoke(identity);
+            var instances = new Dictionary<string, InstanceIntent>(State.Instances, StringComparer.Ordinal) { [identity.InstanceId] = intent.Drain() };
+            var tombstones = new List<string>(State.Tombstones);
+            if (!State.IsTombstoned(identity)) tombstones.Add(identity.Partition);
+            await CommitAsync(new RegistryState(checked(State.Revision + 1), State.Grants, instances, tombstones), "revoke-instance", administrator, identity.Partition, cancellationToken).ConfigureAwait(false);
         }
         finally { _writer.Release(); }
     }
@@ -172,12 +204,13 @@ public sealed class RegistryCoordinator : IDisposable
     {
         try
         {
+            RequireInitialized();
             await _repository.CommitAsync(State.Revision, replacement, new RegistryAudit(_clock.GetUtcNow(), operation, actor, subject), cancellationToken).ConfigureAwait(false);
+            RequireInitialized();
         }
         catch
         {
-            _storageHealthy = false;
-            foreach (var node in State.Grants.Keys) _availability.RevokeNode(node);
+            FailStorage();
             throw;
         }
         Volatile.Write(ref _state, replacement);
@@ -185,6 +218,6 @@ public sealed class RegistryCoordinator : IDisposable
 
     private void RequireInitialized()
     {
-        if (!_initialized || !_storageHealthy) throw new InvalidOperationException("Registry requires healthy initialized durable state.");
+        if (!StorageHealthy) throw new InvalidOperationException("Registry requires healthy initialized durable state.");
     }
 }

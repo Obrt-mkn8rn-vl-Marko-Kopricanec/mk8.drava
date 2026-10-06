@@ -32,7 +32,7 @@ internal static class Program
             throw new ArgumentException("Use --bootstrap with an absolute Application bootstrap file.", nameof(args));
         var bootstrap = await BootstrapFile.LoadAsync<ApplicationBootstrap>(args[1], CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
-        using var privateState = PrivateApplicationState.Open(bootstrap);
+        using var privateState = await PrivateApplicationState.OpenAsync(bootstrap, CancellationToken.None).ConfigureAwait(false);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.Configuration["Mdrava:DataDirectory"] = bootstrap.StateDirectory;
         builder.Services.AddSingleton(bootstrap);
@@ -74,6 +74,8 @@ internal static class Program
         builder.Services.AddSingleton(registration.Plans);
         builder.Services.AddSingleton(services => new RegistrationService(services.GetRequiredService<Mk8.Drava.Application.INF.Registry.SignedRegistrationHandler>()));
         builder.Services.AddNoConfRuntime(bootstrap, registration);
+        builder.Services.AddSingleton(services => new NoConfAdministration(services.GetRequiredService<NoConfReconciler>(), registration.Registry,
+            services.GetRequiredService<DestinationAvailabilityStore>(), bootstrap.SiteId));
         builder.Services.AddGrpc().AddServiceOptions<RegistrationService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
     }
 

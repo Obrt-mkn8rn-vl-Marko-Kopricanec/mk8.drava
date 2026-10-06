@@ -2,11 +2,12 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
+using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.BLL.Registry;
 
 namespace Mk8.Drava.Application.DAL.Registry;
 
-public sealed class SqliteRegistryRepository : IRegistryRepository, IAsyncDisposable
+public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPolicyRepository, IAsyncDisposable
 {
     private const int MaximumStateBytes = 16 * 1024 * 1024;
     private static readonly JsonSerializerOptions Json = new()
@@ -139,6 +140,10 @@ public sealed class SqliteRegistryRepository : IRegistryRepository, IAsyncDispos
                 revision INTEGER NOT NULL, fence INTEGER NOT NULL, state BLOB NOT NULL, digest BLOB NOT NULL, site_id TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS registry_audit(revision INTEGER PRIMARY KEY, at_utc INTEGER NOT NULL,
                 operation TEXT NOT NULL, actor TEXT NOT NULL, subject TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS policy_state(id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL, revision INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS policy_revisions(revision INTEGER PRIMARY KEY, canonical BLOB NOT NULL, digest BLOB NOT NULL,
+                at_utc INTEGER NOT NULL, actor TEXT NOT NULL, source TEXT NOT NULL);
+            INSERT OR IGNORE INTO policy_state VALUES(1,1,0);
             """;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)await _connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);

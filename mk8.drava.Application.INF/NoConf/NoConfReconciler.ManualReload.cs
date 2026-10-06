@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text.Json;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.DAL.NoConf;
@@ -17,7 +15,9 @@ public sealed partial class NoConfReconciler
         try
         {
             EnsureBaseline();
-            var policy = await NoConfPolicyFile.ReadAsync(_policyPath, cancellationToken).ConfigureAwait(false);
+            RequireAuthority();
+            await LoadPolicyAsync(cancellationToken).ConfigureAwait(false);
+            var policy = _acceptedPolicy is { } accepted ? NoConfPolicyFile.Parse(accepted.CanonicalJson) : await NoConfPolicyFile.ReadAsync(_policyPath, cancellationToken).ConfigureAwait(false);
             var state = _registry.State;
             var candidate = _compiler.Compile(state, baseline, policy, _domain, _localNodeId);
             var snapshot = candidate.Snapshot.WithVersion(checked(_version + 1));
@@ -33,7 +33,8 @@ public sealed partial class NoConfReconciler
                 _version = snapshot.Version;
                 Volatile.Write(ref _compiled, applied);
             }
-            _policyHash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(policy)));
+            _policyHash = _acceptedPolicy?.Digest ?? "";
+            _appliedPolicyRevision = _acceptedPolicy?.Revision ?? 0;
             Volatile.Write(ref _failure, "");
             return snapshot;
         }

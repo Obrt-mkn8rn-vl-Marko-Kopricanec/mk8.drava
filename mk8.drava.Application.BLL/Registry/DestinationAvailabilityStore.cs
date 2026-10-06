@@ -6,6 +6,7 @@ namespace Mk8.Drava.Application.BLL.Registry;
 public sealed class DestinationAvailabilityStore(TimeProvider clock)
 {
     private readonly Dictionary<string, DestinationAvailability> _destinations = new(StringComparer.Ordinal);
+    private bool _authorityValid = true;
     internal Lock Gate { get; } = new();
 
     public static void ValidateLease(TimeSpan lease)
@@ -19,6 +20,7 @@ public sealed class DestinationAvailabilityStore(TimeProvider clock)
         ValidateLease(lease);
         lock (Gate)
         {
+            if (!_authorityValid) throw new InvalidOperationException("Registered authority requires a restart after storage failure.");
             var destination = GetOrCreate("registered|" + intent.Identity.Partition);
             // Expired membership requires a new readiness proof; an old successful probe cannot resurrect it.
             if (!destination.LeaseValid(clock) || destination.Intent != intent)
@@ -96,6 +98,16 @@ public sealed class DestinationAvailabilityStore(TimeProvider clock)
         lock (Gate)
             foreach (var destination in _destinations.Values)
                 if (string.Equals(destination.Intent?.Identity.NodeId, nodeId, StringComparison.Ordinal)) destination.Revoked = true;
+    }
+
+    public void FailClosed()
+    {
+        lock (Gate)
+        {
+            _authorityValid = false;
+            foreach (var destination in _destinations.Values)
+                if (destination.Intent is not null) destination.Revoked = true;
+        }
     }
 
     public bool IsEligible(RegisteredUpstreamIdentity identity)

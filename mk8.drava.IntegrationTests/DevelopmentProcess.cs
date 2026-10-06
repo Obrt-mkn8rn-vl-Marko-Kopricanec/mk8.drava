@@ -9,6 +9,7 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
     private readonly Task _stdout;
     private readonly Task _stderr;
     private readonly StringBuilder _log = new();
+    private int _disposed;
 
     public DevelopmentProcess(string assemblyPath, string bootstrapPath)
     {
@@ -44,6 +45,7 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD003", Justification = "The stdout/stderr tasks are started and owned by this process fixture. Teardown joins them before disposing their Process-owned readers; the fixture captures no UI context.")]
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
         if (!_process.HasExited) _process.Kill(entireProcessTree: true);
         await _process.WaitForExitAsync().ConfigureAwait(false);
         await Task.WhenAll(_stdout, _stderr).ConfigureAwait(false);

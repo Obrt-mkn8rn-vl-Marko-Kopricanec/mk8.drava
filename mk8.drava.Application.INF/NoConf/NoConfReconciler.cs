@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -14,6 +13,7 @@ namespace Mk8.Drava.Application.INF.NoConf;
 public sealed partial class NoConfReconciler : BackgroundService
 {
     private readonly RegistryCoordinator _registry;
+    private readonly IPolicyRepository _policies;
     private readonly DestinationAvailabilityStore _availability;
     private readonly ProxyConfigurationStore _store;
     private readonly NoConfSnapshotCompiler _compiler;
@@ -33,12 +33,16 @@ public sealed partial class NoConfReconciler : BackgroundService
     private string _policyHash = "";
     private int _version;
     private string _failure = "";
+    private PolicyRevision? _acceptedPolicy;
+    private bool _policyLoaded;
+    private long _appliedPolicyRevision;
 
     public NoConfReconciler(RegistryCoordinator registry, DestinationAvailabilityStore availability, ProxyConfigurationStore store,
         NoConfSnapshotCompiler compiler, IRegisteredReadinessProbe readiness, IServiceDnsVerifier dns, IGatewayPublicationSource gateway,
-        string policyPath, string domain, string localNodeId, TimeProvider clock, ILogger<NoConfReconciler> logger)
+        string policyPath, string domain, string localNodeId, TimeProvider clock, ILogger<NoConfReconciler> logger, IPolicyRepository policies)
     {
         ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(policies);
         ArgumentNullException.ThrowIfNull(availability);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(compiler);
@@ -51,6 +55,7 @@ public sealed partial class NoConfReconciler : BackgroundService
         ArgumentNullException.ThrowIfNull(domain);
         RegistryNames.RequireLabel(localNodeId);
         _registry = registry; _availability = availability; _store = store; _compiler = compiler; _readiness = readiness; _dns = dns; _gateway = gateway;
+        _policies = policies;
         _policyPath = policyPath; _domain = domain; _localNodeId = localNodeId; _clock = clock; _logger = logger;
     }
 
@@ -91,24 +96,29 @@ public sealed partial class NoConfReconciler : BackgroundService
         try
         {
             EnsureBaseline();
-            var policy = await NoConfPolicyFile.ReadAsync(_policyPath, cancellationToken).ConfigureAwait(false);
-            var hash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(policy)));
+            RequireAuthority();
+            await LoadPolicyAsync(cancellationToken).ConfigureAwait(false);
+            var (policy, fileRejected) = await ReadDesiredPolicyAsync(cancellationToken).ConfigureAwait(false);
             var state = _registry.State;
-            if (Compiled?.DesiredRevision == state.Revision && string.Equals(hash, _policyHash, StringComparison.Ordinal)) return;
-            var candidate = _compiler.Compile(state, _baseline ?? throw new InvalidOperationException("Manual baseline is missing."), policy, _domain, _localNodeId);
-            if (_registry.State.Revision != state.Revision) return;
-            var snapshot = candidate.Snapshot.WithVersion(checked(++_version));
-            var applied = new CompiledNoConfSnapshot(candidate.DesiredRevision, snapshot, candidate.Services);
-            lock (_publicationGate)
+            var desired = new PolicyRevision(checked((_acceptedPolicy?.Revision ?? 0) + 1), NoConfPolicyFile.Encode(policy), _clock.GetUtcNow(), "file-watcher", "file");
+            if (Compiled?.DesiredRevision == state.Revision && _appliedPolicyRevision == _acceptedPolicy?.Revision && string.Equals(desired.Digest, _policyHash, StringComparison.Ordinal))
             {
-                InvalidateChangedProofs(applied, state);
-                _store.Replace(snapshot);
-                Volatile.Write(ref _compiled, applied);
+                SetPolicyFailure(fileRejected);
+                return;
             }
-            _policyHash = hash;
-            Volatile.Write(ref _failure, "");
-            foreach (var intent in state.Instances.Values)
-                if (!applied.Services.ContainsKey(intent.Identity.ServiceId)) _availability.ClearPublication(intent.Identity);
+            var candidate = CompileDesiredPolicy(state, policy, ref fileRejected);
+            if (fileRejected && _acceptedPolicy is { } retained) desired = retained;
+            if (Compiled?.DesiredRevision == state.Revision && _appliedPolicyRevision == desired.Revision && string.Equals(desired.Digest, _policyHash, StringComparison.Ordinal))
+            {
+                SetPolicyFailure(fileRejected);
+                return;
+            }
+            if (_registry.State.Revision != state.Revision) return;
+            if (_acceptedPolicy is null || !string.Equals(desired.Digest, _acceptedPolicy.Digest, StringComparison.Ordinal))
+            {
+                if (!await CommitPolicyAsync(desired, state.Revision, cancellationToken).ConfigureAwait(false)) return;
+            }
+            if (InstallPolicy(candidate, state, _acceptedPolicy ?? throw new InvalidOperationException("Accepted policy is missing."))) SetPolicyFailure(fileRejected);
         }
         catch (Exception exception) when (exception is InvalidDataException or ArgumentException or JsonException or IOException)
         {

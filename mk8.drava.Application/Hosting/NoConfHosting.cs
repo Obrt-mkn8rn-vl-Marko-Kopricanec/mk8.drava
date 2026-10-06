@@ -23,7 +23,7 @@ internal static class NoConfHosting
             provider.GetRequiredService<NoConfSnapshotCompiler>(), provider.GetRequiredService<IRegisteredReadinessProbe>(),
             provider.GetRequiredService<IServiceDnsVerifier>(), registration.Plans,
             Path.Combine(bootstrap.StateDirectory, "config", "noconf.json"), controller.Domain, bootstrap.NodeId, TimeProvider.System,
-            provider.GetRequiredService<ILogger<NoConfReconciler>>()));
+            provider.GetRequiredService<ILogger<NoConfReconciler>>(), registration.Policies));
         services.AddHostedService(provider => provider.GetRequiredService<NoConfReconciler>());
     }
 }

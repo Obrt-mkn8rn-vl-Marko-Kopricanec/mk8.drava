@@ -22,7 +22,7 @@ public sealed partial class ProxyAdministrationDispatcher(
     ProxyConfigLintAdministrationService lint, ProxyRouteDiagnosticsAdministrationService routes,
     ProxyCacheAdministrationService cache, ProxyDiagnosticsAdministrationService diagnostics,
     ProxyAdminAuditAdministrationService audit, ProxyAcmeAdministrationService acme,
-    ProxyMetricsAdministrationService metrics, ProxyBackupAdministrationService backup)
+    ProxyMetricsAdministrationService metrics, ProxyBackupAdministrationService backup, NoConfAdministration? drava = null)
 {
     public async ValueTask<ControlReply> ExecuteAsync(ControlRequest request, CancellationToken cancellationToken)
     {
@@ -47,12 +47,19 @@ public sealed partial class ProxyAdministrationDispatcher(
                 ControlOperation.MetricsExport => ExportMetrics(request),
                 ControlOperation.BackupQuery => EmptyPayload(request, ControlJson.Reply(ProxyBackupManifestResponseMapper.FromManifest(backup.CreateManifest()))),
                 ControlOperation.RestoreValidate => await ValidateRestoreAsync(request, cancellationToken).ConfigureAwait(false),
+                ControlOperation.RegistryQuery or ControlOperation.PolicyQuery or ControlOperation.PolicyUpdate or ControlOperation.PolicyRollback or ControlOperation.NodeRevoke or ControlOperation.InstanceRevoke
+                    => drava is null ? new ControlReply { StatusCode = 503, SafeReason = "Controller administration is unavailable." } : await drava.ExecuteAsync(request, cancellationToken).ConfigureAwait(false),
                 _ => new ControlReply { StatusCode = 501, SafeReason = "Control operation is not supported." },
             };
         }
         catch (Exception exception) when (exception is InvalidDataException or ArgumentException or JsonException)
         {
-            return new ControlReply { StatusCode = 400, SafeReason = "Control request failed validation." };
+            return drava is { StorageHealthy: false } ? new ControlReply { StatusCode = 503, SafeReason = "Control authority is unavailable." }
+                : new ControlReply { StatusCode = 400, SafeReason = "Control request failed validation." };
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            return new ControlReply { StatusCode = 503, SafeReason = "Control authority is unavailable." };
         }
     }
 

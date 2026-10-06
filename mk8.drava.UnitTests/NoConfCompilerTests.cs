@@ -140,8 +140,8 @@ public sealed class NoConfCompilerTests
         Assert.Throws<InvalidDataException>(() => new NodeGrant("node", "owner", RegistryTestFixture.Fingerprint, "svc", [address], 1, 65535, DateTimeOffset.UtcNow.AddDays(1), revoked: false));
     }
 
-    private static NoConfSnapshotCompiler Compiler() => new(new ProxyEndpointAddressPolicy(), new ProxyUrlSyntaxPolicy());
-    private static ProxyConfigurationSnapshot Baseline() => ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(
+    internal static NoConfSnapshotCompiler Compiler() => new(new ProxyEndpointAddressPolicy(), new ProxyUrlSyntaxPolicy());
+    internal static ProxyConfigurationSnapshot Baseline() => ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(
         new ProxyOptions { Listeners = [new ListenerOptions { Name = "http", Address = "127.0.0.1", Port = 8080 }] }, new ProxyOperationalOptions(),
         ProxyAdminTokenResolution.None("DRAVA_ADMIN_TOKEN"), new Dictionary<string, RuntimeCertificate>(StringComparer.Ordinal), 1, DateTimeOffset.UtcNow,
         "manual", [], new ProxyConfigurationDiscovery(new ProxyFilesystemLayout("/development", "/development/config", "/development/sites", "/development/logs", "/development/certs", "/development/state", "/development/config/proxy.json"), [], [], []));

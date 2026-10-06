@@ -1,4 +1,5 @@
 using Mk8.Drava.Application.BLL.Registry;
+using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.DAL.Registry;
 using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Application.INF.Registry;
@@ -14,6 +15,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
     public RegistryCoordinator Registry { get; }
     public SignedRegistrationHandler Handler { get; }
     public ServingPlanState Plans { get; }
+    public IPolicyRepository Policies => _repository;
 
     private RegistrationRuntime(SqliteRegistryRepository repository, LocalSiteCertificateAuthority authority, RegistryCoordinator registry,
         EnrollmentVerifier verifier, SignedRegistrationHandler handler, ServingPlanState plans)
