@@ -21,7 +21,12 @@ public sealed class DestinationAvailabilityStore(TimeProvider clock)
         {
             var destination = GetOrCreate("registered|" + intent.Identity.Partition);
             // Expired membership requires a new readiness proof; an old successful probe cannot resurrect it.
-            if (!destination.LeaseValid(clock) || destination.Intent != intent) destination.Ready = false;
+            if (!destination.LeaseValid(clock) || destination.Intent != intent)
+            {
+                destination.Ready = false;
+                destination.Publication = null;
+                destination.ReadinessGeneration = checked(destination.ReadinessGeneration + 1);
+            }
             destination.Intent = intent;
             destination.RenewedAt = clock.GetTimestamp();
             destination.Lease = lease;
@@ -30,13 +35,13 @@ public sealed class DestinationAvailabilityStore(TimeProvider clock)
         }
     }
 
-    public bool SetReadiness(RegisteredUpstreamIdentity identity, bool ready, TimeSpan validity)
+    public bool SetReadiness(RegisteredUpstreamIdentity identity, bool ready, TimeSpan validity, long? expectedGeneration = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         if (validity < TimeSpan.FromSeconds(1) || validity > TimeSpan.FromMinutes(5)) throw new InvalidDataException("Invalid readiness proof lifetime.");
         lock (Gate)
         {
-            if (!_destinations.TryGetValue("registered|" + identity.Partition, out var destination) || !destination.LeaseValid(clock)) return false;
+            if (!_destinations.TryGetValue("registered|" + identity.Partition, out var destination) || !destination.LeaseValid(clock) || (expectedGeneration is { } generation && generation != destination.ReadinessGeneration)) return false;
             destination.Ready = ready;
             destination.CheckedAt = clock.GetTimestamp();
             destination.ProofValidity = validity;
@@ -44,16 +49,38 @@ public sealed class DestinationAvailabilityStore(TimeProvider clock)
         }
     }
 
-    public bool SetPublication(RegisteredUpstreamIdentity identity, DestinationPublication publication)
+    public bool SetPublication(RegisteredUpstreamIdentity identity, DestinationPublication publication, long? expectedGeneration = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(publication);
         lock (Gate)
         {
-            if (!_destinations.TryGetValue("registered|" + identity.Partition, out var destination) || destination.Revoked) return false;
+            if (!_destinations.TryGetValue("registered|" + identity.Partition, out var destination) || !destination.LeaseValid(clock) || (expectedGeneration is { } generation && generation != destination.ReadinessGeneration)) return false;
             destination.Publication = publication;
+            destination.PublicationAt = clock.GetTimestamp();
+            var validity = publication.ValidUntilUtc - clock.GetUtcNow();
+            destination.PublicationValidity = validity > TimeSpan.FromMinutes(5) ? TimeSpan.FromMinutes(5) : validity;
             return true;
         }
+    }
+
+    public void InvalidateReadiness(RegisteredUpstreamIdentity identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        lock (Gate)
+            if (_destinations.TryGetValue("registered|" + identity.Partition, out var destination))
+            {
+                destination.Ready = false;
+                destination.Publication = null;
+                destination.ReadinessGeneration = checked(destination.ReadinessGeneration + 1);
+            }
+    }
+
+    public void ClearPublication(RegisteredUpstreamIdentity identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        lock (Gate)
+            if (_destinations.TryGetValue("registered|" + identity.Partition, out var destination)) destination.Publication = null;
     }
 
     public void Revoke(RegisteredUpstreamIdentity identity)
@@ -78,6 +105,15 @@ public sealed class DestinationAvailabilityStore(TimeProvider clock)
             return _destinations.TryGetValue("registered|" + identity.Partition, out var destination) && destination.IsEligible(clock);
     }
 
+    public bool HasEligibleRegisteredUpstream(IReadOnlyList<RuntimeUpstream> upstreams)
+    {
+        ArgumentNullException.ThrowIfNull(upstreams);
+        lock (Gate)
+            foreach (var upstream in upstreams)
+                if (upstream.Membership is not null && FindEligible(upstream) is not null) return true;
+        return false;
+    }
+
     public int ActiveRequests(RuntimeUpstream upstream)
     {
         ArgumentNullException.ThrowIfNull(upstream);
@@ -93,7 +129,7 @@ public sealed class DestinationAvailabilityStore(TimeProvider clock)
             if (!_destinations.TryGetValue("registered|" + identity.Partition, out var destination)) return new(false, false, false, false);
             var age = clock.GetElapsedTime(destination.CheckedAt);
             return new(destination.LeaseValid(clock), destination.Ready && age >= TimeSpan.Zero && age < destination.ProofValidity,
-                destination.Publication?.IsValid(clock.GetUtcNow()) == true, destination.Revoked);
+                destination.Publication?.IsValid(clock.GetUtcNow()) == true && clock.GetElapsedTime(destination.PublicationAt) >= TimeSpan.Zero && clock.GetElapsedTime(destination.PublicationAt) < destination.PublicationValidity, destination.Revoked, destination.Publication, destination.ReadinessGeneration);
         }
     }
 

@@ -6,16 +6,22 @@ using Mk8.Drava.Transport.Protocol.V1;
 
 namespace Mk8.Drava.Application.Hosting;
 
-internal sealed class ServingPlanState
+internal sealed class ServingPlanState : Mk8.Drava.Application.BLL.Registry.IGatewayPublicationSource
 {
     private readonly PresentationPlan _plan;
     private int _acknowledged;
+    private readonly string _domain;
+    private readonly int _httpPort;
+    private readonly int _httpsPort;
 
     public ServingPlanState(ApplicationBootstrap bootstrap, LocalSiteCertificateAuthority authority)
     {
         ArgumentNullException.ThrowIfNull(bootstrap);
         ArgumentNullException.ThrowIfNull(authority);
         var controller = bootstrap.Controller ?? throw new InvalidOperationException("Controller configuration is missing.");
+        _domain = controller.Domain;
+        _httpPort = bootstrap.HttpPort;
+        _httpsPort = bootstrap.HttpsPort;
         using var certificate = authority.IssueGateway(controller.Domain, [bootstrap.IngressAddress]);
         using var root = authority.PublicCertificate;
         _plan = new PresentationPlan
@@ -43,6 +49,9 @@ internal sealed class ServingPlanState
     }
 
     public bool IsAcknowledged => Volatile.Read(ref _acknowledged) != 0;
+
+    public Mk8.Drava.Application.BLL.Registry.GatewayPublicationProof? ReadPublicationProof() => IsAcknowledged && _plan.ValidUntilUnixSeconds > DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+        ? new(checked((long)_plan.Generation), DateTimeOffset.FromUnixTimeSeconds(_plan.ValidUntilUnixSeconds), _domain, _httpPort, _httpsPort) : null;
 
     public bool Acknowledge(PlanAcknowledgment acknowledgment)
     {

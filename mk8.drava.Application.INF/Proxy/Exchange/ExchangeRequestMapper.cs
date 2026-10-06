@@ -28,6 +28,7 @@ public static class ExchangeRequestMapper
         var path = query < 0 ? request.RawTarget : request.RawTarget[..query];
         var head = new Http1RequestHead(request.Method, request.RawTarget, path, "HTTP/1.1", request.Authority, framing, headers);
         return new ProxyRequest(head, request.ListenerId, new ForwardedHeadersPeer(request.PeerAddress, $"{request.PeerAddress}:{request.PeerPort}"),
-            request.ClientProtocol, request.HasContentLength ? request.ContentLength : null);
+            request.ClientProtocol switch { "HTTP/1.1" => "http1", "HTTP/2" => "http2", "HTTP/3" => "http3", _ => throw new InvalidDataException("Unsupported client protocol.") },
+            request.HasContentLength ? request.ContentLength : null);
     }
 }

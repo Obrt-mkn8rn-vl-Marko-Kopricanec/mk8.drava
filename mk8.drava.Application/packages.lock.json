@@ -129,6 +129,7 @@
       "mk8.drava.application.inf": {
         "type": "Project",
         "dependencies": {
+          "DnsClient": "[1.8.0, )",
           "mk8.drava.Application.BLL": "[0.1.0-alpha.1, )",
           "mk8.drava.Application.DAL": "[0.1.0-alpha.1, )",
           "mk8.drava.Contracts": "[0.1.0-alpha.1, )",
@@ -151,6 +152,12 @@
           "mk8.drava.Configuration": "[0.1.0-alpha.1, )",
           "mk8.drava.Contracts": "[0.1.0-alpha.1, )"
         }
+      },
+      "DnsClient": {
+        "type": "CentralTransitive",
+        "requested": "[1.8.0, )",
+        "resolved": "1.8.0",
+        "contentHash": "RRwtaCXkXWsx0mmsReGDqCbRLtItfUbkRJlet1FpdciVhyMGKcPd57T1+8Jki9ojHlq9fntVhXQroOOgRak8DQ=="
       },
       "Google.Protobuf": {
         "type": "CentralTransitive",

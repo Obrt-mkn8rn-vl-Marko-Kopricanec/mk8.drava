@@ -13,6 +13,9 @@ public sealed class ExchangeInbound : IAsyncStreamReader<ExchangeFrame>
     private readonly Channel<ExchangeFrame> _body;
     private readonly int _maximum;
     private int _requestFrames;
+    private int _responseCompleting;
+
+    public void AllowClientCompletion() => Volatile.Write(ref _responseCompleting, 1);
 
     public ExchangeInbound(IAsyncStreamReader<ExchangeFrame> reader, ExchangeServerWriter writer, int window)
     {
@@ -65,7 +68,9 @@ public sealed class ExchangeInbound : IAsyncStreamReader<ExchangeFrame>
                     throw new InvalidDataException("Unexpected inbound exchange frame.");
                 if (!_body.Writer.TryWrite(frame)) throw new InvalidDataException("Inbound metadata exceeded its bound.");
             }
-            throw new EndOfStreamException("Private request stream ended before exchange completion.");
+            if (!requestEnded || Volatile.Read(ref _responseCompleting) == 0)
+                throw new EndOfStreamException("Private request stream ended before exchange completion.");
+            _body.Writer.TryComplete();
         }
         catch (Exception exception) when (exception is IOException or RpcException or OperationCanceledException)
         {

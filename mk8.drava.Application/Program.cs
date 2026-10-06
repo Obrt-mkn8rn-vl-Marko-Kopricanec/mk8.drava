@@ -63,6 +63,7 @@ internal static class Program
         builder.Services.AddSingleton(registration.Plans);
         builder.Services.AddSingleton(services => new RegistrationService(services.GetRequiredService<Mk8.Drava.Application.INF.Registry.SignedRegistrationHandler>()));
         builder.Services.AddSingleton(services => new ControlService(services.GetRequiredService<ServingPlanState>()));
+        builder.Services.AddNoConfRuntime(bootstrap, registration);
         builder.Services.AddGrpc().AddServiceOptions<RegistrationService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
     }
 

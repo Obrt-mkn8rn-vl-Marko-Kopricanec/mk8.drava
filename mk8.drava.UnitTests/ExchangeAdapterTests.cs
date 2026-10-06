@@ -9,6 +9,18 @@ namespace Mk8.Drava.UnitTests;
 
 public sealed class ExchangeAdapterTests
 {
+    [Theory]
+    [InlineData("HTTP/1.1", "http1")]
+    [InlineData("HTTP/2", "http2")]
+    [InlineData("HTTP/3", "http3")]
+    public void IncomingVersionsPreserveProtocolMetricsAcrossTheVirtualHttp1Adapter(string protocol, string expected)
+    {
+        var request = new RequestHead { Version = FrameLimits.Version, ExchangeId = Guid.NewGuid().ToString("N"), GatewayId = "gateway", GatewayGeneration = 1,
+            ListenerId = "http", Method = "GET", RawTarget = "/", Authority = "svc.site.test", Scheme = "http", ClientProtocol = protocol,
+            PeerAddress = "127.0.0.1", PeerPort = 12345 };
+        Assert.Equal(expected, ExchangeRequestMapper.ToRequest(request).ClientProtocol);
+    }
+
     [Fact]
     public async Task DecodesFragmentedInformationalChunkedResponseAndTrailersAsync()
     {

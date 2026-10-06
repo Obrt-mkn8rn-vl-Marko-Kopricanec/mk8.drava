@@ -272,5 +272,6 @@ internal static partial class ProxyServiceCollectionExtensions
         RequestIds = services.GetRequiredService<RequestIdGenerator>(),
         Observer = services.GetRequiredService<IProxyRequestObserver>(),
         Clock = services.GetRequiredService<TimeProvider>(),
+        Availability = services.GetRequiredService<Mk8.Drava.Application.BLL.Registry.DestinationAvailabilityStore>(),
     };
 }

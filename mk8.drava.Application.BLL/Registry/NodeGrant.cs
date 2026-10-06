@@ -19,6 +19,8 @@ public sealed record NodeGrant
             if (!IPAddress.TryParse(address, out var parsed) || !string.Equals(parsed.ToString(), address, StringComparison.Ordinal) ||
                 parsed.Equals(IPAddress.Any) || parsed.Equals(IPAddress.IPv6Any) || parsed.IsIPv4MappedToIPv6 || parsed.IsIPv6Multicast)
                 throw new InvalidDataException("Enrollment requires canonical unicast endpoint literals.");
+            else if (parsed.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && parsed.GetAddressBytes()[0] is 0 or >= 224)
+                throw new InvalidDataException("Enrollment cannot authorize unspecified, multicast or reserved IPv4 endpoints.");
         NodeId = nodeId;
         OwnerId = ownerId;
         CertificateFingerprint = certificateFingerprint;

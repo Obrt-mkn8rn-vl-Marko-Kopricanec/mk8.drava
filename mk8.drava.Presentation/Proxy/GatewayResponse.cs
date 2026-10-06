@@ -61,6 +61,7 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
                 digest.Verify(frame.Complete);
                 ApplyTrailers(_trailers);
                 _complete = true;
+                await writer.CompleteAsync().ConfigureAwait(false);
                 break;
             default:
                 throw new InvalidDataException("Application reset or invalid response frame.");

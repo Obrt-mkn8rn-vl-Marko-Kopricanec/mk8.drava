@@ -44,8 +44,9 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
             await registry.InitializeAsync(cancellationToken).ConfigureAwait(false);
             using var root = authority.PublicCertificate;
             verifier = new EnrollmentVerifier(root, registry, clock);
-            var handler = new SignedRegistrationHandler(bootstrap.SiteId, registry, availability, verifier, new EnrollmentChallenges(clock), clock);
-            var runtime = new RegistrationRuntime(repository, authority, registry, verifier, handler, new ServingPlanState(bootstrap, authority));
+            var plans = new ServingPlanState(bootstrap, authority);
+            var handler = new SignedRegistrationHandler(bootstrap.SiteId, registry, availability, verifier, new EnrollmentChallenges(clock), clock, plans);
+            var runtime = new RegistrationRuntime(repository, authority, registry, verifier, handler, plans);
             repository = null;
             authority = null;
             registry = null;

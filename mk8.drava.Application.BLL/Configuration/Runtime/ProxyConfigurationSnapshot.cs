@@ -43,6 +43,11 @@ public sealed record ProxyConfigurationSnapshot
     public IReadOnlyList<RuntimeRoute> Routes { get; }
     public RuntimeMetricsOptions Metrics { get; }
 
+    public ProxyConfigurationSnapshot WithVersion(int version)
+    {
+        return new ProxyConfigurationSnapshot(version, LoadedAtUtc, SourceDirectory, SourceFiles, Discovery, AdminSecurity, Acme, Timeouts, ConnectionLimits, Observability, Limits, ForwardedHeaders, Certificates, Listeners, Routes, Metrics);
+    }
+
     public ProxyConfigurationSnapshot WithCertificates(IReadOnlyDictionary<string, RuntimeCertificate> certificates)
     {
         return new ProxyConfigurationSnapshot(Version, LoadedAtUtc, SourceDirectory, SourceFiles, Discovery, AdminSecurity, Acme, Timeouts, ConnectionLimits, Observability, Limits, ForwardedHeaders, certificates, Listeners, Routes, Metrics);

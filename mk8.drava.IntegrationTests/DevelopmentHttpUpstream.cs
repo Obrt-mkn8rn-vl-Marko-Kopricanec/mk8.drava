@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -14,10 +15,13 @@ internal sealed class DevelopmentHttpUpstream : IAsyncDisposable
 
     private DevelopmentHttpUpstream(WebApplication application, int port) { _application = application; Port = port; }
 
-    public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler)
+    public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler, X509Certificate2? certificate = null, Action<string?>? onSni = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
-        builder.WebHost.ConfigureKestrel(options => options.Listen(System.Net.IPAddress.Loopback, 0));
+        builder.WebHost.ConfigureKestrel(options => options.Listen(System.Net.IPAddress.Loopback, 0, listener =>
+        {
+            if (certificate is not null) listener.UseHttps(https => https.ServerCertificateSelector = (_, name) => { onSni?.Invoke(name); return certificate; });
+        }));
         var application = builder.Build();
         try
         {

@@ -15,10 +15,11 @@ public sealed class SignedRegistrationHandler
     private readonly EnrollmentVerifier _enrollments;
     private readonly EnrollmentChallenges _challenges;
     private readonly TimeProvider _clock;
+    private readonly IGatewayPublicationSource? _publication;
     private static readonly TimeSpan Lease = TimeSpan.FromSeconds(90);
 
     public SignedRegistrationHandler(string siteId, RegistryCoordinator registry, DestinationAvailabilityStore availability,
-        EnrollmentVerifier enrollments, EnrollmentChallenges challenges, TimeProvider clock)
+        EnrollmentVerifier enrollments, EnrollmentChallenges challenges, TimeProvider clock, IGatewayPublicationSource? publication = null)
     {
         RegistryNames.RequireLabel(siteId);
         ArgumentNullException.ThrowIfNull(registry);
@@ -32,6 +33,7 @@ public sealed class SignedRegistrationHandler
         _enrollments = enrollments;
         _challenges = challenges;
         _clock = clock;
+        _publication = publication;
     }
 
     public ChallengeReply Challenge(ChallengeRequest request)
@@ -84,13 +86,25 @@ public sealed class SignedRegistrationHandler
             throw new InvalidDataException("Unknown or superseded instance boot.");
         var status = _availability.Status(identity);
         var phase = current.Draining ? RegistrationPhase.Draining : status.Revoked ? RegistrationPhase.Revoked : !status.LeaseValid ? RegistrationPhase.LeaseExpired :
-            status.ReadinessValid && status.PublicationValid ? RegistrationPhase.Ready : RegistrationPhase.Checking;
+            !status.ReadinessValid ? RegistrationPhase.Checking : status.PublicationValid ? RegistrationPhase.Ready :
+            status.Publication is { RouteRevision: > 0, CertificateVerified: false } ? RegistrationPhase.CertificatePending :
+            status.Publication is { RouteRevision: > 0, DnsVerified: false } ? RegistrationPhase.DnsPending : RegistrationPhase.Checking;
         return new RegistrationStatus
         {
             Identity = command.Identity, Phase = phase, DesiredRevision = _registry.State.Revision,
             LeaseSeconds = 90, RenewAfterSeconds = 30,
+            AssignedUrls = phase == RegistrationPhase.Ready ? AssignedUrls(identity) : [],
             Reason = phase == RegistrationPhase.Checking ? "Readiness and acknowledged publication are required." : "",
         };
+    }
+
+    private IReadOnlyList<string> AssignedUrls(RegisteredUpstreamIdentity identity)
+    {
+        var gateway = _publication?.ReadPublicationProof();
+        if (gateway is null) return [];
+        var host = identity.ServiceId + "." + gateway.Domain;
+        return gateway.HttpsPort > 0 ? ["https://" + host + (gateway.HttpsPort == 443 ? "" : ":" + gateway.HttpsPort.ToString(System.Globalization.CultureInfo.InvariantCulture)) + "/"] :
+            gateway.HttpPort > 0 ? ["http://" + host + (gateway.HttpPort == 80 ? "" : ":" + gateway.HttpPort.ToString(System.Globalization.CultureInfo.InvariantCulture)) + "/"] : [];
     }
 
     private static RegisteredUpstreamIdentity ToDomain(RegistrationIdentity identity) => new(identity.NodeId, identity.OwnerId, identity.ServiceId,

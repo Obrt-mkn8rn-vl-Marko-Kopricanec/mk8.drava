@@ -55,6 +55,7 @@ internal sealed class ProxyExchangeService(ProxyRequestPipeline pipeline, ProxyF
             if (!head.HasBody) await stream.VerifyEmptyUploadAsync(token).ConfigureAwait(false);
             var executor = new MdravaProxyExchangeExecutor(stream, forwarder, upgrades);
             await pipeline.ExecuteAsync(ExchangeRequestMapper.ToRequest(head), executor, token).ConfigureAwait(false);
+            inbound.AllowClientCompletion();
             await stream.CompleteAsync(token).ConfigureAwait(false);
         }
         var pump = inbound.PumpAsync(token);
@@ -64,6 +65,9 @@ internal sealed class ProxyExchangeService(ProxyRequestPipeline pipeline, ProxyF
             var first = await Task.WhenAny(pump, execute).ConfigureAwait(false);
             if (first == pump) await pump.ConfigureAwait(false);
             await execute.ConfigureAwait(false);
+            using var closing = CancellationTokenSource.CreateLinkedTokenSource(token);
+            closing.CancelAfter(TimeSpan.FromSeconds(5));
+            await pump.WaitAsync(closing.Token).ConfigureAwait(false);
         }
         finally
         {

@@ -31,4 +31,5 @@ public sealed class ProxyPipelineServices
     public required RequestIdGenerator RequestIds { get; init; }
     public required IProxyRequestObserver Observer { get; init; }
     public required TimeProvider Clock { get; init; }
+    public Registry.DestinationAvailabilityStore? Availability { get; init; }
 }

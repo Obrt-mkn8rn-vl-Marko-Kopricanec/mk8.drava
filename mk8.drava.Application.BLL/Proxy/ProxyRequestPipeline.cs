@@ -87,6 +87,12 @@ public sealed class ProxyRequestPipeline(ProxyPipelineServices services)
     private async ValueTask ProcessRouteAsync(ProxyRequest request, ProxyConfigurationSnapshot snapshot, RuntimeListener listener,
         RuntimeRoute route, ForwardedHeadersContext forwarded, ProxyRequestContext context, IProxyExchangeExecutor executor, CancellationToken cancellationToken)
     {
+        if (string.Equals(route.SiteName, "registered", StringComparison.Ordinal) &&
+            (services.Availability is null || !services.Availability.HasEligibleRegisteredUpstream(route.Upstreams)))
+        {
+            await FailureAsync(ProxyFailureKind.NoHealthyUpstream, context, executor, cancellationToken).ConfigureAwait(false);
+            return;
+        }
         var isUpgrade = services.Upgrades.IsUpgradeRequest(request.Head);
         var action = services.RouteActions.Evaluate(ProxyRouteActionRuntimeMapper.ToPolicyInput(route, request.Head, listener, isUpgrade));
         if (!action.ShouldProxy)

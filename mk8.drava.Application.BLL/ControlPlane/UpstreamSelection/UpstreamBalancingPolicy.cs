@@ -7,6 +7,8 @@ public sealed record UpstreamBalancingPolicy
         if (!Enum.IsDefined(algorithm)) throw new InvalidDataException("Unknown balancing algorithm.");
         if (algorithm == BalancingAlgorithm.StableHash && (string.IsNullOrEmpty(affinityHeader) || affinityHeader.Length > 128))
             throw new InvalidDataException("Hash balancing requires an explicit affinity header.");
+        if (algorithm != BalancingAlgorithm.StableHash && affinityHeader is not null)
+            throw new InvalidDataException("An affinity header requires hash balancing.");
         if (affinityHeader is not null)
             foreach (var character in affinityHeader)
                 if (!char.IsAsciiLetterOrDigit(character) && character != '-') throw new InvalidDataException("Invalid affinity header.");

@@ -8,6 +8,9 @@ internal sealed class DestinationAvailability
     public DateTimeOffset CredentialNotAfterUtc { get; set; }
     public bool Revoked { get; set; }
     public bool Ready { get; set; }
+    public long ReadinessGeneration { get; set; }
+    public long PublicationAt { get; set; }
+    public TimeSpan PublicationValidity { get; set; }
     public long CheckedAt { get; set; }
     public TimeSpan ProofValidity { get; set; }
     public DestinationPublication? Publication { get; set; }
@@ -22,6 +25,6 @@ internal sealed class DestinationAvailability
     public bool IsEligible(TimeProvider clock)
     {
         var age = clock.GetElapsedTime(CheckedAt);
-        return LeaseValid(clock) && Ready && age >= TimeSpan.Zero && age < ProofValidity && Publication?.IsValid(clock.GetUtcNow()) == true;
+        return LeaseValid(clock) && Ready && age >= TimeSpan.Zero && age < ProofValidity && Publication?.IsValid(clock.GetUtcNow()) == true && clock.GetElapsedTime(PublicationAt) >= TimeSpan.Zero && clock.GetElapsedTime(PublicationAt) < PublicationValidity;
     }
 }
