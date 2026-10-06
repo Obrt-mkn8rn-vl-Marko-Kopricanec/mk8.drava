@@ -1,0 +1,5 @@
+namespace Mk8.Drava.Application.BLL.ControlPlane.Status;
+public sealed record ProxySubsystemSummaries(ProxyConfigSubsystemSummary Config, ProxyListenerSubsystemSummary Listeners, ProxyRouteSubsystemSummary Routes, ProxyCertificateSubsystemSummary Certificates, ProxyAcmeSubsystemSummary Acme, ProxyUpstreamSubsystemSummary Upstreams, ProxyCacheSubsystemSummary Cache, ProxyCircuitSubsystemSummary Circuits, ProxyLimitSubsystemSummary Limits, ProxyLogSubsystemSummary Logs, ProxyShutdownSubsystemSummary Shutdown, ProxyProtocolSubsystemSummary Protocols)
+{
+    public static ProxySubsystemSummaries Unknown { get; } = new(ProxyConfigSubsystemSummary.Unknown, ProxyListenerSubsystemSummary.Unknown, ProxyRouteSubsystemSummary.Unknown, ProxyCertificateSubsystemSummary.Unknown, ProxyAcmeSubsystemSummary.Unknown, ProxyUpstreamSubsystemSummary.Unknown, ProxyCacheSubsystemSummary.Unknown, ProxyCircuitSubsystemSummary.Unknown, ProxyLimitSubsystemSummary.Unknown, ProxyLogSubsystemSummary.Unknown, ProxyShutdownSubsystemSummary.Unknown, ProxyProtocolSubsystemSummary.Unknown);
+}

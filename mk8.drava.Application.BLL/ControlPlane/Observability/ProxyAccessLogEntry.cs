@@ -1,0 +1,2 @@
+namespace Mk8.Drava.Application.BLL.ControlPlane.Observability;
+public sealed record ProxyAccessLogEntry(DateTimeOffset TimestampUtc, string RequestId, int ConfigVersion, string ListenerName, string? Transport, string? Protocol, string? Method, string? Host, string? Target, string? SiteName, string? RouteName, string? RouteAction, string? UpstreamName, string? UpstreamEndpoint, int? ResponseStatusCode, long DurationMilliseconds, string? FailureKind, bool ResponseStarted, bool KeepClientConnectionOpen, bool IsUpgrade, bool TunnelEstablished);

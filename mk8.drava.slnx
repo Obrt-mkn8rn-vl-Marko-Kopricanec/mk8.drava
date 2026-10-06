@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+  <Project Path="mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj" />
+  <Project Path="mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj" />
+  <Project Path="mk8.drava.Application.INF/mk8.drava.Application.INF.csproj" />
+  <Project Path="mk8.drava.CompatibilityTests/mk8.drava.CompatibilityTests.csproj" />
+</Solution>

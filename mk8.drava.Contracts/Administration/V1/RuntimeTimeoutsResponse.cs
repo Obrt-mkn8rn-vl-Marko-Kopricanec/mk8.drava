@@ -1,0 +1,4 @@
+namespace Mk8.Drava.Contracts.Administration.V1;
+public sealed record RuntimeTimeoutsResponse(TimeSpan ClientRequestHeadTimeout, TimeSpan ClientRequestBodyIdleTimeout, TimeSpan UpstreamConnectTimeout, TimeSpan UpstreamResponseHeadTimeout, TimeSpan UpstreamResponseBodyIdleTimeout, TimeSpan DownstreamWriteTimeout, TimeSpan TlsHandshakeTimeout, TimeSpan ClientKeepAliveIdleTimeout, TimeSpan UpstreamIdleConnectionLifetime, TimeSpan TunnelIdleTimeout)
+{
+}

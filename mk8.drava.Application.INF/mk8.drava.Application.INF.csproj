@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Mk8.Drava.Application.INF</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj" />
+    <ProjectReference Include="../mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj" />
+    <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+</Project>

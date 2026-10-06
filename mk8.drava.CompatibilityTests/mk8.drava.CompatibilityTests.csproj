@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Mk8.Drava.CompatibilityTests</RootNamespace>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj" />
+    <ProjectReference Include="../mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj" />
+    <ProjectReference Include="../mk8.drava.Application.INF/mk8.drava.Application.INF.csproj" />
+    <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+  </ItemGroup>
+</Project>

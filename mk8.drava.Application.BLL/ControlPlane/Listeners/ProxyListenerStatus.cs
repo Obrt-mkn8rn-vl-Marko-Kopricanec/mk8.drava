@@ -1,0 +1,2 @@
+namespace Mk8.Drava.Application.BLL.ControlPlane.Listeners;
+public sealed record ProxyListenerStatus(string Name, string Identity, string BindKey, string Kind, string Address, int Port, string Transport, bool TlsEnabled, string Protocols, ProxyListenerHttp3Status Http3, int Http2MaxConcurrentStreams, int Http2MaxHeaderListBytes, int Http2MaxFrameSize, ProxyListenerState State, long ActiveConnections, DateTimeOffset? StartedAtUtc, DateTimeOffset? StoppedAtUtc, string? LastError);

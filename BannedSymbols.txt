@@ -1,0 +1,5 @@
+# Untrusted payloads use explicit, bounded, versioned contracts.
+T:System.Runtime.Serialization.Formatters.Binary.BinaryFormatter; Use the versioned Drava contract and bounded serializers.
+T:System.Net.WebRequest; Use a configured HttpClient or the controlled upstream transport.
+M:System.Threading.Tasks.Task.Wait; Use cancellation-aware asynchronous operations.
+P:System.Threading.Tasks.Task`1.Result; Await cancellation-aware asynchronous operations.
