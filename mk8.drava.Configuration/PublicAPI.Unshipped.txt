@@ -143,3 +143,9 @@ static Mk8.Drava.Configuration.IpcEndpoint.operator ==(Mk8.Drava.Configuration.I
 static Mk8.Drava.Configuration.RegistrationSiteTrust.RequireLabel(string! value) -> void
 static Mk8.Drava.Configuration.RegistrationSiteTrust.operator !=(Mk8.Drava.Configuration.RegistrationSiteTrust? left, Mk8.Drava.Configuration.RegistrationSiteTrust? right) -> bool
 static Mk8.Drava.Configuration.RegistrationSiteTrust.operator ==(Mk8.Drava.Configuration.RegistrationSiteTrust? left, Mk8.Drava.Configuration.RegistrationSiteTrust? right) -> bool
+Mk8.Drava.Configuration.ApplicationBootstrap.AdministratorTokenPath.get -> string!
+Mk8.Drava.Configuration.ApplicationBootstrap.AdministratorTokenPath.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.ManagementPort.get -> int
+Mk8.Drava.Configuration.ApplicationBootstrap.ManagementPort.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.ManagementPort.get -> int
+Mk8.Drava.Configuration.GatewayBootstrap.ManagementPort.init -> void

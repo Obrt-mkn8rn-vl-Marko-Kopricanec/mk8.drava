@@ -6,6 +6,7 @@ public sealed record RuntimeHttp3SupportResponse
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "MA0051", Justification = "Atomic immutable compatibility projection: argument guards and property initialization. Splitting would require setters or change the public constructor contract.")]
+    [System.Text.Json.Serialization.JsonConstructor]
     public RuntimeHttp3SupportResponse(string runtimeSupport, bool quicListenerSupported, bool quicConnectionSupported, string configured, string enablementLevel, bool enabledForTraffic, bool quicListenerReady, bool altSvcConfigured, bool altSvcActive, int? altSvcMaxAgeSeconds, string disabledReason, bool udpQuicListenerIdentityModeled, string readinessConclusion, string defaultEnablementState, IReadOnlyList<string> defaultReadinessBlockers, string altSvcStateReason, string qpackMode, int qpackDynamicTableCapacity, int qpackBlockedStreams, string requestBodyMode, string clientHttp3SupportLevel, string upstreamHttp3SupportLevel, IReadOnlyList<string> clientProtocols, IReadOnlyList<string> upstreamProtocols, IReadOnlyList<string> supportedRouteActions, IReadOnlyList<string> supportedPolicyFeatures, IReadOnlyList<string> unsupportedFeatures, bool upstreamHttp3Configured, string upstreamPoolingMode, bool upstreamMultiplexingEnabled, int upstreamMaxStreamsPerConnection, string upstreamQpackMode, string upstreamPoolingLimitationReason)
     {
         ArgumentNullException.ThrowIfNull(runtimeSupport);

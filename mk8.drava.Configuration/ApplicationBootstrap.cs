@@ -11,6 +11,8 @@ public sealed record ApplicationBootstrap
     public string IngressAddress { get; init; } = "127.0.0.1";
     public int HttpPort { get; init; } = 80;
     public int HttpsPort { get; init; } = 443;
+    public int ManagementPort { get; init; }
+    public string AdministratorTokenPath { get; init; } = "";
     public int MaxConcurrentExchanges { get; init; } = 256;
     public ControllerBootstrap? Controller { get; init; }
 
@@ -25,6 +27,9 @@ public sealed record ApplicationBootstrap
         if (MaxConcurrentExchanges is < 1 or > 4096) throw new InvalidDataException("Invalid Application exchange admission limit.");
         Listen.Validate();
         Controller?.Validate();
+        if (ManagementPort is < 0 or > 65535 || (ManagementPort > 0 && (Controller is null || AdministratorTokenPath.Length == 0 || ManagementPort == HttpPort || ManagementPort == HttpsPort || ManagementPort == Controller.RegistrationPort)))
+            throw new InvalidDataException("Management requires a distinct enrolled listener and administrator credential.");
+        if (AdministratorTokenPath.Length > 0 && !Path.IsPathFullyQualified(AdministratorTokenPath)) throw new InvalidDataException("Administrator credential path must be absolute.");
         if (Controller is not null && (Controller.RegistrationPort == HttpPort || Controller.RegistrationPort == HttpsPort))
             throw new InvalidDataException("Registration and serving ports must be distinct.");
     }

@@ -2467,3 +2467,27 @@ static Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.operator !=(Mk8.Dr
 static Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.operator ==(Mk8.Drava.Contracts.Registration.V1.RegistrationStatus? left, Mk8.Drava.Contracts.Registration.V1.RegistrationStatus? right) -> bool
 static Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.operator !=(Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? left, Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? right) -> bool
 static Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.operator ==(Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? left, Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? right) -> bool
+Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest
+Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.<Clone>$() -> Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest!
+Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.ConfigurationQueryRequest(bool Effective = false) -> void
+Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.Deconstruct(out bool Effective) -> void
+Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.Effective.get -> bool
+Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.Effective.init -> void
+Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.Equals(Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest? other) -> bool
+Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest
+Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.<Clone>$() -> Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest!
+Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.Deconstruct(out int Limit) -> void
+Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.Equals(Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? other) -> bool
+Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.Limit.get -> int
+Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.Limit.init -> void
+Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.RecentItemsRequest(int Limit = 50) -> void
+override Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.GetHashCode() -> int
+override Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.ToString() -> string!
+override Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.GetHashCode() -> int
+override Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.ToString() -> string!
+static Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.operator !=(Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest? left, Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest? right) -> bool
+static Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest.operator ==(Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest? left, Mk8.Drava.Contracts.Administration.V1.ConfigurationQueryRequest? right) -> bool
+static Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.operator !=(Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? left, Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? right) -> bool
+static Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest.operator ==(Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? left, Mk8.Drava.Contracts.Administration.V1.RecentItemsRequest? right) -> bool

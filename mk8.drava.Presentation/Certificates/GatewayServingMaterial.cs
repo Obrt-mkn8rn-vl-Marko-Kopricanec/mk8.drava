@@ -88,7 +88,7 @@ public sealed class GatewayServingMaterial : IDisposable
 
     private static void ValidateListeners(PresentationPlan plan, GatewayBootstrap bootstrap)
     {
-        var expected = (bootstrap.HttpPort > 0 ? 1 : 0) + (bootstrap.HttpsPort > 0 ? 1 : 0) + 1;
+        var expected = (bootstrap.HttpPort > 0 ? 1 : 0) + (bootstrap.HttpsPort > 0 ? 1 : 0) + (bootstrap.ManagementPort > 0 ? 1 : 0) + 1;
         if (plan.Listeners.Count != expected) throw new InvalidDataException("Gateway plan changes its bootstrap listener scope.");
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var listener in plan.Listeners)
@@ -100,6 +100,7 @@ public sealed class GatewayServingMaterial : IDisposable
                 "http" => bootstrap.HttpPort > 0 && listener.Port == bootstrap.HttpPort && !listener.Tls && !listener.Registration,
                 "https" => bootstrap.HttpsPort > 0 && listener.Port == bootstrap.HttpsPort && listener.Tls && !listener.Registration,
                 "registration" => listener.Port == bootstrap.RegistrationPort && listener.Tls && listener.Registration,
+                "management" => bootstrap.ManagementPort > 0 && listener.Port == bootstrap.ManagementPort && listener.Tls && !listener.Registration,
                 _ => false,
             };
             if (!allowed) throw new InvalidDataException("Gateway plan requests an unapproved listener.");

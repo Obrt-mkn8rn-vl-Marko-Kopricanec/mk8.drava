@@ -21,9 +21,16 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public HttpClient Client { get; }
     public int TlsPort { get; private set; }
     public int RegistrationPort { get; private set; }
+    public int ManagementPort { get; private set; }
+    public string AdministratorTokenPath => Path.Combine(_directory, "app", "administrator.token");
     public string RootCertificatePath => Path.Combine(_directory, "site-root.der");
     public string NodeCertificatePath => Path.Combine(_directory, "node.pfx");
     public Task WritePolicyAsync(string json) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "noconf.json"), json);
+    public Task WriteManualRouteAsync(int upstreamPort, int? listenerPort = null) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "sites", "service.json"), JsonSerializer.Serialize(new
+    {
+        name = "test", host = "app.test", listeners = new[] { new { name = "http", address = "127.0.0.1", port = listenerPort ?? Port } },
+        pathPrefix = "/", upstreams = new[] { new { name = "test", address = "127.0.0.1", port = upstreamPort } },
+    }));
 
     private TwoProcessProxy(string directory, int port, IpcEndpoint ipc, DevelopmentProcess application, DevelopmentProcess gateway)
     {
@@ -37,7 +44,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false)
     {
         var directory = Path.Combine(Path.GetTempPath(), "drava_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -53,14 +60,15 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var port = UnusedPort();
         var registrationPort = UnusedPort();
         var tlsPort = enrolledSite ? UnusedPort() : 0;
-        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery).ConfigureAwait(false);
+        var managementPort = administration ? UnusedPort() : 0;
+        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery).ConfigureAwait(false);
         var root = FindRoot();
         var application = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), applicationPath);
         DevelopmentProcess? gateway = null;
         try
         {
             gateway = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Gateway", "bin", "Release", "net10.0", "mk8.drava.Gateway.dll"), gatewayPath);
-            var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { TlsPort = tlsPort, RegistrationPort = registrationPort };
+            var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { TlsPort = tlsPort, RegistrationPort = registrationPort, ManagementPort = managementPort };
             try { await result.WaitUntilBoundAsync().ConfigureAwait(false); return result; }
             catch { result.Client.Dispose(); throw; }
         }
@@ -73,7 +81,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         }
     }
 
-    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery)
+    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery)
     {
         ControllerBootstrap? controller = null;
         if (enrolledSite)
@@ -86,8 +94,14 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             await EnrollDevelopmentNodeAsync(directory, state, authority).ConfigureAwait(false);
             controller = new ControllerBootstrap { Domain = "site.test", CertificateAuthorityPath = authorityPath, EnrollmentRootFingerprint = fingerprint, RegistrationPort = registrationPort, DnsServerAddress = dnsPort.HasValue ? "127.0.0.1" : "", DnsServerPort = dnsPort ?? 53 };
         }
-        var applicationBootstrap = new ApplicationBootstrap { SiteId = "development", NodeId = "local", StateDirectory = state, Listen = ipc, HttpPort = port, HttpsPort = tlsPort, Controller = controller };
-        var gatewayBootstrap = new GatewayBootstrap { SiteId = "development", StateDirectory = gatewayState, Application = ipc, HttpPort = port, HttpsPort = tlsPort, RegistrationPort = registrationPort, DiscoveryEnabled = discovery, EnrollmentRootFingerprint = controller?.EnrollmentRootFingerprint ?? "" };
+        var administratorPath = managementPort > 0 ? Path.Combine(state, "administrator.token") : "";
+        if (administratorPath.Length > 0)
+        {
+            await File.WriteAllTextAsync(administratorPath, Convert.ToHexString(RandomNumberGenerator.GetBytes(32))).ConfigureAwait(false);
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(administratorPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        var applicationBootstrap = new ApplicationBootstrap { SiteId = "development", NodeId = "local", StateDirectory = state, Listen = ipc, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, AdministratorTokenPath = administratorPath, Controller = controller };
+        var gatewayBootstrap = new GatewayBootstrap { SiteId = "development", StateDirectory = gatewayState, Application = ipc, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, RegistrationPort = registrationPort, DiscoveryEnabled = discovery, EnrollmentRootFingerprint = controller?.EnrollmentRootFingerprint ?? "" };
         var sites = Directory.CreateDirectory(Path.Combine(state, "config", "sites")).FullName;
         if (manualRoute) await File.WriteAllTextAsync(Path.Combine(sites, "service.json"), JsonSerializer.Serialize(new
         {
@@ -127,6 +141,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
                 {
                     await WaitForListenerAsync(TlsPort, timeout.Token).ConfigureAwait(false);
                     await WaitForListenerAsync(RegistrationPort, timeout.Token).ConfigureAwait(false);
+                    if (ManagementPort > 0) await WaitForListenerAsync(ManagementPort, timeout.Token).ConfigureAwait(false);
                 }
                 if (OperatingSystem.IsWindows() || File.Exists(Ipc.UnixSocketPath)) return;
             }

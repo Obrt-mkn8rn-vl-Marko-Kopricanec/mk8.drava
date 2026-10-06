@@ -7,6 +7,7 @@ using Mk8.Drava.Configuration;
 using Mk8.Drava.Presentation.Certificates;
 using Mk8.Drava.Presentation.Proxy;
 using Mk8.Drava.Presentation.Registration;
+using Mk8.Drava.Presentation.Administration;
 using Mk8.Drava.Transport.Clients;
 using Mk8.Drava.Transport.Discovery;
 using Mk8.Drava.Transport.Protocol.V1;
@@ -30,6 +31,8 @@ internal static class Program
         builder.Services.AddSingleton(bootstrap);
         builder.Services.AddSingleton(channel);
         builder.Services.AddSingleton<GatewayProxy>();
+        builder.Services.AddSingleton<GatewayAdministrationClient>();
+        builder.Services.AddControllers().AddApplicationPart(typeof(ProxyStatusController).Assembly);
         if (material is not null)
         {
             builder.Services.AddGrpc(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
@@ -38,14 +41,7 @@ internal static class Program
         ConfigureListeners(builder, bootstrap, material);
         var app = builder.Build();
         await using var lifetime = app.ConfigureAwait(false);
-        if (material is not null) app.MapGrpcService<GatewayRegistrationService>();
-        app.MapFallback(context =>
-        {
-            if (context.Connection.LocalPort != bootstrap.RegistrationPort)
-                return app.Services.GetRequiredService<GatewayProxy>().InvokeAsync(context);
-            context.Response.StatusCode = 404;
-            return Task.CompletedTask;
-        });
+        MapPresentation(app, bootstrap, material);
         await app.StartAsync().ConfigureAwait(false);
         if (material is not null) await AcknowledgeAsync(channel, material.Plan).ConfigureAwait(false);
         var advertisement = material is not null && bootstrap.DiscoveryEnabled ? TryAdvertise(bootstrap, app.Logger) : null;
@@ -55,6 +51,30 @@ internal static class Program
             await using var discoveryLifetime = advertisement.ConfigureAwait(false);
             await app.WaitForShutdownAsync().ConfigureAwait(false);
         }
+    }
+
+    private static void MapPresentation(WebApplication app, GatewayBootstrap bootstrap, GatewayServingMaterial? material)
+    {
+        app.Use((context, next) =>
+        {
+            var management = bootstrap.ManagementPort > 0 && context.Connection.LocalPort == bootstrap.ManagementPort;
+            var administrationPath = context.Request.Path.StartsWithSegments("/admin", StringComparison.OrdinalIgnoreCase);
+            if (management != administrationPath)
+            {
+                context.Response.StatusCode = 404;
+                return Task.CompletedTask;
+            }
+            return next(context);
+        });
+        app.MapControllers();
+        if (material is not null) app.MapGrpcService<GatewayRegistrationService>();
+        app.MapFallback(context =>
+        {
+            if (context.Connection.LocalPort != bootstrap.RegistrationPort && context.Connection.LocalPort != bootstrap.ManagementPort)
+                return app.Services.GetRequiredService<GatewayProxy>().InvokeAsync(context);
+            context.Response.StatusCode = 404;
+            return Task.CompletedTask;
+        });
     }
 
     private static GatewaySiteAdvertisement? TryAdvertise(GatewayBootstrap bootstrap, ILogger logger)
@@ -131,6 +151,17 @@ internal static class Program
                     https.ClientCertificateValidation = (certificate, _, _) => material.ValidateClientCertificate(certificate);
                 });
             });
+            if (bootstrap.ManagementPort > 0)
+                options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.ManagementPort, listener =>
+                {
+                    listener.Protocols = HttpProtocols.Http1AndHttp2;
+                    listener.UseHttps(material.ServingCertificate, https =>
+                    {
+                        https.SslProtocols = SslProtocols.None;
+                        https.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
+                        https.ClientCertificateValidation = (certificate, _, _) => material.ValidateClientCertificate(certificate);
+                    });
+                });
         });
     }
 }

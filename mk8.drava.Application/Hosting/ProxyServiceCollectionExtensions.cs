@@ -102,7 +102,6 @@ internal static partial class ProxyServiceCollectionExtensions
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ProxyListenerReloadPlanner>();
         services.AddSingleton<IRuntimeHttp3PlatformSupportSource, SystemRuntimeHttp3PlatformSupportSource>();
-        services.AddSingleton<IProxyListenerReloadApplier>(static _ => new GatewayPlanCoordinator());
         services.AddSingleton<ProxyAdmissionController>();
         services.AddSingleton<IProxyRuntimeDirectoryProbe, ProxyRuntimeDirectoryProbe>();
         services.AddSingleton<ProxyRuntimePreflightService>();

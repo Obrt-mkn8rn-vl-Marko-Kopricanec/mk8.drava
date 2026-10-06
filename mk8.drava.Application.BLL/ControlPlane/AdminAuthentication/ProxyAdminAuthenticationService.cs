@@ -51,9 +51,14 @@ public sealed class ProxyAdminAuthenticationService
 
     public void RecordCompleted(ProxyAdminRequestAuthenticationInput input, ProxyAdminAuthenticationOutcome outcome, int statusCode)
     {
+        RecordOperationCompleted(input, outcome, statusCode, succeeded: statusCode < InternalServerErrorStatusCode);
+    }
+
+    public void RecordOperationCompleted(ProxyAdminRequestAuthenticationInput input, ProxyAdminAuthenticationOutcome outcome, int statusCode, bool succeeded)
+    {
         ArgumentNullException.ThrowIfNull(outcome);
         ArgumentNullException.ThrowIfNull(input);
-        RecordAudit(input, outcome.AuthResult, statusCode, succeeded: outcome.Allowed && statusCode < InternalServerErrorStatusCode, outcome.RecentAuditCapacity);
+        RecordAudit(input, outcome.AuthResult, statusCode, succeeded: outcome.Allowed && succeeded, outcome.RecentAuditCapacity);
     }
 
     public void RecordFailed(ProxyAdminRequestAuthenticationInput input, ProxyAdminAuthenticationOutcome outcome)

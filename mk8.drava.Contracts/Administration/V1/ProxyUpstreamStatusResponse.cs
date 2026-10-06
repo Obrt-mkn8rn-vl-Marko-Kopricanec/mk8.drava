@@ -5,6 +5,7 @@ public sealed record ProxyUpstreamStatusResponse
     {
     }
 
+    [System.Text.Json.Serialization.JsonConstructor]
     public ProxyUpstreamStatusResponse(string routeName, string upstreamName, string endpoint, string scheme, bool tlsCertificateValidationEnabled, string? sniHost, bool healthCheckEnabled, UpstreamHealthStateResponse healthState, string? lastHealthCheckResult, DateTimeOffset? lastHealthCheckAtUtc, int consecutiveSuccesses, int consecutiveFailures, long selectedRequests, long requestFailures, string protocol, int weight, CircuitBreakerStatusResponse circuitBreaker)
     {
         ArgumentNullException.ThrowIfNull(routeName);

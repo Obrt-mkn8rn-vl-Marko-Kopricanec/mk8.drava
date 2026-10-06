@@ -26,6 +26,7 @@ public sealed partial class NoConfReconciler : BackgroundService
     private readonly TimeProvider _clock;
     private readonly ILogger<NoConfReconciler> _logger;
     private readonly Lock _publicationGate = new();
+    private readonly SemaphoreSlim _compilationGate = new(1, 1);
     private readonly ConcurrentDictionary<string, ReadinessTracker> _trackers = new(StringComparer.Ordinal);
     private ProxyConfigurationSnapshot? _baseline;
     private CompiledNoConfSnapshot? _compiled;
@@ -58,27 +59,38 @@ public sealed partial class NoConfReconciler : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _baseline = _store.Snapshot;
-        _version = _baseline.Version;
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        await Task.WhenAll(RunLoopAsync(CompileLoopAsync, lifetime), RunLoopAsync(ProbeLoopAsync, lifetime)).ConfigureAwait(false);
+    }
+
+    private static async Task RunLoopAsync(Func<CancellationToken, Task> loop, CancellationTokenSource lifetime)
+    {
+        try { await loop(lifetime.Token).ConfigureAwait(false); }
+        catch { await lifetime.CancelAsync().ConfigureAwait(false); throw; }
+    }
+
+    private async Task CompileLoopAsync(CancellationToken stoppingToken)
+    {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), _clock);
-        var nextProbe = _clock.GetTimestamp();
-        var firstProbe = true;
         do
         {
             await CompileLatestAsync(stoppingToken).ConfigureAwait(false);
-            if (_clock.GetElapsedTime(nextProbe) >= TimeSpan.FromSeconds(10) || firstProbe)
-            {
-                await ProbeAndPublishAsync(stoppingToken).ConfigureAwait(false);
-                nextProbe = _clock.GetTimestamp();
-                firstProbe = false;
-            }
         } while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
+    }
+
+    private async Task ProbeLoopAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10), _clock);
+        do { await ProbeAndPublishAsync(stoppingToken).ConfigureAwait(false); }
+        while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
     }
 
     private async ValueTask CompileLatestAsync(CancellationToken cancellationToken)
     {
+        await _compilationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            EnsureBaseline();
             var policy = await NoConfPolicyFile.ReadAsync(_policyPath, cancellationToken).ConfigureAwait(false);
             var hash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(policy)));
             var state = _registry.State;
@@ -104,6 +116,19 @@ public sealed partial class NoConfReconciler : BackgroundService
             if (Failure.Length == 0) InvalidPolicy(_logger, exception);
             Volatile.Write(ref _failure, "Noconf revision rejected; the last accepted snapshot is retained.");
         }
+        finally { _compilationGate.Release(); }
+    }
+
+    private void EnsureBaseline()
+    {
+        _baseline ??= _store.Snapshot;
+        _version = Math.Max(_version, _store.Snapshot.Version);
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        _compilationGate.Dispose();
     }
 
     private void InvalidateChangedProofs(CompiledNoConfSnapshot applied, RegistryState state)

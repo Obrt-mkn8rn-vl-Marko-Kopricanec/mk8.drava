@@ -8,6 +8,11 @@ using Mk8.Drava.Application.DAL.Configuration.Paths;
 using Mk8.Drava.Application.BLL.Proxy;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
 using Mk8.Drava.Application.INF.Publication;
+using Mk8.Drava.Application.INF.Administration;
+using Mk8.Drava.Application.BLL.ControlPlane.AdminAuthentication;
+using Mk8.Drava.Application.BLL.ControlPlane.Listeners;
+using Mk8.Drava.Application.INF.NoConf;
+using Mk8.Drava.Application.INF.Runtime;
 using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application;
@@ -50,6 +55,8 @@ internal static class Program
 
     private static void ConfigureServices(WebApplicationBuilder builder, ApplicationBootstrap bootstrap, RegistrationRuntime? registration)
     {
+        builder.Services.AddSingleton<IProxyListenerReloadApplier>(services => new GatewayPlanCoordinator(bootstrap,
+            services.GetRequiredService<ProxyConfigurationStore>(), registration?.Plans, registration is null ? null : services.GetRequiredService<NoConfReconciler>()));
         builder.Services.AddSingleton<IMdravaDataDirectoryProvider>(new ApplicationDataDirectoryProvider(bootstrap.StateDirectory));
         builder.Services.AddSingleton(_ => new IpcIdentityInterceptor(bootstrap));
         builder.Services.AddSingleton(_ => new ExchangeAdmission(bootstrap));
@@ -57,12 +64,15 @@ internal static class Program
             services.GetRequiredService<ProxyForwarder>(), services.GetRequiredService<UpgradeForwarder>(), bootstrap, services.GetRequiredService<ExchangeAdmission>()));
         builder.Services.AddGrpc(options => { options.Interceptors.Add<IpcIdentityInterceptor>(); options.MaxReceiveMessageSize = 8 * 1024 * 1024; options.MaxSendMessageSize = 8 * 1024 * 1024; });
         builder.Services.AddGrpc().AddServiceOptions<ProxyExchangeService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
+        builder.Services.RemoveAll<IProxyAdminSecurityOptionsReader>();
+        builder.Services.AddSingleton<IProxyAdminSecurityOptionsReader>(_ => new EnrolledAdministratorSecurityReader(bootstrap.AdministratorTokenPath));
+        builder.Services.AddSingleton<ProxyAdministrationDispatcher>();
+        builder.Services.AddSingleton(services => new ControlService(registration?.Plans, services.GetRequiredService<ProxyAdminAuthenticationService>(), services.GetRequiredService<ProxyAdministrationDispatcher>()));
         if (registration is null) return;
         builder.Services.AddSingleton(registration.Registry);
         builder.Services.AddSingleton(registration.Handler);
         builder.Services.AddSingleton(registration.Plans);
         builder.Services.AddSingleton(services => new RegistrationService(services.GetRequiredService<Mk8.Drava.Application.INF.Registry.SignedRegistrationHandler>()));
-        builder.Services.AddSingleton(services => new ControlService(services.GetRequiredService<ServingPlanState>()));
         builder.Services.AddNoConfRuntime(bootstrap, registration);
         builder.Services.AddGrpc().AddServiceOptions<RegistrationService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
     }
@@ -73,10 +83,10 @@ internal static class Program
         await using var appLifetime = app.ConfigureAwait(false);
         await RuntimeInitializer.InitializeAsync(app.Services, CancellationToken.None).ConfigureAwait(false);
         app.MapGrpcService<ProxyExchangeService>();
+        app.MapGrpcService<ControlService>();
         if (registration is not null)
         {
             app.MapGrpcService<RegistrationService>();
-            app.MapGrpcService<ControlService>();
         }
         await app.RunAsync().ConfigureAwait(false);
     }

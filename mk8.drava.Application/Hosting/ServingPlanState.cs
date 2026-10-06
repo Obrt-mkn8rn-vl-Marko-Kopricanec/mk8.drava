@@ -39,6 +39,7 @@ internal sealed class ServingPlanState : Mk8.Drava.Application.BLL.Registry.IGat
         if (bootstrap.HttpPort > 0) _plan.Listeners.Add(Listener("http", bootstrap.IngressAddress, bootstrap.HttpPort, tls: false, registration: false));
         if (bootstrap.HttpsPort > 0) _plan.Listeners.Add(Listener("https", bootstrap.IngressAddress, bootstrap.HttpsPort, tls: true, registration: false));
         _plan.Listeners.Add(Listener("registration", bootstrap.IngressAddress, controller.RegistrationPort, tls: true, registration: true));
+        if (bootstrap.ManagementPort > 0) _plan.Listeners.Add(Listener("management", bootstrap.IngressAddress, bootstrap.ManagementPort, tls: true, registration: false));
         _plan.ContentSha256 = ByteString.CopyFrom(PresentationPlanDigest.Compute(_plan));
     }
 

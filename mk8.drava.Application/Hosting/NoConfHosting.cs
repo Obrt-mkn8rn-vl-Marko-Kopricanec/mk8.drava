@@ -13,7 +13,7 @@ internal static class NoConfHosting
         var controller = bootstrap.Controller ?? throw new InvalidOperationException("Controller configuration is missing.");
         var publicAddresses = controller.PublicAddresses.Count > 0 ? controller.PublicAddresses : [bootstrap.IngressAddress];
         var protectedAddresses = new List<string>(publicAddresses) { bootstrap.IngressAddress };
-        services.AddSingleton(new NoConfIngressGuard(bootstrap.NodeId, protectedAddresses, [bootstrap.HttpPort, bootstrap.HttpsPort, controller.RegistrationPort]));
+        services.AddSingleton(new NoConfIngressGuard(bootstrap.NodeId, protectedAddresses, [bootstrap.HttpPort, bootstrap.HttpsPort, controller.RegistrationPort, bootstrap.ManagementPort]));
         services.AddSingleton<NoConfSnapshotCompiler>();
         services.AddSingleton<IRegisteredReadinessProbe, RegisteredReadinessProbe>();
         services.AddSingleton<IServiceDnsVerifier>(_ => new ServiceDnsVerifier(publicAddresses, controller.DnsServerAddress, controller.DnsServerPort));
