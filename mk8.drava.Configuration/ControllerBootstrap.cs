@@ -9,9 +9,11 @@ public sealed record ControllerBootstrap
     public IReadOnlyList<string> PublicAddresses { get; init; } = [];
     public string DnsServerAddress { get; init; } = "";
     public int DnsServerPort { get; init; } = 53;
+    public RelayLimits Relay { get; init; } = new();
 
     public void Validate()
     {
+        Relay.Validate();
         if (Domain.Length is < 3 or > 189 || !Domain.Contains('.', StringComparison.Ordinal)) throw new InvalidDataException("Site requires a fully qualified domain with room for its service label.");
         foreach (var label in Domain.Split('.'))
         {

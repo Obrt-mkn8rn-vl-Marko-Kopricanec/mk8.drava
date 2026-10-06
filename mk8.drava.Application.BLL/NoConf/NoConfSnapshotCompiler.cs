@@ -71,7 +71,7 @@ public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses
         {
             var intent = intents[index];
             // A remote loopback literal belongs to its node. It is never connected to as controller-local.
-            if (intent.Draining || (!string.Equals(intent.Identity.NodeId, localNodeId, StringComparison.Ordinal) && IPAddress.IsLoopback(IPAddress.Parse(intent.Address)))) continue;
+            if (intent.Draining || (intent.Relay is null && !string.Equals(intent.Identity.NodeId, localNodeId, StringComparison.Ordinal) && IPAddress.IsLoopback(IPAddress.Parse(intent.Address)))) continue;
             var upstream = mapped.Upstreams[index];
             upstreams.Add(new RuntimeUpstream(upstream.RouteName, upstream.Name, upstream.Scheme, upstream.Protocol, upstream.Address, upstream.Port,
                 upstream.Weight, upstream.Tls, upstream.CircuitBreaker, intent.Identity));

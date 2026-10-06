@@ -7,12 +7,29 @@ using System.Text;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
 using Mk8.Drava.Application.BLL.ControlPlane.Timeouts;
+using Mk8.Drava.Application.INF.NodeRelay;
+using Mk8.Drava.Contracts.Relay.V1;
 
 namespace Mk8.Drava.Application.INF.Proxy.Connections;
 public sealed class UpstreamConnectionFactory
 {
+    private readonly RegisteredRelayConnector? _registered;
+    public UpstreamConnectionFactory() { }
+    public UpstreamConnectionFactory(RegisteredRelayConnector registered) { ArgumentNullException.ThrowIfNull(registered); _registered = registered; }
+
     public async ValueTask<UpstreamTransportConnection> ConnectAsync(UpstreamTransportEndpoint endpoint, TimeSpan connectTimeout, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        if (endpoint.MembershipPartition.Length != 0)
+        {
+            if (_registered is null) throw new IOException("Registered connections require their current authority adapter.");
+            var raw = await _registered.TryConnectAsync(endpoint, RelayPurpose.Exchange, cancellationToken).ConfigureAwait(false);
+            if (raw is not null)
+            {
+                try { return new UpstreamTransportConnection(endpoint, socket: null, await CreateStreamAsync(raw, endpoint, connectTimeout, cancellationToken).ConfigureAwait(false)); }
+                catch { await raw.DisposeAsync().ConfigureAwait(false); throw; }
+            }
+        }
         var addresses = await ProxyTimeoutPolicy.RunAsync(timeoutToken => ResolveAddressesAsync(endpoint, timeoutToken), connectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
         Exception? lastException = null;
         foreach (var address in addresses)
@@ -53,6 +70,11 @@ public sealed class UpstreamConnectionFactory
     private static async ValueTask<Stream> CreateStreamAsync(Socket socket, UpstreamTransportEndpoint endpoint, TimeSpan connectTimeout, CancellationToken cancellationToken)
     {
         var networkStream = new NetworkStream(socket, ownsSocket: false);
+        return await CreateStreamAsync(networkStream, endpoint, connectTimeout, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async ValueTask<Stream> CreateStreamAsync(Stream networkStream, UpstreamTransportEndpoint endpoint, TimeSpan connectTimeout, CancellationToken cancellationToken)
+    {
         if (!string.Equals(endpoint.Scheme, "https", StringComparison.OrdinalIgnoreCase))
         {
             return networkStream;

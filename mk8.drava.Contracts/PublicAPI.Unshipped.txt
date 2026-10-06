@@ -2668,3 +2668,22 @@ override Mk8.Drava.Contracts.Relay.V1.RelayCapability.GetHashCode() -> int
 override Mk8.Drava.Contracts.Relay.V1.RelayCapability.ToString() -> string!
 static Mk8.Drava.Contracts.Relay.V1.RelayCapability.operator !=(Mk8.Drava.Contracts.Relay.V1.RelayCapability? left, Mk8.Drava.Contracts.Relay.V1.RelayCapability? right) -> bool
 static Mk8.Drava.Contracts.Relay.V1.RelayCapability.operator ==(Mk8.Drava.Contracts.Relay.V1.RelayCapability? left, Mk8.Drava.Contracts.Relay.V1.RelayCapability? right) -> bool
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.<Clone>$() -> Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint!
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.Address.get -> string!
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.Address.init -> void
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.AgentBootId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.AgentBootId.init -> void
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.CertificateFingerprint.get -> string!
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.CertificateFingerprint.init -> void
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.Equals(Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? other) -> bool
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.NodeRelayEndpoint() -> void
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.Port.get -> int
+Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.Port.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Relay.get -> Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint?
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Relay.init -> void
+override Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.GetHashCode() -> int
+override Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.ToString() -> string!
+static Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.operator !=(Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? left, Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? right) -> bool
+static Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.operator ==(Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? left, Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? right) -> bool

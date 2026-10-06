@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.Extensions.Hosting;
 using Mk8.Drava.Contracts.Registration.V1;
 using Mk8.Drava.Transport.Registration;
+using Mk8.Drava.Transport.Relay;
 
 namespace Mk8.Drava.Registration;
 
@@ -16,6 +17,9 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
         ContractId = options.ContractId, InstanceId = options.InstanceId, BootId = Guid.NewGuid().ToString("N"),
     };
     private SiteRegistrationChannel? _channel;
+    private NodeAgentLocalClient? _agent;
+    private ServiceAdvertisement? _advertisement;
+    private bool _usesAgent;
     private bool _registerAttempted;
     private bool _registered;
     private int _draining;
@@ -35,21 +39,45 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
                 if (_channel is null) state.Failed();
                 else
                 {
-                    var advertisement = _registered ? null : BoundServiceAdvertisement.Read(server, options, _channel.LocalAddress);
+                    var advertisement = await RenewAgentAsync(_channel, stoppingToken).ConfigureAwait(false);
                     _registerAttempted = true;
-                    var result = await _channel.SubmitAsync(new RegistrationCommand { Identity = _identity, Operation = _registered ? RegistrationOperation.Renew : RegistrationOperation.Register, Advertisement = advertisement }, stoppingToken).ConfigureAwait(false);
+                    var result = await _channel.SubmitAsync(new RegistrationCommand { Identity = _identity, Operation = _registered ? RegistrationOperation.Renew : RegistrationOperation.Register, Advertisement = _registered ? null : advertisement }, stoppingToken).ConfigureAwait(false);
                     _registered = true;
                     state.Accept(result);
                     delay = TimeSpan.FromSeconds((result.Phase == RegistrationPhase.Ready ? result.RenewAfterSeconds : 5) * (System.Security.Cryptography.RandomNumberGenerator.GetInt32(800, 1201) / 1000d));
                 }
             }
-            catch (Exception exception) when (exception is RpcException or HttpRequestException or InvalidDataException or IOException)
+            catch (Exception exception) when (exception is RpcException or HttpRequestException or InvalidDataException or IOException or System.Text.Json.JsonException)
             {
                 _channel?.Dispose(); _channel = null; _registered = false; state.Failed();
             }
             finally { _operations.Release(); }
             await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
         }
+    }
+
+    private async ValueTask<ServiceAdvertisement> RenewAgentAsync(SiteRegistrationChannel channel, CancellationToken cancellationToken)
+    {
+        var advertisement = BoundServiceAdvertisement.Read(server, options, channel.LocalAddress);
+        var descriptor = await NodeAgentLocalClient.ReadDescriptorAsync(options.Site, options.NodeId, channel.NodeCertificateFingerprint, cancellationToken).ConfigureAwait(false);
+        if (descriptor is null)
+        {
+            if (_usesAgent) throw new InvalidDataException("The enrolled local agent is unavailable.");
+        }
+        else
+        {
+            _usesAgent = true;
+            if (_agent?.Descriptor != descriptor)
+            {
+                _agent?.Dispose(); _agent = new NodeAgentLocalClient(descriptor);
+                _registered = false;
+            }
+            var relay = await _agent.ApplyAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Register, Advertisement = advertisement }, cancellationToken).ConfigureAwait(false);
+            advertisement = advertisement with { Relay = relay };
+        }
+        if (_advertisement != advertisement) _registered = false;
+        _advertisement = advertisement;
+        return advertisement;
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
@@ -62,14 +90,24 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
             await _operations.WaitAsync(drain.Token).ConfigureAwait(false);
             try
             {
+                if (_agent is not null)
+                    await DrainAgentAsync(_agent, drain.Token).ConfigureAwait(false);
                 if (_registerAttempted && _channel is not null)
                     state.Accept(await _channel.SubmitAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Drain }, drain.Token).ConfigureAwait(false));
             }
             finally { _operations.Release(); }
         }
-        catch (Exception exception) when (exception is RpcException or HttpRequestException or InvalidDataException or OperationCanceledException) { }
+        catch (Exception exception) when (exception is RpcException or HttpRequestException or InvalidDataException or IOException or System.Text.Json.JsonException or OperationCanceledException) { }
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public override void Dispose() { base.Dispose(); _channel?.Dispose(); _operations.Dispose(); }
+    private async ValueTask DrainAgentAsync(NodeAgentLocalClient agent, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(1));
+        try { await agent.ApplyAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Drain }, timeout.Token).ConfigureAwait(false); }
+        catch (Exception exception) when (exception is RpcException or InvalidDataException or IOException or System.Text.Json.JsonException or OperationCanceledException) { }
+    }
+
+    public override void Dispose() { base.Dispose(); _agent?.Dispose(); _channel?.Dispose(); _operations.Dispose(); }
 }

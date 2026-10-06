@@ -3,11 +3,17 @@ using System.Net.Security;
 using System.Net.Sockets;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.Registry;
+using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
+using Mk8.Drava.Application.INF.NodeRelay;
+using Mk8.Drava.Contracts.Relay.V1;
 
 namespace Mk8.Drava.Application.INF.NoConf;
 
 public sealed class RegisteredReadinessProbe : IRegisteredReadinessProbe
 {
+    private readonly RegisteredRelayConnector? _relay;
+    public RegisteredReadinessProbe() { }
+    public RegisteredReadinessProbe(RegisteredRelayConnector relay) { ArgumentNullException.ThrowIfNull(relay); _relay = relay; }
     public async ValueTask<bool> CheckAsync(InstanceIntent intent, RuntimeUpstream upstream, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(intent);
@@ -21,7 +27,16 @@ public sealed class RegisteredReadinessProbe : IRegisteredReadinessProbe
         using var handler = new SocketsHttpHandler
         {
             AllowAutoRedirect = false, UseProxy = false, UseCookies = false, MaxConnectionsPerServer = 1, MaxResponseHeadersLength = 16,
-            ConnectCallback = (_, token) => ConnectAsync(new IPEndPoint(address, intent.Port), token),
+            ConnectCallback = async (_, token) =>
+            {
+                if (intent.Relay is not null)
+                {
+                    if (_relay is null) throw new IOException("Registered relay readiness requires its authority adapter.");
+                    return await _relay.TryConnectAsync(UpstreamTransportEndpointMapper.FromUpstream(upstream), RelayPurpose.Readiness, token).ConfigureAwait(false)
+                        ?? throw new IOException("Readiness relay did not return a transport.");
+                }
+                return await ConnectAsync(new IPEndPoint(address, intent.Port), token).ConfigureAwait(false);
+            },
             SslOptions = new SslClientAuthenticationOptions
             {
                 // This is the explicit, validated per-service setting also used by native forwarding. Secure by default.

@@ -49,6 +49,8 @@ public sealed record NodeGrant
             !string.Equals(OwnerId, intent.Identity.OwnerId, StringComparison.Ordinal) ||
             !(string.Equals(intent.Identity.ServiceId, ServicePrefix, StringComparison.Ordinal) || intent.Identity.ServiceId.StartsWith(ServicePrefix + "-", StringComparison.Ordinal)) ||
             intent.Port < MinimumPort || intent.Port > MaximumPort) return false;
+        if (intent.Relay is { } relay && (!string.Equals(relay.CertificateFingerprint, CertificateFingerprint, StringComparison.Ordinal) ||
+            relay.Port < MinimumPort || relay.Port > MaximumPort || !EndpointAddresses.Contains(relay.Address, StringComparer.Ordinal))) return false;
         foreach (var address in EndpointAddresses)
             if (string.Equals(address, intent.Address, StringComparison.Ordinal)) return true;
         return false;

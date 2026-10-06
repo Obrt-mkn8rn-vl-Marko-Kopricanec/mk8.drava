@@ -53,6 +53,7 @@ public sealed class SiteRegistrationChannel : IDisposable
     }
 
     public IPAddress? LocalAddress => Volatile.Read(ref _localAddress);
+    public string NodeCertificateFingerprint => _node.GetCertHashString(HashAlgorithmName.SHA256);
 
     public async ValueTask VerifySiteAsync(CancellationToken cancellationToken)
     {

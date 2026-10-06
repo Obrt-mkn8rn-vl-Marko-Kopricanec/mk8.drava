@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
+using Mk8.Drava.Registration;
 
 namespace Mk8.Drava.IntegrationTests;
 
@@ -12,16 +13,18 @@ internal sealed class DevelopmentHttpUpstream : IAsyncDisposable
 {
     private readonly WebApplication _application;
     public int Port { get; }
+    public DravaRegistrationState RegistrationState => _application.Services.GetRequiredService<DravaRegistrationState>();
 
     private DevelopmentHttpUpstream(WebApplication application, int port) { _application = application; Port = port; }
 
-    public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler, X509Certificate2? certificate = null, Action<string?>? onSni = null)
+    public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler, X509Certificate2? certificate = null, Action<string?>? onSni = null, DravaRegistrationOptions? registration = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.WebHost.ConfigureKestrel(options => options.Listen(System.Net.IPAddress.Loopback, 0, listener =>
         {
             if (certificate is not null) listener.UseHttps(https => https.ServerCertificateSelector = (_, name) => { onSni?.Invoke(name); return certificate; });
         }));
+        if (registration is not null) builder.Services.AddDravaRegistration(registration);
         var application = builder.Build();
         try
         {

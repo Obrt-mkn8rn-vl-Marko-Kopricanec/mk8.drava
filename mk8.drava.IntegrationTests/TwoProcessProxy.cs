@@ -25,6 +25,8 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public string AdministratorTokenPath => Path.Combine(_directory, "app", "administrator.token");
     public string RootCertificatePath => Path.Combine(_directory, "site-root.der");
     public string NodeCertificatePath => Path.Combine(_directory, "node.pfx");
+    public string EnrolledNodeId { get; private set; } = "local";
+    public string NodeRelayAddress { get; private set; } = "127.0.0.1";
     public Task WritePolicyAsync(string json) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "noconf.json"), json);
 
     public async Task RestartAsync()
@@ -57,7 +59,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false)
     {
         var directory = Path.Combine(Path.GetTempPath(), "drava_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -74,14 +76,16 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var registrationPort = UnusedPort();
         var tlsPort = enrolledSite ? UnusedPort() : 0;
         var managementPort = administration ? UnusedPort() : 0;
-        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery).ConfigureAwait(false);
+        var relayAddress = relayNode ? LocalRelayAddress() : null;
+        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress).ConfigureAwait(false);
         var root = FindRoot();
         var application = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), applicationPath);
         DevelopmentProcess? gateway = null;
         try
         {
             gateway = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Gateway", "bin", "Release", "net10.0", "mk8.drava.Gateway.dll"), gatewayPath);
-            var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { TlsPort = tlsPort, RegistrationPort = registrationPort, ManagementPort = managementPort };
+            var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { TlsPort = tlsPort, RegistrationPort = registrationPort, ManagementPort = managementPort,
+                EnrolledNodeId = relayNode ? "remote" : "local", NodeRelayAddress = relayAddress ?? "127.0.0.1" };
             try { await result.WaitUntilBoundAsync().ConfigureAwait(false); return result; }
             catch { result.Client.Dispose(); throw; }
         }
@@ -94,7 +98,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         }
     }
 
-    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery)
+    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery, string? relayAddress)
     {
         ControllerBootstrap? controller = null;
         if (enrolledSite)
@@ -104,7 +108,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             using var authority = LocalSiteCertificateAuthority.Open(authorityPath, fingerprint, TimeProvider.System);
             using var rootCertificate = authority.PublicCertificate;
             await File.WriteAllBytesAsync(Path.Combine(directory, "site-root.der"), rootCertificate.RawData).ConfigureAwait(false);
-            await EnrollDevelopmentNodeAsync(directory, state, authority).ConfigureAwait(false);
+            await EnrollDevelopmentNodeAsync(directory, state, authority, relayAddress).ConfigureAwait(false);
             controller = new ControllerBootstrap { Domain = "site.test", CertificateAuthorityPath = authorityPath, EnrollmentRootFingerprint = fingerprint, RegistrationPort = registrationPort, DnsServerAddress = dnsPort.HasValue ? "127.0.0.1" : "", DnsServerPort = dnsPort ?? 53 };
         }
         var administratorPath = managementPort > 0 ? Path.Combine(state, "administrator.token") : "";
@@ -128,17 +132,28 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         return (applicationPath, gatewayPath);
     }
 
-    private static async Task EnrollDevelopmentNodeAsync(string directory, string state, LocalSiteCertificateAuthority authority)
+    private static async Task EnrollDevelopmentNodeAsync(string directory, string state, LocalSiteCertificateAuthority authority, string? relayAddress)
     {
-        using var node = authority.IssueNode("local", ["127.0.0.1"]);
+        var nodeId = relayAddress is null ? "local" : "remote";
+        string[] addresses = relayAddress is null ? ["127.0.0.1"] : ["127.0.0.1", relayAddress];
+        using var node = authority.IssueNode(nodeId, addresses);
         await PrivateCertificateFile.WriteNewAsync(Path.Combine(directory, "node.pfx"), node.Export(X509ContentType.Pkcs12), CancellationToken.None).ConfigureAwait(false);
         var repository = await SqliteRegistryRepository.OpenAsync(state, "development", CancellationToken.None).ConfigureAwait(false);
         await using var repositoryLifetime = repository.ConfigureAwait(false);
         using var coordinator = new RegistryCoordinator(repository, new DestinationAvailabilityStore(TimeProvider.System), TimeProvider.System);
         await coordinator.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
-        var grant = new NodeGrant("local", "development", node.GetCertHashString(HashAlgorithmName.SHA256), "svc", ["127.0.0.1"], 1024, 65535,
+        var grant = new NodeGrant(nodeId, "development", node.GetCertHashString(HashAlgorithmName.SHA256), "svc", addresses, 1024, 65535,
             new DateTimeOffset(node.NotAfter.ToUniversalTime()), revoked: false);
         await coordinator.EnrollAsync(grant, "administrator", CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private static string LocalRelayAddress()
+    {
+        foreach (var network in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            if (network.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
+                foreach (var unicast in network.GetIPProperties().UnicastAddresses)
+                    if (unicast.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(unicast.Address) && !unicast.Address.Equals(IPAddress.Any)) return unicast.Address.ToString();
+        throw new InvalidOperationException("Logical remote-node validation requires an active local IPv4 LAN interface.");
     }
 
     private async Task WaitUntilBoundAsync()
@@ -176,7 +191,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
-    private static string FindRoot()
+    internal static string FindRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)

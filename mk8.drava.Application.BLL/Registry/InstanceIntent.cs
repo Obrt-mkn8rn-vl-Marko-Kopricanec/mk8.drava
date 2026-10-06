@@ -1,11 +1,12 @@
 using System.Net;
+using Mk8.Drava.Contracts.Registration.V1;
 
 namespace Mk8.Drava.Application.BLL.Registry;
 
 public sealed record InstanceIntent
 {
     public InstanceIntent(RegisteredUpstreamIdentity identity, string deploymentId, string address, int port,
-        string protocol, string scheme, string readinessPath, string zone, int weight, bool draining)
+        string protocol, string scheme, string readinessPath, string zone, int weight, bool draining, NodeRelayEndpoint? relay = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
         RegistryNames.RequireLabel(deploymentId);
@@ -28,6 +29,18 @@ public sealed record InstanceIntent
         Zone = zone;
         Weight = weight;
         Draining = draining;
+        if (relay is not null)
+        {
+            RegistryNames.RequireEpoch(relay.AgentBootId);
+            RegistryNames.RequireFingerprint(relay.CertificateFingerprint);
+            if (!IPAddress.TryParse(relay.Address, out var relayAddress) || !string.Equals(relayAddress.ToString(), relay.Address, StringComparison.Ordinal) ||
+                relayAddress.IsIPv4MappedToIPv6 || relayAddress.IsIPv6Multicast || relayAddress.Equals(IPAddress.Any) || relayAddress.Equals(IPAddress.IPv6Any) ||
+                relayAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && relayAddress.ScopeId != 0 ||
+                relay.Port is < 1 or > 65535) throw new InvalidDataException("Invalid node relay endpoint.");
+            if (relayAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && relayAddress.GetAddressBytes()[0] is 0 or >= 224)
+                throw new InvalidDataException("Relay requires unicast IPv4.");
+        }
+        Relay = relay;
     }
 
     public RegisteredUpstreamIdentity Identity { get; }
@@ -40,5 +53,6 @@ public sealed record InstanceIntent
     public string Zone { get; }
     public int Weight { get; }
     public bool Draining { get; }
-    public InstanceIntent Drain() => new(Identity, DeploymentId, Address, Port, Protocol, Scheme, ReadinessPath, Zone, Weight, draining: true);
+    public NodeRelayEndpoint? Relay { get; }
+    public InstanceIntent Drain() => new(Identity, DeploymentId, Address, Port, Protocol, Scheme, ReadinessPath, Zone, Weight, draining: true, Relay);
 }

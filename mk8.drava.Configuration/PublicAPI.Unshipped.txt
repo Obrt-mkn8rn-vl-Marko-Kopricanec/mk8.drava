@@ -149,3 +149,89 @@ Mk8.Drava.Configuration.ApplicationBootstrap.ManagementPort.get -> int
 Mk8.Drava.Configuration.ApplicationBootstrap.ManagementPort.init -> void
 Mk8.Drava.Configuration.GatewayBootstrap.ManagementPort.get -> int
 Mk8.Drava.Configuration.GatewayBootstrap.ManagementPort.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap
+Mk8.Drava.Configuration.NodeAgentBootstrap.<Clone>$() -> Mk8.Drava.Configuration.NodeAgentBootstrap!
+Mk8.Drava.Configuration.NodeAgentBootstrap.EndpointAddresses.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Mk8.Drava.Configuration.NodeAgentBootstrap.EndpointAddresses.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.Equals(Mk8.Drava.Configuration.NodeAgentBootstrap? other) -> bool
+Mk8.Drava.Configuration.NodeAgentBootstrap.LocalListen.get -> Mk8.Drava.Configuration.IpcEndpoint!
+Mk8.Drava.Configuration.NodeAgentBootstrap.LocalListen.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.MaximumPort.get -> int
+Mk8.Drava.Configuration.NodeAgentBootstrap.MaximumPort.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.MinimumPort.get -> int
+Mk8.Drava.Configuration.NodeAgentBootstrap.MinimumPort.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.NodeAgentBootstrap() -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.NodeId.get -> string!
+Mk8.Drava.Configuration.NodeAgentBootstrap.NodeId.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.OwnerId.get -> string!
+Mk8.Drava.Configuration.NodeAgentBootstrap.OwnerId.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.RelayAddress.get -> string!
+Mk8.Drava.Configuration.NodeAgentBootstrap.RelayAddress.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.RelayPort.get -> int
+Mk8.Drava.Configuration.NodeAgentBootstrap.RelayPort.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.SchemaVersion.get -> uint
+Mk8.Drava.Configuration.NodeAgentBootstrap.SchemaVersion.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.ServicePrefix.get -> string!
+Mk8.Drava.Configuration.NodeAgentBootstrap.ServicePrefix.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.Site.get -> Mk8.Drava.Configuration.RegistrationSiteTrust!
+Mk8.Drava.Configuration.NodeAgentBootstrap.Site.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.StateDirectory.get -> string!
+Mk8.Drava.Configuration.NodeAgentBootstrap.StateDirectory.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.Validate() -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor
+Mk8.Drava.Configuration.NodeAgentDescriptor.<Clone>$() -> Mk8.Drava.Configuration.NodeAgentDescriptor!
+Mk8.Drava.Configuration.NodeAgentDescriptor.AgentBootId.get -> string!
+Mk8.Drava.Configuration.NodeAgentDescriptor.AgentBootId.init -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.CertificateFingerprint.get -> string!
+Mk8.Drava.Configuration.NodeAgentDescriptor.CertificateFingerprint.init -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.Equals(Mk8.Drava.Configuration.NodeAgentDescriptor? other) -> bool
+Mk8.Drava.Configuration.NodeAgentDescriptor.LocalEndpoint.get -> Mk8.Drava.Configuration.IpcEndpoint!
+Mk8.Drava.Configuration.NodeAgentDescriptor.LocalEndpoint.init -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.NodeAgentDescriptor() -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.NodeId.get -> string!
+Mk8.Drava.Configuration.NodeAgentDescriptor.NodeId.init -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.RelayAddress.get -> string!
+Mk8.Drava.Configuration.NodeAgentDescriptor.RelayAddress.init -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.RelayPort.get -> int
+Mk8.Drava.Configuration.NodeAgentDescriptor.RelayPort.init -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.SiteId.get -> string!
+Mk8.Drava.Configuration.NodeAgentDescriptor.SiteId.init -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.Validate() -> void
+Mk8.Drava.Configuration.NodeAgentDescriptor.Version.get -> uint
+Mk8.Drava.Configuration.NodeAgentDescriptor.Version.init -> void
+override Mk8.Drava.Configuration.NodeAgentBootstrap.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.NodeAgentBootstrap.GetHashCode() -> int
+override Mk8.Drava.Configuration.NodeAgentBootstrap.ToString() -> string!
+override Mk8.Drava.Configuration.NodeAgentDescriptor.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.NodeAgentDescriptor.GetHashCode() -> int
+override Mk8.Drava.Configuration.NodeAgentDescriptor.ToString() -> string!
+static Mk8.Drava.Configuration.NodeAgentBootstrap.operator !=(Mk8.Drava.Configuration.NodeAgentBootstrap? left, Mk8.Drava.Configuration.NodeAgentBootstrap? right) -> bool
+static Mk8.Drava.Configuration.NodeAgentBootstrap.operator ==(Mk8.Drava.Configuration.NodeAgentBootstrap? left, Mk8.Drava.Configuration.NodeAgentBootstrap? right) -> bool
+static Mk8.Drava.Configuration.NodeAgentDescriptor.operator !=(Mk8.Drava.Configuration.NodeAgentDescriptor? left, Mk8.Drava.Configuration.NodeAgentDescriptor? right) -> bool
+static Mk8.Drava.Configuration.NodeAgentDescriptor.operator ==(Mk8.Drava.Configuration.NodeAgentDescriptor? left, Mk8.Drava.Configuration.NodeAgentDescriptor? right) -> bool
+Mk8.Drava.Configuration.ControllerBootstrap.Relay.get -> Mk8.Drava.Configuration.RelayLimits!
+Mk8.Drava.Configuration.ControllerBootstrap.Relay.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.Relay.get -> Mk8.Drava.Configuration.RelayLimits!
+Mk8.Drava.Configuration.NodeAgentBootstrap.Relay.init -> void
+Mk8.Drava.Configuration.RelayLimits
+Mk8.Drava.Configuration.RelayLimits.<Clone>$() -> Mk8.Drava.Configuration.RelayLimits!
+Mk8.Drava.Configuration.RelayLimits.CapabilityLifetimeSeconds.get -> int
+Mk8.Drava.Configuration.RelayLimits.CapabilityLifetimeSeconds.init -> void
+Mk8.Drava.Configuration.RelayLimits.Equals(Mk8.Drava.Configuration.RelayLimits? other) -> bool
+Mk8.Drava.Configuration.RelayLimits.MaximumBytesPerDirection.get -> long
+Mk8.Drava.Configuration.RelayLimits.MaximumBytesPerDirection.init -> void
+Mk8.Drava.Configuration.RelayLimits.MaximumConcurrentConnections.get -> int
+Mk8.Drava.Configuration.RelayLimits.MaximumConcurrentConnections.init -> void
+Mk8.Drava.Configuration.RelayLimits.MaximumDurationSeconds.get -> int
+Mk8.Drava.Configuration.RelayLimits.MaximumDurationSeconds.init -> void
+Mk8.Drava.Configuration.RelayLimits.OpeningTimeoutSeconds.get -> int
+Mk8.Drava.Configuration.RelayLimits.OpeningTimeoutSeconds.init -> void
+Mk8.Drava.Configuration.RelayLimits.RelayLimits() -> void
+Mk8.Drava.Configuration.RelayLimits.StreamWindowFrames.get -> int
+Mk8.Drava.Configuration.RelayLimits.StreamWindowFrames.init -> void
+Mk8.Drava.Configuration.RelayLimits.Validate() -> void
+override Mk8.Drava.Configuration.RelayLimits.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.RelayLimits.GetHashCode() -> int
+override Mk8.Drava.Configuration.RelayLimits.ToString() -> string!
+static Mk8.Drava.Configuration.RelayLimits.operator !=(Mk8.Drava.Configuration.RelayLimits? left, Mk8.Drava.Configuration.RelayLimits? right) -> bool
+static Mk8.Drava.Configuration.RelayLimits.operator ==(Mk8.Drava.Configuration.RelayLimits? left, Mk8.Drava.Configuration.RelayLimits? right) -> bool

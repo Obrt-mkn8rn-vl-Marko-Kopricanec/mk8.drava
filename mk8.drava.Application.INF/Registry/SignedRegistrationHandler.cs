@@ -71,7 +71,7 @@ public sealed class SignedRegistrationHandler
         {
             var metadata = command.Advertisement ?? throw new InvalidDataException("Register requires the bound endpoint metadata.");
             var intent = new InstanceIntent(identity, metadata.DeploymentId, metadata.Address, metadata.Port, metadata.Protocol,
-                metadata.Scheme, metadata.ReadinessPath, metadata.Zone, metadata.Weight, draining: false);
+                metadata.Scheme, metadata.ReadinessPath, metadata.Zone, metadata.Weight, draining: false, metadata.Relay);
             await _registry.RegisterAsync(enrollment.CertificateFingerprint, intent, Lease, cancellationToken).ConfigureAwait(false);
         }
         else

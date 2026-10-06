@@ -11,11 +11,11 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
     private readonly StringBuilder _log = new();
     private int _disposed;
 
-    public DevelopmentProcess(string assemblyPath, string bootstrapPath)
+    public DevelopmentProcess(string assemblyPath, string bootstrapPath, string bootstrapOption = "--bootstrap")
     {
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         start.ArgumentList.Add(assemblyPath);
-        start.ArgumentList.Add("--bootstrap");
+        start.ArgumentList.Add(bootstrapOption);
         start.ArgumentList.Add(bootstrapPath);
         _process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the development process.");
         _stdout = CaptureAsync(_process.StandardOutput);

@@ -15,6 +15,7 @@ internal static class NoConfHosting
         var protectedAddresses = new List<string>(publicAddresses) { bootstrap.IngressAddress };
         services.AddSingleton(new NoConfIngressGuard(bootstrap.NodeId, protectedAddresses, [bootstrap.HttpPort, bootstrap.HttpsPort, controller.RegistrationPort, bootstrap.ManagementPort]));
         services.AddSingleton<NoConfSnapshotCompiler>();
+        services.AddSingleton(registration.Relay);
         services.AddSingleton<IRegisteredReadinessProbe, RegisteredReadinessProbe>();
         services.AddSingleton<IServiceDnsVerifier>(_ => new ServiceDnsVerifier(publicAddresses, controller.DnsServerAddress, controller.DnsServerPort));
         services.AddSingleton<IGatewayPublicationSource>(registration.Plans);

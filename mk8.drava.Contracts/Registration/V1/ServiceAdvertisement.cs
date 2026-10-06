@@ -10,4 +10,5 @@ public sealed record ServiceAdvertisement
     public string ReadinessPath { get; init; } = "";
     public string Zone { get; init; } = "local";
     public int Weight { get; init; } = 1;
+    public NodeRelayEndpoint? Relay { get; init; }
 }

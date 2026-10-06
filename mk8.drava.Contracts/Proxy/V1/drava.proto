@@ -17,6 +17,9 @@ service ServiceRegistry {
 service NodeRelay {
   rpc Relay(stream RelayFrame) returns (stream RelayFrame);
 }
+service NodeAgentLocal {
+  rpc Apply(NodeLocalRequest) returns (NodeLocalReply);
+}
 
 message Header {
   string name = 1;
@@ -195,6 +198,16 @@ message RelayOpen {
   string instance_id = 4;
   string boot_id = 5;
   string exchange_id = 6;
+  bytes capability_json = 7;
+  bytes signature = 8;
+  uint32 stream_window_frames = 9;
+}
+message RelayAccepted {
+  uint32 version = 1;
+  string capability_id = 2;
+  uint32 stream_window_frames = 3;
+  uint64 maximum_bytes_per_direction = 4;
+  uint32 maximum_duration_seconds = 5;
 }
 message RelayFrame {
   oneof frame {
@@ -203,5 +216,15 @@ message RelayFrame {
     Completion complete = 3;
     Reset reset = 4;
     HalfClose half_close = 5;
+    RelayAccepted accepted = 6;
+    Consumed consumed = 7;
   }
+}
+message NodeLocalRequest {
+  uint32 version = 1;
+  bytes command_json = 2;
+}
+message NodeLocalReply {
+  uint32 status_code = 1;
+  bytes descriptor_json = 2;
 }

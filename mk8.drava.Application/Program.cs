@@ -21,6 +21,11 @@ internal static class Program
 {
     public static async Task Main(string[] args)
     {
+        if (args.Length == 2 && string.Equals(args[0], "--node-agent-bootstrap", StringComparison.Ordinal) && Path.IsPathFullyQualified(args[1]))
+        {
+            await NodeAgentHost.RunAsync(args[1]).ConfigureAwait(false);
+            return;
+        }
         if (args.Length == 5 && string.Equals(args[0], "--initialize-ca", StringComparison.Ordinal) && string.Equals(args[3], "--site", StringComparison.Ordinal))
         {
             if (!string.Equals(args[1], "--path", StringComparison.Ordinal)) throw new ArgumentException("Issuer initialization requires --path.", nameof(args));

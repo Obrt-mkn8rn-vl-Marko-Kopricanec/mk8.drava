@@ -150,7 +150,7 @@ public sealed class NodeRelayMappings
         ArgumentNullException.ThrowIfNull(advertisement);
         return new InstanceIntent(new RegisteredUpstreamIdentity(identity.NodeId, identity.OwnerId, identity.ServiceId, identity.ContractId, identity.InstanceId, identity.BootId),
             advertisement.DeploymentId, advertisement.Address, advertisement.Port, advertisement.Protocol, advertisement.Scheme, advertisement.ReadinessPath,
-            advertisement.Zone, advertisement.Weight, draining: false);
+            advertisement.Zone, advertisement.Weight, draining: false, advertisement.Relay);
     }
 
     private sealed record Mapping(RegistrationIdentity Identity, ServiceAdvertisement Advertisement, InstanceIntent Intent, long RenewedAt);

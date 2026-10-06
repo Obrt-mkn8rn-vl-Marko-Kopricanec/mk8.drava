@@ -4,7 +4,7 @@ using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
 namespace Mk8.Drava.Application.INF.Proxy.Connections;
 internal sealed class PooledUpstreamConnection : IDisposable
 {
-    public PooledUpstreamConnection(string key, UpstreamTransportEndpoint endpoint, Socket socket, Stream stream, DateTimeOffset lastUsedUtc)
+    public PooledUpstreamConnection(string key, UpstreamTransportEndpoint endpoint, Socket? socket, Stream stream, DateTimeOffset lastUsedUtc)
     {
         Key = key;
         Endpoint = endpoint;
@@ -15,7 +15,7 @@ internal sealed class PooledUpstreamConnection : IDisposable
 
     public string Key { get; }
     public UpstreamTransportEndpoint Endpoint { get; }
-    public Socket Socket { get; }
+    public Socket? Socket { get; }
     public Stream Stream { get; }
     public DateTimeOffset LastUsedUtc { get; private set; }
     public bool CanReturnToPool { get; private set; }
@@ -29,7 +29,7 @@ internal sealed class PooledUpstreamConnection : IDisposable
 
     public void MarkReusable()
     {
-        CanReturnToPool = true;
+        CanReturnToPool = Socket is not null; // A relay capability authorizes one exchange; it is never reused for a later request.
     }
 
     public void MarkUnusable()
@@ -46,6 +46,6 @@ internal sealed class PooledUpstreamConnection : IDisposable
     public void Dispose()
     {
         Stream.Dispose();
-        Socket.Dispose();
+        Socket?.Dispose();
     }
 }

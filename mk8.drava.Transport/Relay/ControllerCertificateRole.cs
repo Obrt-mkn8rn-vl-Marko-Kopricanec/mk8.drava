@@ -17,6 +17,18 @@ public static class ControllerCertificateRole
         return new Uri("urn:mk8.drava:controller:" + siteId + ":" + controllerEpoch, UriKind.Absolute);
     }
 
+    public static string Epoch(X509Certificate2 certificate, string siteId)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+        RegistrationSiteTrust.RequireLabel(siteId);
+        var value = ReadRole(certificate);
+        var prefix = "urn:mk8.drava:controller:" + siteId + ":";
+        if (!value.StartsWith(prefix, StringComparison.Ordinal)) throw new UnauthorizedAccessException("Controller role belongs to another site.");
+        var epoch = value[prefix.Length..];
+        if (!string.Equals(Identity(siteId, epoch).AbsoluteUri, value, StringComparison.Ordinal)) throw new UnauthorizedAccessException("Noncanonical controller role.");
+        return epoch;
+    }
+
     public static void Validate(X509Certificate2 certificate, X509Certificate2 root, string siteId, string controllerEpoch, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(certificate);
@@ -53,6 +65,11 @@ public static class ControllerCertificateRole
 
     private static void RequireRole(X509Certificate2 certificate, string expected)
     {
+        if (!string.Equals(ReadRole(certificate), expected, StringComparison.Ordinal)) throw new UnauthorizedAccessException("Controller role does not match site and writer epoch.");
+    }
+
+    private static string ReadRole(X509Certificate2 certificate)
+    {
         var san = certificate.Extensions["2.5.29.17"] ?? throw new UnauthorizedAccessException("Missing controller role.");
         try
         {
@@ -61,7 +78,7 @@ public static class ControllerCertificateRole
             var value = names.ReadCharacterString(UniversalTagNumber.IA5String, new Asn1Tag(TagClass.ContextSpecific, 6));
             names.ThrowIfNotEmpty();
             reader.ThrowIfNotEmpty();
-            if (!string.Equals(value, expected, StringComparison.Ordinal)) throw new UnauthorizedAccessException("Controller role does not match site and writer epoch.");
+            return value;
         }
         catch (AsnContentException exception) { throw new UnauthorizedAccessException("Invalid controller role encoding.", exception); }
     }

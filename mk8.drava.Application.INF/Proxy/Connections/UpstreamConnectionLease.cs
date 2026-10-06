@@ -22,15 +22,15 @@ public sealed class UpstreamConnectionLease : IAsyncDisposable
         Connection.MarkUnusable();
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (_returned)
         {
-            return ValueTask.CompletedTask;
+            return;
         }
 
         _returned = true;
-        _pool.Return(Connection);
-        return ValueTask.CompletedTask;
+        try { if (Connection.Socket is null) await Connection.Stream.DisposeAsync().ConfigureAwait(false); }
+        finally { _pool.Return(Connection); }
     }
 }
