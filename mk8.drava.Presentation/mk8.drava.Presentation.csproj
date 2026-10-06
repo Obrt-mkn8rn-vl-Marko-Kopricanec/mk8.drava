@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RootNamespace>Mk8.Drava.Presentation</RootNamespace></PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+    <ProjectReference Include="../mk8.drava.Transport/mk8.drava.Transport.csproj" />
+    <ProjectReference Include="../mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
+  </ItemGroup>
+</Project>

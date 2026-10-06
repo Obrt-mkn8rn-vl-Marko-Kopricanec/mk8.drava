@@ -1,14 +1,12 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <RootNamespace>Mk8.Drava.Application.INF</RootNamespace>
-  </PropertyGroup>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><RootNamespace>Mk8.Drava.Application</RootNamespace></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj" />
     <ProjectReference Include="../mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj" />
+    <ProjectReference Include="../mk8.drava.Application.INF/mk8.drava.Application.INF.csproj" />
     <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
     <ProjectReference Include="../mk8.drava.Transport/mk8.drava.Transport.csproj" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Options" />
+    <ProjectReference Include="../mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
+    <PackageReference Include="Grpc.AspNetCore" />
   </ItemGroup>
 </Project>

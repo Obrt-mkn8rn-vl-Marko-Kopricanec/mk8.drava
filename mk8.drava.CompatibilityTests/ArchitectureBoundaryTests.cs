@@ -8,7 +8,7 @@ internal static class ArchitectureBoundaryTests
     {
         var root = FindRepositoryRoot();
         AssertReferences(root, "mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj", ["mk8.drava.Contracts/mk8.drava.Contracts.csproj"]);
-        AssertReferences(root, "mk8.drava.Application.INF/mk8.drava.Application.INF.csproj", ["mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj", "mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj", "mk8.drava.Contracts/mk8.drava.Contracts.csproj"]);
+        AssertReferences(root, "mk8.drava.Application.INF/mk8.drava.Application.INF.csproj", ["mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj", "mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj", "mk8.drava.Contracts/mk8.drava.Contracts.csproj", "mk8.drava.Transport/mk8.drava.Transport.csproj"]);
         AssertReferences(root, "mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj", ["mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj", "mk8.drava.Contracts/mk8.drava.Contracts.csproj"]);
         AssertReferences(root, "mk8.drava.Contracts/mk8.drava.Contracts.csproj", []);
     }
@@ -16,7 +16,7 @@ internal static class ArchitectureBoundaryTests
     public static void BusinessLayerSourceDoesNotReferenceOuterLayers()
     {
         var root = FindRepositoryRoot();
-        AssertSourceDoesNotContain(root, "mk8.drava.Application.BLL", ["Mk8.Drava.Gateway", "Mk8.Drava.Application.INF", "Microsoft.AspNetCore", "Microsoft.Extensions.Hosting"]);
+        AssertSourceDoesNotContain(root, "mk8.drava.Application.BLL", ["Mk8.Drava.Gateway", "Mk8.Drava.Application.INF", "Mk8.Drava.Application.DAL", "Mk8.Drava.Transport", "Microsoft.AspNetCore", "Microsoft.Extensions.Hosting", "Grpc."]);
     }
 
     public static void InfrastructureSourceDoesNotReferenceApiLayer()

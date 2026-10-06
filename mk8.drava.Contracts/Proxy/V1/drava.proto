@@ -1,0 +1,206 @@
+syntax = "proto3";
+package mk8.drava.proxy.v1;
+option csharp_namespace = "Mk8.Drava.Transport.Protocol.V1";
+
+service ProxyExchange {
+  rpc Exchange(stream ExchangeFrame) returns (stream ExchangeFrame);
+}
+service ApplicationControl {
+  rpc Execute(ControlRequest) returns (ControlReply);
+  rpc GatewayPlan(GatewayIdentity) returns (PresentationPlan);
+  rpc AcknowledgePlan(PlanAcknowledgment) returns (ControlReply);
+}
+service ServiceRegistry {
+  rpc Challenge(ChallengeRequest) returns (ChallengeReply);
+  rpc Submit(SignedCommand) returns (RegistrationReply);
+}
+service NodeRelay {
+  rpc Relay(stream RelayFrame) returns (stream RelayFrame);
+}
+
+message Header {
+  string name = 1;
+  string value = 2;
+}
+message RequestHead {
+  uint32 version = 1;
+  string exchange_id = 2;
+  string gateway_id = 3;
+  uint64 gateway_generation = 4;
+  string method = 5;
+  string raw_target = 6;
+  string authority = 7;
+  string scheme = 8;
+  string client_protocol = 9;
+  string peer_address = 10;
+  uint32 peer_port = 11;
+  repeated Header headers = 12;
+  optional int64 content_length = 13;
+  bool has_body = 14;
+  bool wants_upgrade = 15;
+  string listener_id = 16;
+  uint32 stream_window_frames = 17;
+}
+message ResponseHead {
+  uint32 status_code = 1;
+  repeated Header headers = 2;
+  bool informational = 3;
+  bool upgrade = 4;
+}
+message DataFrame {
+  bytes payload = 1;
+}
+message TrailerFrame {
+  repeated Header headers = 1;
+}
+message Completion {
+  uint64 body_bytes = 1;
+  bytes sha256 = 2;
+}
+message Reset {
+  string code = 1;
+  string safe_reason = 2;
+}
+message HalfClose {}
+// An early final response ends upload deliberately; it does not turn EOF into completion.
+message StopUpload {}
+message UploadStopped {}
+message UploadAllowed {}
+message Consumed {
+  enum Direction { REQUEST = 0; RESPONSE = 1; }
+  Direction direction = 1;
+  uint32 frames = 2;
+}
+message ExchangeFrame {
+  oneof frame {
+    RequestHead request = 1;
+    ResponseHead response = 2;
+    DataFrame data = 3;
+    TrailerFrame trailers = 4;
+    Completion complete = 5;
+    Reset reset = 6;
+    HalfClose half_close = 7;
+    StopUpload stop_upload = 8;
+    UploadStopped upload_stopped = 9;
+    UploadAllowed upload_allowed = 10;
+    Consumed consumed = 11;
+  }
+}
+
+enum ControlOperation {
+  CONTROL_UNSPECIFIED = 0;
+  RUNTIME_STATUS = 1;
+  CONFIGURATION_QUERY = 2;
+  CONFIGURATION_NORMALIZE = 3;
+  CONFIGURATION_VALIDATE = 4;
+  CONFIGURATION_RELOAD = 5;
+  CONFIGURATION_LINT = 6;
+  ROUTE_DRY_RUN = 7;
+  CACHE_QUERY = 8;
+  CACHE_CLEAR = 9;
+  DIAGNOSTICS_QUERY = 10;
+  AUDIT_QUERY = 11;
+  ACME_QUERY = 12;
+  METRICS_QUERY = 13;
+  METRICS_EXPORT = 14;
+  BACKUP_CREATE = 15;
+  BACKUP_QUERY = 16;
+  RESTORE_VALIDATE = 17;
+  REGISTRY_QUERY = 18;
+  POLICY_QUERY = 19;
+  POLICY_UPDATE = 20;
+  POLICY_ROLLBACK = 21;
+  NODE_REVOKE = 22;
+  INSTANCE_REVOKE = 23;
+}
+message ControlRequest {
+  uint32 version = 1;
+  ControlOperation operation = 2;
+  bytes json_payload = 3;
+  string administrator_credential = 4;
+  string peer_address = 5;
+  string request_id = 6;
+}
+message ControlReply {
+  uint32 status_code = 1;
+  bytes json_payload = 2;
+  string content_type = 3;
+  string safe_reason = 4;
+}
+message GatewayIdentity {
+  uint32 version = 1;
+  string gateway_id = 2;
+}
+message PresentationListener {
+  string id = 1;
+  string address = 2;
+  uint32 port = 3;
+  bool tls = 4;
+  repeated string protocols = 5;
+  bool registration = 6;
+}
+message ServingCertificate {
+  string certificate_id = 1;
+  repeated string host_names = 2;
+  bytes pfx = 3;
+  string pfx_password = 4;
+  int64 not_after_unix_seconds = 5;
+}
+message PresentationPlan {
+  uint32 version = 1;
+  string site_id = 2;
+  string gateway_id = 3;
+  uint64 generation = 4;
+  bytes content_sha256 = 5;
+  repeated PresentationListener listeners = 6;
+  repeated ServingCertificate certificates = 7;
+  bytes enrollment_ca_der = 8;
+  int64 valid_until_unix_seconds = 9;
+}
+message PlanAcknowledgment {
+  uint32 version = 1;
+  string gateway_id = 2;
+  uint64 generation = 3;
+  bytes content_sha256 = 4;
+  bool applied = 5;
+  string safe_reason = 6;
+}
+
+message ChallengeRequest {
+  uint32 version = 1;
+  bytes enrollment_certificate_der = 2;
+}
+message ChallengeReply {
+  bytes nonce = 1;
+  int64 expires_unix_seconds = 2;
+  string site_id = 3;
+}
+message SignedCommand {
+  uint32 version = 1;
+  bytes enrollment_certificate_der = 2;
+  bytes nonce = 3;
+  bytes json_payload = 4;
+  bytes signature = 5;
+}
+message RegistrationReply {
+  uint32 status_code = 1;
+  bytes json_payload = 2;
+  string safe_reason = 3;
+}
+message RelayOpen {
+  uint32 version = 1;
+  string site_id = 2;
+  string node_id = 3;
+  string instance_id = 4;
+  string boot_id = 5;
+  string exchange_id = 6;
+}
+message RelayFrame {
+  oneof frame {
+    RelayOpen open = 1;
+    DataFrame data = 2;
+    Completion complete = 3;
+    Reset reset = 4;
+    HalfClose half_close = 5;
+  }
+}

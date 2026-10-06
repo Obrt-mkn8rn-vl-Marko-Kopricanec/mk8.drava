@@ -17,6 +17,8 @@ using Mk8.Drava.Application.INF.Proxy.Connections;
 using Mk8.Drava.Application.INF.Proxy.Http1;
 using Mk8.Drava.Application.INF.Proxy.Http3;
 using Mk8.Drava.Application.INF.Proxy.Http2;
+using Mk8.Drava.Application.INF.Proxy.Exchange;
+using Mk8.Drava.Application.INF.Proxy.Streams;
 using Mk8.Drava.Application.INF.Proxy;
 using Mk8.Drava.Application.DAL.Observability;
 using Mk8.Drava.Application.INF.Observability;
@@ -50,7 +52,7 @@ public sealed class ProxyForwarder
         {
             Http1BodyReader? preReadRequestBodyReader = null;
             byte[]? preReadChunkLine = null;
-            if (requestHead.Framing.Kind == Http1BodyKind.Chunked)
+            if (requestHead.Framing.Kind == Http1BodyKind.Chunked && clientStream is not ExchangeClientStream)
             {
                 preReadRequestBodyReader = new Http1BodyReader(clientStream, requestHeadRead.InitialBodyBytes, _metrics, timeouts.ClientRequestBodyIdleTimeout, ProxyTimeoutKind.ClientRequestBodyIdle);
                 preReadChunkLine = await preReadRequestBodyReader.ReadLineWithCrlfAsync(listener.MaxChunkLineBytes, cancellationToken).ConfigureAwait(false);
@@ -220,8 +222,66 @@ public sealed class ProxyForwarder
     private async ValueTask<ResponseForwardingResult> ForwardHttp1Async(Stream upstreamStream, Stream clientStream, Http1HeadReadResult requestHeadRead, Http1RequestHead requestHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, bool preferClientKeepAlive, string requestId, bool suppressGeneratedFailureResponse, Http1BodyReader? preReadRequestBodyReader, byte[]? preReadChunkLine, Action markResponseStarted, CancellationToken cancellationToken)
     {
         await WriteRequestHeadAsync(upstreamStream, requestHead, route, upstreamTarget, forwardedHeaders, timeouts, cancellationToken).ConfigureAwait(false);
-        await RelayRequestBodyAsync(clientStream, upstreamStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, cancellationToken).ConfigureAwait(false);
-        return await RelayResponseAsync(upstreamStream, clientStream, requestHead, route, listener, timeouts, preferClientKeepAlive, upstreamTarget, requestId, suppressGeneratedFailureResponse, markResponseStarted, cancellationToken).ConfigureAwait(false);
+        // Preserve the copied native-ingress reference contract. Production exchanges use concurrent upload/response handling below.
+        if (clientStream is not ExchangeClientStream exchange)
+        {
+            await RelayRequestBodyAsync(clientStream, upstreamStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts,
+                route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, cancellationToken).ConfigureAwait(false);
+            return await RelayResponseAsync(upstreamStream, clientStream, requestHead, route, listener, timeouts, preferClientKeepAlive,
+                upstreamTarget, requestId, suppressGeneratedFailureResponse, markResponseStarted, cancellationToken).ConfigureAwait(false);
+        }
+        await exchange.AllowUploadAsync(cancellationToken).ConfigureAwait(false);
+        return await ForwardDuplexHttp1Async(upstreamStream, clientStream, requestHeadRead, requestHead, route, listener, timeouts,
+            upstreamTarget, preferClientKeepAlive, requestId, suppressGeneratedFailureResponse, preReadRequestBodyReader, preReadChunkLine,
+            markResponseStarted, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<ResponseForwardingResult> ForwardDuplexHttp1Async(Stream upstreamStream, Stream clientStream, Http1HeadReadResult requestHeadRead,
+        Http1RequestHead requestHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, string upstreamTarget,
+        bool preferClientKeepAlive, string requestId, bool suppressGeneratedFailureResponse, Http1BodyReader? preReadRequestBodyReader,
+        byte[]? preReadChunkLine, Action markResponseStarted, CancellationToken cancellationToken)
+    {
+        using var uploadCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var responseCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var finalResponseReceived = false;
+        async Task<bool> UploadAsync()
+        {
+            try
+            {
+                await RelayRequestBodyAsync(clientStream, upstreamStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts,
+                    route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, uploadCancellation.Token).ConfigureAwait(false);
+                return true;
+            }
+            catch (OperationCanceledException) when (finalResponseReceived && !cancellationToken.IsCancellationRequested) { return false; }
+        }
+        void OnFinalResponse(int statusCode)
+        {
+            if (statusCode < 300 && !string.Equals(requestHead.Method, "HEAD", StringComparison.OrdinalIgnoreCase)) return;
+            finalResponseReceived = true;
+            uploadCancellation.Cancel();
+        }
+        var upload = UploadAsync();
+        var response = RelayResponseAsync(upstreamStream, clientStream, requestHead, route, listener, timeouts, preferClientKeepAlive,
+            upstreamTarget, requestId, suppressGeneratedFailureResponse, markResponseStarted, responseCancellation.Token, OnFinalResponse).AsTask();
+        try
+        {
+            var first = await Task.WhenAny(upload, response).ConfigureAwait(false);
+            if (first == upload) await upload.ConfigureAwait(false);
+            var result = await response.ConfigureAwait(false);
+            if (clientStream is ExchangeClientStream exchange) await exchange.StopUploadAsync(cancellationToken).ConfigureAwait(false);
+            finalResponseReceived = true;
+            uploadCancellation.Cancel();
+            var uploaded = await upload.ConfigureAwait(false);
+            return result with { CanReuseUpstreamConnection = result.CanReuseUpstreamConnection && uploaded };
+        }
+        catch
+        {
+            await uploadCancellation.CancelAsync().ConfigureAwait(false);
+            await responseCancellation.CancelAsync().ConfigureAwait(false);
+            try { await Task.WhenAll(upload, response).ConfigureAwait(false); }
+            catch (Exception exception) when (exception is OperationCanceledException or IOException or SocketException or ProxyTimeoutException) { }
+            throw;
+        }
     }
 
     private async ValueTask<ResponseForwardingResult> ForwardHttp2Async(Stream upstreamStream, Stream clientStream, Http1HeadReadResult requestHeadRead, Http1RequestHead requestHead, RuntimeRoute route, RuntimeUpstream upstream, RuntimeListener listener, RuntimeTimeouts timeouts, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, bool preferClientKeepAlive, string requestId, bool suppressRetryableStatusResponse, Http1BodyReader? preReadRequestBodyReader, byte[]? preReadChunkLine, Action markResponseStarted, CancellationToken cancellationToken)
@@ -232,6 +292,7 @@ public sealed class ProxyForwarder
         var requestHeaders = BuildHttp2RequestHeaders(requestHead, route, upstream, upstreamTarget, forwardedHeaders);
         var endRequestStream = !Http1RequestFramingPolicy.HasFramedBody(requestHead);
         await upstreamHttp2.SendHeadersAsync(requestHeaders, endRequestStream, timeouts, cancellationToken).ConfigureAwait(false);
+        if (clientStream is ExchangeClientStream exchange) await exchange.AllowUploadAsync(cancellationToken).ConfigureAwait(false);
         if (!endRequestStream)
         {
             await RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp2.SendDataAsync, cancellationToken).ConfigureAwait(false);
@@ -275,6 +336,7 @@ public sealed class ProxyForwarder
         var requestHeaders = BuildHttp2RequestHeaders(requestHead, route, upstream, upstreamTarget, forwardedHeaders);
         var endRequestStream = !Http1RequestFramingPolicy.HasFramedBody(requestHead);
         await upstreamHttp3.SendHeadersAsync(requestHeaders, endRequestStream, timeouts, cancellationToken).ConfigureAwait(false);
+        if (clientStream is ExchangeClientStream exchange) await exchange.AllowUploadAsync(cancellationToken).ConfigureAwait(false);
         if (!endRequestStream)
         {
             await RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync, cancellationToken).ConfigureAwait(false);
@@ -656,13 +718,15 @@ public sealed class ProxyForwarder
         }
     }
 
-    private async ValueTask<ResponseForwardingResult> RelayResponseAsync(Stream upstreamStream, Stream clientStream, Http1RequestHead requestHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, bool preferClientKeepAlive, string upstreamTarget, string requestId, bool suppressRetryableStatusResponse, Action markResponseStarted, CancellationToken cancellationToken)
+    private async ValueTask<ResponseForwardingResult> RelayResponseAsync(Stream upstreamStream, Stream clientStream, Http1RequestHead requestHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, bool preferClientKeepAlive, string upstreamTarget, string requestId, bool suppressRetryableStatusResponse, Action markResponseStarted, CancellationToken cancellationToken, Action<int>? finalResponseReceived = null)
     {
         ReadOnlyMemory<byte> initialBodyBytes = ReadOnlyMemory<byte>.Empty;
         var responseStarted = false;
+        var informationalCount = 0;
+        Stream responseInput = upstreamStream;
         while (true)
         {
-            var responseHeadRead = await Http1UpstreamResponseHeadReader.ReadAsync(upstreamStream, listener.MaxResponseHeadBytes, timeouts.UpstreamResponseHeadTimeout, _metrics, cancellationToken).ConfigureAwait(false);
+            var responseHeadRead = await Http1UpstreamResponseHeadReader.ReadAsync(responseInput, listener.MaxResponseHeadBytes, timeouts.UpstreamResponseHeadTimeout, _metrics, cancellationToken).ConfigureAwait(false);
             if (!responseHeadRead.HasReadableHead)
             {
                 throw new Http1UpstreamProtocolException("Upstream closed before a complete response head was received.");
@@ -678,6 +742,7 @@ public sealed class ProxyForwarder
             initialBodyBytes = responseHeadRead.InitialBodyBytes;
             if (!Http1ResponseParser.IsInformational(responseHead))
             {
+                finalResponseReceived?.Invoke(responseHead.StatusCode);
                 if (ProxyRetryPolicy.ShouldSuppressRetryableStatusResponse(ProxyRetryRuntimeMapper.ToOutcomeInput(route.Retry), responseHead.StatusCode, suppressRetryableStatusResponse))
                 {
                     return CreateRetrySuppressedResult(responseHead.StatusCode);
@@ -686,7 +751,7 @@ public sealed class ProxyForwarder
                 var responseHeaders = BuildResponseHeaders(responseHead, route);
                 if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
                 {
-                    var body = await ReadCacheCandidateBodyAsync(upstreamStream, initialBodyBytes, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
+                    var body = await ReadCacheCandidateBodyAsync(responseInput, initialBodyBytes, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
                     await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body, keepClientConnectionOpen, requestId, () =>
                     {
                         responseStarted = true;
@@ -699,17 +764,19 @@ public sealed class ProxyForwarder
                     await WriteResponseHeadAsync(clientStream, responseHead, responseHeaders, timeouts, keepClientConnectionOpen, requestId, listener, cancellationToken).ConfigureAwait(false);
                     responseStarted = true;
                     markResponseStarted();
-                    await RelayResponseBodyAsync(upstreamStream, clientStream, initialBodyBytes, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
+                    await RelayResponseBodyAsync(responseInput, clientStream, initialBodyBytes, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
                 }
 
                 var canReuseUpstream = !upstreamWantsClose && responseHead.Framing.Kind != Http1BodyKind.CloseDelimited;
                 return new ResponseForwardingResult(responseStarted, keepClientConnectionOpen, canReuseUpstream, responseHead.StatusCode);
             }
 
+            if (++informationalCount > 8) throw new Http1UpstreamProtocolException("Too many informational responses.");
             var informationalHeaders = BuildResponseHeaders(responseHead, route);
             await WriteResponseHeadAsync(clientStream, responseHead, informationalHeaders, timeouts, keepClientConnectionOpen, requestId, listener, cancellationToken).ConfigureAwait(false);
             responseStarted = true;
             markResponseStarted();
+            if (!initialBodyBytes.IsEmpty) responseInput = new PrefixReadStream(responseInput, initialBodyBytes);
         }
     }
 

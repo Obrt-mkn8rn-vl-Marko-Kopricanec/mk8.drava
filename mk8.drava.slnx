@@ -4,4 +4,12 @@
   <Project Path="mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj" />
   <Project Path="mk8.drava.Application.INF/mk8.drava.Application.INF.csproj" />
   <Project Path="mk8.drava.CompatibilityTests/mk8.drava.CompatibilityTests.csproj" />
+  <Project Path="mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
+  <Project Path="mk8.drava.Transport/mk8.drava.Transport.csproj" />
+  <Project Path="mk8.drava.UnitTests/mk8.drava.UnitTests.csproj" />
+  <Project Path="mk8.drava.Presentation/mk8.drava.Presentation.csproj" />
+  <Project Path="mk8.drava.Gateway/mk8.drava.Gateway.csproj" />
+  <Project Path="mk8.drava.Application/mk8.drava.Application.csproj" />
+  <Project Path="mk8.drava.IntegrationTests/mk8.drava.IntegrationTests.csproj" />
+  <Project Path="mk8.drava.ArchitectureTests/mk8.drava.ArchitectureTests.csproj" />
 </Solution>

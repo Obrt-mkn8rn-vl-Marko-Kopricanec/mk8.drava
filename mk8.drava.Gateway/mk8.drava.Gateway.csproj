@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><RootNamespace>Mk8.Drava.Gateway</RootNamespace></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../mk8.drava.Presentation/mk8.drava.Presentation.csproj" />
+    <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+    <ProjectReference Include="../mk8.drava.Transport/mk8.drava.Transport.csproj" />
+    <ProjectReference Include="../mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
+  </ItemGroup>
+</Project>

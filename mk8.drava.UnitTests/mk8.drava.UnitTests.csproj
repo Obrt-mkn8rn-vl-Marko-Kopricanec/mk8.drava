@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Mk8.Drava.UnitTests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../mk8.drava.Application.INF/mk8.drava.Application.INF.csproj" />
+    <ProjectReference Include="../mk8.drava.Transport/mk8.drava.Transport.csproj" />
+    <ProjectReference Include="../mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.analyzers" PrivateAssets="all" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

@@ -40,34 +40,19 @@
           "Grpc.Core.Api": "2.84.0"
         }
       },
-      "mk8.drava.application.bll": {
-        "type": "Project",
-        "dependencies": {
-          "mk8.drava.Contracts": "[0.1.0-alpha.1, )"
-        }
-      },
-      "mk8.drava.application.dal": {
-        "type": "Project",
-        "dependencies": {
-          "YamlDotNet": "[17.1.0, )",
-          "mk8.drava.Application.BLL": "[0.1.0-alpha.1, )",
-          "mk8.drava.Contracts": "[0.1.0-alpha.1, )"
-        }
-      },
-      "mk8.drava.application.inf": {
-        "type": "Project",
-        "dependencies": {
-          "mk8.drava.Application.BLL": "[0.1.0-alpha.1, )",
-          "mk8.drava.Application.DAL": "[0.1.0-alpha.1, )",
-          "mk8.drava.Contracts": "[0.1.0-alpha.1, )",
-          "mk8.drava.Transport": "[0.1.0-alpha.1, )"
-        }
-      },
       "mk8.drava.configuration": {
         "type": "Project"
       },
       "mk8.drava.contracts": {
         "type": "Project"
+      },
+      "mk8.drava.presentation": {
+        "type": "Project",
+        "dependencies": {
+          "mk8.drava.Configuration": "[0.1.0-alpha.1, )",
+          "mk8.drava.Contracts": "[0.1.0-alpha.1, )",
+          "mk8.drava.Transport": "[0.1.0-alpha.1, )"
+        }
       },
       "mk8.drava.transport": {
         "type": "Project",
@@ -106,12 +91,6 @@
         "requested": "[1.0.21, )",
         "resolved": "1.0.21",
         "contentHash": "rXdSM868bKQzlRxC4iS40VgmOLouRNPstV4WyfciGNQ6hKqxbVTNC6FimcIzmh4u1zlaTaz3kFee0BkV04uyiA=="
-      },
-      "YamlDotNet": {
-        "type": "CentralTransitive",
-        "requested": "[17.1.0, )",
-        "resolved": "17.1.0",
-        "contentHash": "AhsNXgeAs3Ugt653t8LC44xXDuldFfwBpWbWX9pN3e4Yg8U5Bk8jLn8eXtGv5HV2V2nHu7F46fqsPC+tpcTGAA=="
       }
     }
   }

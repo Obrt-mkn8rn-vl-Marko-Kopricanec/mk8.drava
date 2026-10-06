@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RootNamespace>Mk8.Drava.Transport</RootNamespace></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+    <ProjectReference Include="../mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
+    <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="Grpc.Core.Api" />
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+    <PackageReference Include="Haukcode.Mdns" />
+    <Protobuf Include="../mk8.drava.Contracts/Proxy/V1/drava.proto" Link="Protocol/drava.proto" GrpcServices="Both" />
+  </ItemGroup>
+</Project>
