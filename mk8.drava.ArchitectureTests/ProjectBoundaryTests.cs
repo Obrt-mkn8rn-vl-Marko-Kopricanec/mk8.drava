@@ -6,6 +6,18 @@ namespace Mk8.Drava.ArchitectureTests;
 public sealed class ProjectBoundaryTests
 {
     [Fact]
+    public void RegistrationSdkExcludesApplicationImplementationAndKeepsAnInwardOnlyGraph()
+    {
+        var graph = ReadGraph();
+        var reachable = new HashSet<string>(StringComparer.Ordinal);
+        Visit("mk8.drava.Registration", graph, reachable);
+        Assert.DoesNotContain("mk8.drava.Application.BLL", reachable);
+        Assert.DoesNotContain("mk8.drava.Application.DAL", reachable);
+        Assert.DoesNotContain("mk8.drava.Application.INF", reachable);
+        Assert.Subset(new HashSet<string>(["mk8.drava.Contracts", "mk8.drava.Configuration", "mk8.drava.Transport"], StringComparer.Ordinal), new HashSet<string>(graph["mk8.drava.Registration"], StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void GatewayTransitiveGraphExcludesApplicationImplementationAndDataAccess()
     {
         var graph = ReadGraph();

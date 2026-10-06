@@ -12,4 +12,5 @@
   <Project Path="mk8.drava.Application/mk8.drava.Application.csproj" />
   <Project Path="mk8.drava.IntegrationTests/mk8.drava.IntegrationTests.csproj" />
   <Project Path="mk8.drava.ArchitectureTests/mk8.drava.ArchitectureTests.csproj" />
+  <Project Path="mk8.drava.Registration/mk8.drava.Registration.csproj" />
 </Solution>

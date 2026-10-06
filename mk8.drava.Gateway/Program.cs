@@ -8,12 +8,16 @@ using Mk8.Drava.Presentation.Certificates;
 using Mk8.Drava.Presentation.Proxy;
 using Mk8.Drava.Presentation.Registration;
 using Mk8.Drava.Transport.Clients;
+using Mk8.Drava.Transport.Discovery;
 using Mk8.Drava.Transport.Protocol.V1;
 
 namespace Mk8.Drava.Gateway;
 
 internal static class Program
 {
+    private static readonly Action<ILogger, Exception?> DiscoveryUnavailable = LoggerMessage.Define(LogLevel.Warning,
+        new EventId(1, nameof(DiscoveryUnavailable)), "Local service discovery is unavailable; registration remains available through configured addresses.");
+
     public static async Task Main(string[] args)
     {
         if (args.Length != 2 || !string.Equals(args[0], "--bootstrap", StringComparison.Ordinal) || !Path.IsPathFullyQualified(args[1]))
@@ -44,7 +48,23 @@ internal static class Program
         });
         await app.StartAsync().ConfigureAwait(false);
         if (material is not null) await AcknowledgeAsync(channel, material.Plan).ConfigureAwait(false);
-        await app.WaitForShutdownAsync().ConfigureAwait(false);
+        var advertisement = material is not null && bootstrap.DiscoveryEnabled ? TryAdvertise(bootstrap, app.Logger) : null;
+        if (advertisement is null) await app.WaitForShutdownAsync().ConfigureAwait(false);
+        else
+        {
+            await using var discoveryLifetime = advertisement.ConfigureAwait(false);
+            await app.WaitForShutdownAsync().ConfigureAwait(false);
+        }
+    }
+
+    private static GatewaySiteAdvertisement? TryAdvertise(GatewayBootstrap bootstrap, ILogger logger)
+    {
+        try { return new GatewaySiteAdvertisement(bootstrap); }
+        catch (Exception exception) when (exception is System.Net.Sockets.SocketException or InvalidOperationException or NotSupportedException)
+        {
+            DiscoveryUnavailable(logger, exception);
+            return null;
+        }
     }
 
     private static async Task<GatewayServingMaterial?> LoadMaterialAsync(GatewayBootstrap bootstrap, ApplicationChannel channel)

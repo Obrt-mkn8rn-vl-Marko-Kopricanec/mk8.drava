@@ -1,0 +1,44 @@
+#nullable enable
+Mk8.Drava.Registration.DravaRegistrationExtensions
+Mk8.Drava.Registration.DravaRegistrationOptions
+Mk8.Drava.Registration.DravaRegistrationOptions.<Clone>$() -> Mk8.Drava.Registration.DravaRegistrationOptions!
+Mk8.Drava.Registration.DravaRegistrationOptions.AdvertiseAddress.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.AdvertiseAddress.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.ContractId.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.ContractId.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.DeploymentId.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.DeploymentId.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.DravaRegistrationOptions() -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.Equals(Mk8.Drava.Registration.DravaRegistrationOptions? other) -> bool
+Mk8.Drava.Registration.DravaRegistrationOptions.GatewaySeeds.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Transport.Discovery.DiscoveryCandidate!>!
+Mk8.Drava.Registration.DravaRegistrationOptions.GatewaySeeds.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.InstanceId.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.InstanceId.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.MulticastDiscovery.get -> bool
+Mk8.Drava.Registration.DravaRegistrationOptions.MulticastDiscovery.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.NodeId.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.NodeId.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.OwnerId.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.OwnerId.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.ReadinessPath.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.ReadinessPath.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.ServiceId.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.ServiceId.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.Site.get -> Mk8.Drava.Configuration.RegistrationSiteTrust!
+Mk8.Drava.Registration.DravaRegistrationOptions.Site.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.UpstreamProtocol.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.UpstreamProtocol.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.Weight.get -> int
+Mk8.Drava.Registration.DravaRegistrationOptions.Weight.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.Zone.get -> string!
+Mk8.Drava.Registration.DravaRegistrationOptions.Zone.init -> void
+Mk8.Drava.Registration.DravaRegistrationState
+Mk8.Drava.Registration.DravaRegistrationState.DravaRegistrationState() -> void
+Mk8.Drava.Registration.DravaRegistrationState.Failure.get -> string!
+Mk8.Drava.Registration.DravaRegistrationState.Status.get -> Mk8.Drava.Contracts.Registration.V1.RegistrationStatus?
+override Mk8.Drava.Registration.DravaRegistrationOptions.Equals(object? obj) -> bool
+override Mk8.Drava.Registration.DravaRegistrationOptions.GetHashCode() -> int
+override Mk8.Drava.Registration.DravaRegistrationOptions.ToString() -> string!
+static Mk8.Drava.Registration.DravaRegistrationExtensions.AddDravaRegistration(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Mk8.Drava.Registration.DravaRegistrationOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Mk8.Drava.Registration.DravaRegistrationOptions.operator !=(Mk8.Drava.Registration.DravaRegistrationOptions? left, Mk8.Drava.Registration.DravaRegistrationOptions? right) -> bool
+static Mk8.Drava.Registration.DravaRegistrationOptions.operator ==(Mk8.Drava.Registration.DravaRegistrationOptions? left, Mk8.Drava.Registration.DravaRegistrationOptions? right) -> bool

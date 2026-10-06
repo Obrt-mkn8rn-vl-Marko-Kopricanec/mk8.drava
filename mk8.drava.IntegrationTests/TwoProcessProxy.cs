@@ -37,7 +37,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false)
     {
         var directory = Path.Combine(Path.GetTempPath(), "drava_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -53,7 +53,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var port = UnusedPort();
         var registrationPort = UnusedPort();
         var tlsPort = enrolledSite ? UnusedPort() : 0;
-        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort).ConfigureAwait(false);
+        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery).ConfigureAwait(false);
         var root = FindRoot();
         var application = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), applicationPath);
         DevelopmentProcess? gateway = null;
@@ -73,7 +73,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         }
     }
 
-    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort)
+    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery)
     {
         ControllerBootstrap? controller = null;
         if (enrolledSite)
@@ -87,7 +87,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             controller = new ControllerBootstrap { Domain = "site.test", CertificateAuthorityPath = authorityPath, EnrollmentRootFingerprint = fingerprint, RegistrationPort = registrationPort, DnsServerAddress = dnsPort.HasValue ? "127.0.0.1" : "", DnsServerPort = dnsPort ?? 53 };
         }
         var applicationBootstrap = new ApplicationBootstrap { SiteId = "development", NodeId = "local", StateDirectory = state, Listen = ipc, HttpPort = port, HttpsPort = tlsPort, Controller = controller };
-        var gatewayBootstrap = new GatewayBootstrap { SiteId = "development", StateDirectory = gatewayState, Application = ipc, HttpPort = port, HttpsPort = tlsPort, RegistrationPort = registrationPort, EnrollmentRootFingerprint = controller?.EnrollmentRootFingerprint ?? "" };
+        var gatewayBootstrap = new GatewayBootstrap { SiteId = "development", StateDirectory = gatewayState, Application = ipc, HttpPort = port, HttpsPort = tlsPort, RegistrationPort = registrationPort, DiscoveryEnabled = discovery, EnrollmentRootFingerprint = controller?.EnrollmentRootFingerprint ?? "" };
         var sites = Directory.CreateDirectory(Path.Combine(state, "config", "sites")).FullName;
         if (manualRoute) await File.WriteAllTextAsync(Path.Combine(sites, "service.json"), JsonSerializer.Serialize(new
         {

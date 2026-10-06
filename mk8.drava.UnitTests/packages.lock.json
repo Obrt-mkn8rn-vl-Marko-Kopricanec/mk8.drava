@@ -231,6 +231,14 @@
       "mk8.drava.contracts": {
         "type": "Project"
       },
+      "mk8.drava.registration": {
+        "type": "Project",
+        "dependencies": {
+          "mk8.drava.Configuration": "[0.1.0-alpha.1, )",
+          "mk8.drava.Contracts": "[0.1.0-alpha.1, )",
+          "mk8.drava.Transport": "[0.1.0-alpha.1, )"
+        }
+      },
       "mk8.drava.transport": {
         "type": "Project",
         "dependencies": {

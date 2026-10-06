@@ -9,6 +9,7 @@ public sealed record GatewayBootstrap
     public int HttpPort { get; init; } = 80;
     public int HttpsPort { get; init; } = 443;
     public int RegistrationPort { get; init; } = 9443;
+    public bool DiscoveryEnabled { get; init; } = true;
     public string StateDirectory { get; init; } = "";
     public IpcEndpoint Application { get; init; } = new();
     public int MaxConcurrentExchanges { get; init; } = 256;
