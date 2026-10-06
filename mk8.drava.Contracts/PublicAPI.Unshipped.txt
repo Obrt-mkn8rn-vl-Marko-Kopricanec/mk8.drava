@@ -2363,3 +2363,107 @@ static Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamResponse.operator ==
 static Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse.operator !=(Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse? left, Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse? right) -> bool
 static Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse.operator ==(Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse? left, Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse? right) -> bool
 Mk8.Drava.Contracts.Administration.V1.ProxyLogPersistenceStatusResponse.ProxyLogPersistenceStatusResponse(bool accessLogEnabled, bool adminAuditEnabled, string? logDirectory, long maxFileBytes, int maxFiles, string! state, string! reason, System.DateTimeOffset? lastSuccessfulWriteAtUtc, Mk8.Drava.Contracts.Administration.V1.ProxyLogPersistenceFailureStatusResponse? lastWriteFailure) -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.<Clone>$() -> Mk8.Drava.Contracts.Registration.V1.RegistrationCommand!
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Advertisement.get -> Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement?
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Advertisement.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Equals(Mk8.Drava.Contracts.Registration.V1.RegistrationCommand? other) -> bool
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Identity.get -> Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity!
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Identity.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Operation.get -> Mk8.Drava.Contracts.Registration.V1.RegistrationOperation
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Operation.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.RegistrationCommand() -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Version.get -> int
+Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Version.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.<Clone>$() -> Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity!
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.BootId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.BootId.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.ContractId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.ContractId.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.Equals(Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity? other) -> bool
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.InstanceId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.InstanceId.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.NodeId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.NodeId.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.OwnerId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.OwnerId.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.RegistrationIdentity() -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.ServiceId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.ServiceId.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.SiteId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.SiteId.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationOperation
+Mk8.Drava.Contracts.Registration.V1.RegistrationOperation.Drain = 3 -> Mk8.Drava.Contracts.Registration.V1.RegistrationOperation
+Mk8.Drava.Contracts.Registration.V1.RegistrationOperation.Register = 1 -> Mk8.Drava.Contracts.Registration.V1.RegistrationOperation
+Mk8.Drava.Contracts.Registration.V1.RegistrationOperation.Renew = 2 -> Mk8.Drava.Contracts.Registration.V1.RegistrationOperation
+Mk8.Drava.Contracts.Registration.V1.RegistrationOperation.Status = 4 -> Mk8.Drava.Contracts.Registration.V1.RegistrationOperation
+Mk8.Drava.Contracts.Registration.V1.RegistrationOperation.Unspecified = 0 -> Mk8.Drava.Contracts.Registration.V1.RegistrationOperation
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.Accepted = 0 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.CertificatePending = 4 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.Checking = 1 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.DnsPending = 3 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.Draining = 6 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.LeaseExpired = 8 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.Ready = 5 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.Revoked = 7 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationPhase.RouteApplied = 2 -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.<Clone>$() -> Mk8.Drava.Contracts.Registration.V1.RegistrationStatus!
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.AssignedUrls.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.AssignedUrls.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.DesiredRevision.get -> long
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.DesiredRevision.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.Equals(Mk8.Drava.Contracts.Registration.V1.RegistrationStatus? other) -> bool
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.Identity.get -> Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity!
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.Identity.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.LeaseSeconds.get -> int
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.LeaseSeconds.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.Phase.get -> Mk8.Drava.Contracts.Registration.V1.RegistrationPhase
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.Phase.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.Reason.get -> string!
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.Reason.init -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.RegistrationStatus() -> void
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.RenewAfterSeconds.get -> int
+Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.RenewAfterSeconds.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.<Clone>$() -> Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement!
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Address.get -> string!
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Address.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.DeploymentId.get -> string!
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.DeploymentId.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Equals(Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? other) -> bool
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Port.get -> int
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Port.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Protocol.get -> string!
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Protocol.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.ReadinessPath.get -> string!
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.ReadinessPath.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Scheme.get -> string!
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Scheme.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.ServiceAdvertisement() -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Weight.get -> int
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Weight.init -> void
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Zone.get -> string!
+Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Zone.init -> void
+override Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.GetHashCode() -> int
+override Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.ToString() -> string!
+override Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.GetHashCode() -> int
+override Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.ToString() -> string!
+override Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.GetHashCode() -> int
+override Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.ToString() -> string!
+override Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.GetHashCode() -> int
+override Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.ToString() -> string!
+static Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.operator !=(Mk8.Drava.Contracts.Registration.V1.RegistrationCommand? left, Mk8.Drava.Contracts.Registration.V1.RegistrationCommand? right) -> bool
+static Mk8.Drava.Contracts.Registration.V1.RegistrationCommand.operator ==(Mk8.Drava.Contracts.Registration.V1.RegistrationCommand? left, Mk8.Drava.Contracts.Registration.V1.RegistrationCommand? right) -> bool
+static Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.operator !=(Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity? left, Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity? right) -> bool
+static Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity.operator ==(Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity? left, Mk8.Drava.Contracts.Registration.V1.RegistrationIdentity? right) -> bool
+static Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.operator !=(Mk8.Drava.Contracts.Registration.V1.RegistrationStatus? left, Mk8.Drava.Contracts.Registration.V1.RegistrationStatus? right) -> bool
+static Mk8.Drava.Contracts.Registration.V1.RegistrationStatus.operator ==(Mk8.Drava.Contracts.Registration.V1.RegistrationStatus? left, Mk8.Drava.Contracts.Registration.V1.RegistrationStatus? right) -> bool
+static Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.operator !=(Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? left, Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? right) -> bool
+static Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement.operator ==(Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? left, Mk8.Drava.Contracts.Registration.V1.ServiceAdvertisement? right) -> bool

@@ -85,6 +85,18 @@ public sealed class DestinationAvailabilityStore(TimeProvider clock)
             return _destinations.TryGetValue(Key(upstream), out var destination) ? destination.Active : 0;
     }
 
+    public DestinationStatus Status(RegisteredUpstreamIdentity identity)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        lock (Gate)
+        {
+            if (!_destinations.TryGetValue("registered|" + identity.Partition, out var destination)) return new(false, false, false, false);
+            var age = clock.GetElapsedTime(destination.CheckedAt);
+            return new(destination.LeaseValid(clock), destination.Ready && age >= TimeSpan.Zero && age < destination.ProofValidity,
+                destination.Publication?.IsValid(clock.GetUtcNow()) == true, destination.Revoked);
+        }
+    }
+
     internal DestinationAvailability? FindEligible(RuntimeUpstream upstream)
     {
         // Caller holds Gate through candidate comparison, circuit acquisition and active reservation.

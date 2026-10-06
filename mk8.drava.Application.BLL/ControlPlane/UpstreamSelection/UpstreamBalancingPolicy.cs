@@ -24,11 +24,11 @@ public sealed record UpstreamBalancingPolicy
     public string? PreferredZone { get; }
     public bool RequireLocalZone { get; }
 
-    public static UpstreamBalancingPolicy FromName(string name) => name switch
+    public static UpstreamBalancingPolicy FromName(string name)
     {
-        "p2c" => Default,
-        "round-robin" => new(BalancingAlgorithm.WeightedRoundRobin),
-        "least-active" => new(BalancingAlgorithm.LeastActive),
-        _ => throw new InvalidDataException("Balancing needs a supported effective policy."),
-    };
+        if (string.Equals(name, "p2c", StringComparison.OrdinalIgnoreCase)) return Default;
+        if (string.Equals(name, "round-robin", StringComparison.OrdinalIgnoreCase)) return new(BalancingAlgorithm.WeightedRoundRobin);
+        if (string.Equals(name, "least-active", StringComparison.OrdinalIgnoreCase)) return new(BalancingAlgorithm.LeastActive);
+        throw new InvalidDataException("Balancing needs a supported effective policy.");
+    }
 }
