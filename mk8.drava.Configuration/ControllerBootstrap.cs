@@ -9,6 +9,7 @@ public sealed record ControllerBootstrap
     public IReadOnlyList<string> PublicAddresses { get; init; } = [];
     public string DnsServerAddress { get; init; } = "";
     public int DnsServerPort { get; init; } = 53;
+    public DnsPublicationSettings DnsPublication { get; init; } = new();
     public RelayLimits Relay { get; init; } = new();
     public RegistrationSettings Registration { get; init; } = new();
     public ServingPlanSettings ServingPlan { get; init; } = new();
@@ -23,6 +24,7 @@ public sealed record ControllerBootstrap
             foreach (var character in label)
                 if (character is not (>= 'a' and <= 'z') and not (>= '0' and <= '9') and not '-') throw new InvalidDataException("Site domain requires canonical ASCII labels.");
         }
+        DnsPublication.Validate(Domain);
         if (!Path.IsPathFullyQualified(CertificateAuthorityPath)) throw new InvalidDataException("Site issuer path must be absolute.");
         if (EnrollmentRootFingerprint.Length != 64) throw new InvalidDataException("Site issuer requires its enrolled SHA-256 fingerprint.");
         foreach (var character in EnrollmentRootFingerprint)

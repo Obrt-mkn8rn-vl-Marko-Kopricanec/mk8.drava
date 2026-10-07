@@ -18,7 +18,13 @@ internal static class NoConfHosting
         services.AddSingleton(registration.Relay);
         var runtimePolicy = RegistrationPolicyMapping.ToPolicy(controller.Registration);
         services.AddSingleton<IRegisteredReadinessProbe>(_ => new RegisteredReadinessProbe(registration.Relay, runtimePolicy));
-        services.AddSingleton<IServiceDnsVerifier>(_ => new ServiceDnsVerifier(publicAddresses, controller.DnsServerAddress, controller.DnsServerPort));
+        if (string.Equals(controller.DnsPublication.Provider, "cloudflare", StringComparison.Ordinal))
+        {
+            services.AddSingleton<IServiceDnsPublisher>(_ => new CloudflareDnsPublisher(controller.DnsPublication, controller.Domain, bootstrap.SiteId, publicAddresses, TimeProvider.System));
+            services.AddSingleton<IServiceDnsVerifier>(provider => new PublishingServiceDnsVerifier(
+                new ServiceDnsVerifier(publicAddresses, controller.DnsServerAddress, controller.DnsServerPort), provider.GetRequiredService<IServiceDnsPublisher>()));
+        }
+        else services.AddSingleton<IServiceDnsVerifier>(_ => new ServiceDnsVerifier(publicAddresses, controller.DnsServerAddress, controller.DnsServerPort));
         services.AddSingleton<IGatewayPublicationSource>(registration.Plans);
         services.AddSingleton(provider => new NoConfReconciler(registration.Registry,
             provider.GetRequiredService<DestinationAvailabilityStore>(), provider.GetRequiredService<ProxyConfigurationStore>(),

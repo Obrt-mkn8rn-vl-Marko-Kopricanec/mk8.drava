@@ -18,6 +18,7 @@ internal sealed record SiteInitializationBundle(ApplicationBootstrap Application
             Domain = options.Domain, CertificateAuthorityPath = Path.Combine(applicationState, "site-ca.pfx"),
             EnrollmentRootFingerprint = fingerprint, RegistrationPort = options.RegistrationPort,
             PublicAddresses = [options.BindAddress], DnsServerAddress = options.DnsServerAddress, DnsServerPort = options.DnsServerPort,
+            DnsPublication = options.DnsPublication,
             Registration = options.Registration, ServingPlan = options.ServingPlan,
         };
         var application = new ApplicationBootstrap

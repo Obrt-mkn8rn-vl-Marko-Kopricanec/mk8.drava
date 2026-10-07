@@ -22,6 +22,7 @@ internal sealed record SiteInitializationOptions
     public int MaximumPort { get; init; } = 65535;
     public string DnsServerAddress { get; init; } = "";
     public int DnsServerPort { get; init; } = 53;
+    public DnsPublicationSettings DnsPublication { get; init; } = new();
     public RegistrationSettings Registration { get; init; } = new();
     public ServingPlanSettings ServingPlan { get; init; } = new();
     public GatewayPlanSettings GatewayPlan { get; init; } = new();

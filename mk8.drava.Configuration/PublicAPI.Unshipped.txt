@@ -337,3 +337,29 @@ Mk8.Drava.Configuration.NodeEnrollmentProfile.RegistrationPort.get -> int
 Mk8.Drava.Configuration.NodeEnrollmentProfile.RegistrationPort.init -> void
 Mk8.Drava.Configuration.NodeEnrollmentProfile.MulticastDiscovery.get -> bool
 Mk8.Drava.Configuration.NodeEnrollmentProfile.MulticastDiscovery.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.DnsPublication.get -> Mk8.Drava.Configuration.DnsPublicationSettings!
+Mk8.Drava.Configuration.ControllerBootstrap.DnsPublication.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings
+Mk8.Drava.Configuration.DnsPublicationSettings.<Clone>$() -> Mk8.Drava.Configuration.DnsPublicationSettings!
+Mk8.Drava.Configuration.DnsPublicationSettings.DnsPublicationSettings() -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.Equals(Mk8.Drava.Configuration.DnsPublicationSettings? other) -> bool
+Mk8.Drava.Configuration.DnsPublicationSettings.Validate(string! siteDomain) -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.Provider.get -> string!
+Mk8.Drava.Configuration.DnsPublicationSettings.Provider.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.ZoneId.get -> string!
+Mk8.Drava.Configuration.DnsPublicationSettings.ZoneId.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.ZoneName.get -> string!
+Mk8.Drava.Configuration.DnsPublicationSettings.ZoneName.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.CredentialPath.get -> string!
+Mk8.Drava.Configuration.DnsPublicationSettings.CredentialPath.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.TtlSeconds.get -> int
+Mk8.Drava.Configuration.DnsPublicationSettings.TtlSeconds.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.RequestTimeoutSeconds.get -> int
+Mk8.Drava.Configuration.DnsPublicationSettings.RequestTimeoutSeconds.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.RetrySeconds.get -> int
+Mk8.Drava.Configuration.DnsPublicationSettings.RetrySeconds.init -> void
+override Mk8.Drava.Configuration.DnsPublicationSettings.ToString() -> string!
+static Mk8.Drava.Configuration.DnsPublicationSettings.operator !=(Mk8.Drava.Configuration.DnsPublicationSettings? left, Mk8.Drava.Configuration.DnsPublicationSettings? right) -> bool
+static Mk8.Drava.Configuration.DnsPublicationSettings.operator ==(Mk8.Drava.Configuration.DnsPublicationSettings? left, Mk8.Drava.Configuration.DnsPublicationSettings? right) -> bool
+override Mk8.Drava.Configuration.DnsPublicationSettings.GetHashCode() -> int
+override Mk8.Drava.Configuration.DnsPublicationSettings.Equals(object? obj) -> bool

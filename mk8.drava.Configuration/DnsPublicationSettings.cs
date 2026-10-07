@@ -1,0 +1,41 @@
+namespace Mk8.Drava.Configuration;
+
+public sealed record DnsPublicationSettings
+{
+    public string Provider { get; init; } = "existing";
+    public string ZoneId { get; init; } = "";
+    public string ZoneName { get; init; } = "";
+    public string CredentialPath { get; init; } = "";
+    public int TtlSeconds { get; init; } = 300;
+    public int RequestTimeoutSeconds { get; init; } = 5;
+    public int RetrySeconds { get; init; } = 30;
+
+    public void Validate(string siteDomain)
+    {
+        ArgumentNullException.ThrowIfNull(siteDomain);
+        RequireDomain(siteDomain);
+        if (TtlSeconds is < 60 or > 86400 || RequestTimeoutSeconds is < 1 or > 30 || RetrySeconds is < 5 or > 3600)
+            throw new InvalidDataException("DNS publication timing is outside supported bounds.");
+        if (string.Equals(Provider, "existing", StringComparison.Ordinal))
+        {
+            if (ZoneId.Length != 0 || ZoneName.Length != 0 || CredentialPath.Length != 0)
+                throw new InvalidDataException("Existing DNS verification does not accept publisher credentials or zone settings.");
+            return;
+        }
+        if (!string.Equals(Provider, "cloudflare", StringComparison.Ordinal) || ZoneId.Length != 32 || !Path.IsPathFullyQualified(CredentialPath))
+            throw new InvalidDataException("DNS publication requires a supported provider, zone identity and private credential path.");
+        foreach (var character in ZoneId)
+            if (character is not (>= 'a' and <= 'f') and not (>= '0' and <= '9'))
+                throw new InvalidDataException("DNS zone identity requires canonical hexadecimal.");
+        RequireDomain(ZoneName);
+        if (!string.Equals(siteDomain, ZoneName, StringComparison.Ordinal) && !siteDomain.EndsWith("." + ZoneName, StringComparison.Ordinal))
+            throw new InvalidDataException("The DNS zone must contain the enrolled site domain.");
+    }
+
+    private static void RequireDomain(string domain)
+    {
+        if (domain.Length is < 3 or > 253 || !domain.Contains('.', StringComparison.Ordinal))
+            throw new InvalidDataException("DNS publication requires a canonical fully qualified domain.");
+        foreach (var label in domain.Split('.')) RegistrationSiteTrust.RequireLabel(label);
+    }
+}

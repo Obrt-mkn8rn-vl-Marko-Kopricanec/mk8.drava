@@ -10,10 +10,11 @@ internal sealed class DevelopmentDnsServer : IAsyncDisposable
     private readonly UdpClient _listener = new(new IPEndPoint(IPAddress.Loopback, 0));
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _run;
-    private readonly IPAddress _answer;
+    private readonly Func<IPAddress?> _answer;
     public int Port => ((IPEndPoint)(_listener.Client.LocalEndPoint ?? throw new InvalidOperationException("DNS fixture is unbound."))).Port;
 
-    public DevelopmentDnsServer(IPAddress answer) { _answer = answer; _run = RunAsync(); }
+    public DevelopmentDnsServer(IPAddress answer) : this(() => answer) { }
+    public DevelopmentDnsServer(Func<IPAddress?> answer) { ArgumentNullException.ThrowIfNull(answer); _answer = answer; _run = RunAsync(); }
 
     private async Task RunAsync()
     {
@@ -37,7 +38,7 @@ internal sealed class DevelopmentDnsServer : IAsyncDisposable
         end++;
         var type = BinaryPrimitives.ReadUInt16BigEndian(query.AsSpan(end));
         end += 4;
-        var address = _answer.GetAddressBytes();
+        var address = _answer()?.GetAddressBytes() ?? [];
         var answer = type == 1 && address.Length == 4;
         var response = new byte[end + (answer ? 16 : 0)];
         query.AsSpan(0, end).CopyTo(response);

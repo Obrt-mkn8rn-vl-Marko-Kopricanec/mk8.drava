@@ -117,13 +117,22 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             try { await result.WaitUntilBoundAsync().ConfigureAwait(false); return result; }
             catch { result.Client.Dispose(); throw; }
         }
-        catch
+        catch (Exception exception)
         {
             if (gateway is not null) await gateway.DisposeAsync().ConfigureAwait(false);
             if (application is not null) await application.DisposeAsync().ConfigureAwait(false);
+            await CaptureStartupFailureAsync(directory, application, gateway, exception).ConfigureAwait(false);
             Directory.Delete(directory, recursive: true);
             throw;
         }
+    }
+
+    private static async Task CaptureStartupFailureAsync(string directory, DevelopmentProcess? application, DevelopmentProcess? gateway, Exception exception)
+    {
+        var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "noconf-tests", Path.GetFileName(directory))).FullName;
+        await File.WriteAllTextAsync(Path.Combine(evidence, "application-startup-failed.log"), application?.CapturedLog ?? "not started").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(evidence, "gateway-startup-failed.log"), gateway?.CapturedLog ?? "not started").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(evidence, "startup-failure.log"), exception.ToString()).ConfigureAwait(false);
     }
 
     private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery, string? relayAddress, DevelopmentLifecycleSettings lifecycleSettings)
