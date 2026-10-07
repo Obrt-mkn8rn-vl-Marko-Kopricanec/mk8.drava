@@ -65,6 +65,11 @@
         "resolved": "3.1.5",
         "contentHash": "tKi7dSTwP4m5m9eXPM2Ime4Kn7xNf4x4zT9sdLO/G4hZVnQCRiMTWoSZqI/pYTVeI27oPPqHBKYI/DjJ9GsYgA=="
       },
+      "BouncyCastle.Cryptography": {
+        "type": "Transitive",
+        "resolved": "2.7.0",
+        "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
+      },
       "Grpc.AspNetCore.Server": {
         "type": "Transitive",
         "resolved": "2.84.0",
@@ -216,6 +221,7 @@
       "mk8.drava.application.inf": {
         "type": "Project",
         "dependencies": {
+          "Certes": "[4.1.0, )",
           "DnsClient": "[1.8.0, )",
           "mk8.drava.Application.BLL": "[0.1.0-alpha.1, )",
           "mk8.drava.Application.DAL": "[0.1.0-alpha.1, )",
@@ -264,6 +270,15 @@
           "Haukcode.Mdns": "[1.0.21, )",
           "mk8.drava.Configuration": "[0.1.0-alpha.1, )",
           "mk8.drava.Contracts": "[0.1.0-alpha.1, )"
+        }
+      },
+      "Certes": {
+        "type": "CentralTransitive",
+        "requested": "[4.1.0, )",
+        "resolved": "4.1.0",
+        "contentHash": "xlkcd2hCg397+bCUOvFWqXbPqsHW+WMYZTVutFfQT+04y5asJysCZbIOGnaa8E6PptBBzR+E+e8UZSFj9XlnDw==",
+        "dependencies": {
+          "BouncyCastle.Cryptography": "2.7.0"
         }
       },
       "DnsClient": {

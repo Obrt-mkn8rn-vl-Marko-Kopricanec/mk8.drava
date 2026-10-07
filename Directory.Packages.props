@@ -20,6 +20,7 @@
     <PackageVersion Include="Grpc.Tools" Version="2.84.0" />
     <PackageVersion Include="Haukcode.Mdns" Version="1.0.21" />
     <PackageVersion Include="DnsClient" Version="1.8.0" />
+    <PackageVersion Include="Certes" Version="4.1.0" />
     <PackageVersion Include="Google.Protobuf" Version="3.36.2" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
