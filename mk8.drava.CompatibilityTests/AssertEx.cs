@@ -1,5 +1,3 @@
-using Mk8.Drava.Application.BLL.Administration.ContractMapping;
-
 namespace Mk8.Drava.CompatibilityTests;
 internal static class AssertEx
 {
@@ -51,6 +49,13 @@ internal static class AssertEx
         }
 
         throw new InvalidOperationException($"Expected exception of type {typeof(TException).Name}.");
+    }
+
+    public static void Throws<TException>(Func<object?> factory)
+        where TException : Exception
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        Throws<TException>(() => { _ = factory(); });
     }
 
     public static async Task ThrowsAsync<TException>(Func<Task> action)
