@@ -115,7 +115,7 @@ public sealed class PolicyReconciliationTests
         await runtime.WaitAsync(static view => view.AppliedRevision == 1).ConfigureAwait(true);
         var intent = await RegisterAsync(runtime).ConfigureAwait(true);
         runtime.Availability.SetReadiness(intent.Identity, true, TimeSpan.FromSeconds(30));
-        runtime.Availability.SetPublication(intent.Identity, new DestinationPublication(runtime.Registry.State.Revision, 1, true, true, DateTimeOffset.UtcNow.AddSeconds(30)));
+        runtime.Availability.SetPublication(intent.Identity, new DestinationPublication(runtime.Registry.State.Revision, 1, true, true, DateTimeOffset.UtcNow.AddSeconds(30)) { Address = new PublishedServiceAddress("svc.site.example", "/") });
         Assert.True(runtime.Availability.IsEligible(intent.Identity));
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(directory.Path, "registry.sqlite"), Pooling = false }.ToString());
         await using var connectionLifetime = connection.ConfigureAwait(true);

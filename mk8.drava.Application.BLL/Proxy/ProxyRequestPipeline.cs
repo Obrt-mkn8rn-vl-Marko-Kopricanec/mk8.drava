@@ -97,7 +97,7 @@ public sealed class ProxyRequestPipeline(ProxyPipelineServices services)
         var action = services.RouteActions.Evaluate(ProxyRouteActionRuntimeMapper.ToPolicyInput(route, request.Head, listener, isUpgrade));
         if (!action.ShouldProxy)
         {
-            await GeneratedAsync(action.Response!, context, executor, cancellationToken).ConfigureAwait(false);
+            await GeneratedActionAsync(action.Response!, route, context, executor, cancellationToken).ConfigureAwait(false);
             return;
         }
         if (request.DeclaredBodyBytes > route.ResolvedOptions.MaxRequestBodyBytes)
@@ -225,6 +225,14 @@ public sealed class ProxyRequestPipeline(ProxyPipelineServices services)
         services.Metrics.GeneratedFailureResponse(response.StatusCode);
         await GeneratedAsync(new GeneratedRouteResponse(response.StatusCode, response.ReasonPhrase, ProxyGeneratedFailurePolicy.PlainTextContentType, response.Body, []), context, executor, cancellationToken).ConfigureAwait(false);
         context.RecordGeneratedFailureResponse(response, keepClientConnectionOpen: false);
+    }
+
+    private static ValueTask GeneratedActionAsync(GeneratedRouteResponse response, RuntimeRoute route, ProxyRequestContext context, IProxyExchangeExecutor executor, CancellationToken cancellationToken)
+    {
+        var headers = new List<ProxyHeaderField>(response.Headers);
+        if (response.ContentType is not null) headers.Add(new ProxyHeaderField("Content-Type", response.ContentType));
+        var configured = ProxyHeaderMutationPolicy.ApplyResponseHeaders(headers, ProxyHeaderMutationRuntimeMapper.ToPolicyInput(route.HeaderPolicy));
+        return GeneratedAsync(new GeneratedRouteResponse(response.StatusCode, response.ReasonPhrase, null, response.Body, configured), context, executor, cancellationToken);
     }
 
     private static async ValueTask GeneratedAsync(GeneratedRouteResponse response, ProxyRequestContext context, IProxyExchangeExecutor executor, CancellationToken cancellationToken)

@@ -21,7 +21,7 @@ public sealed class RegistryPersistenceTests
             await controller.EnrollAsync(fixture.Grant, "administrator", CancellationToken.None).ConfigureAwait(true);
             await controller.RegisterAsync(RegistryTestFixture.Fingerprint, intent, TimeSpan.FromSeconds(90), CancellationToken.None).ConfigureAwait(true);
             fixture.Availability.SetReadiness(intent.Identity, true, TimeSpan.FromSeconds(120));
-            fixture.Availability.SetPublication(intent.Identity, new DestinationPublication(controller.State.Revision, 1, true, true, fixture.Clock.GetUtcNow().AddHours(1)));
+            fixture.Availability.SetPublication(intent.Identity, new DestinationPublication(controller.State.Revision, 1, true, true, fixture.Clock.GetUtcNow().AddHours(1)) { Address = new PublishedServiceAddress("svc.site.example", "/") });
             Assert.True(fixture.Availability.IsEligible(intent.Identity));
         }
         var restored = await SqliteRegistryRepository.OpenAsync(directory.Path, "site", CancellationToken.None).ConfigureAwait(true);

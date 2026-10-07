@@ -16,20 +16,17 @@ public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses
         RequireDomain(domain);
         // Validate the policy envelope even when the registry is empty.
         var policyIndex = new NoConfPolicyIndex(policy);
-        ValidatePolicies(policyIndex, baseline, domain, localNodeId);
+        var groups = GroupInstances(state);
+        ValidatePolicies(policyIndex, baseline, domain, localNodeId, groups.Keys);
         var routes = new List<RuntimeRoute>();
         if (!string.Equals(policy.Mode, "auto", StringComparison.Ordinal)) routes.AddRange(baseline.Routes);
         var services = new Dictionary<string, CompiledNoConfService>(StringComparer.Ordinal);
         if (!string.Equals(policy.Mode, "manual", StringComparison.Ordinal))
         {
-            var groups = GroupInstances(state);
             foreach (var pool in groups)
             {
                 var resolved = NoConfPolicyResolver.Resolve(policyIndex, pool.Key, domain);
                 var route = CompileService(resolved, pool.Value, baseline, localNodeId);
-                for (var index = 0; index < routes.Count; index++)
-                    if (string.Equals(routes[index].Host, route.Host, StringComparison.OrdinalIgnoreCase) || string.Equals(routes[index].Name, route.Name, StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidDataException("Automatic service host conflicts with a manual route; use explicit manual mode or a distinct host.");
                 routes.Add(route);
                 services.Add(pool.Key, new CompiledNoConfService(pool.Key, route, resolved.Provenance));
             }
@@ -37,16 +34,21 @@ public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses
         return new CompiledNoConfSnapshot(state.Revision, baseline.WithListenersAndRoutes(baseline.Listeners, routes), services);
     }
 
-    private void ValidatePolicies(NoConfPolicyIndex index, ProxyConfigurationSnapshot baseline, string domain, string localNodeId)
+    private void ValidatePolicies(NoConfPolicyIndex index, ProxyConfigurationSnapshot baseline, string domain, string localNodeId, IEnumerable<string> registeredServices)
     {
-        Validate("validation");
-        foreach (var service in index.Services.Keys) Validate(service);
-        void Validate(string serviceId)
+        _ = Validate("validation");
+        var services = new HashSet<string>(index.Services.Keys, StringComparer.Ordinal);
+        services.UnionWith(registeredServices);
+        var claims = new List<RuntimeRoute>();
+        foreach (var service in services) claims.Add(Validate(service));
+        if (!string.Equals(index.Policy.Mode, "manual", StringComparison.Ordinal))
+            NoConfRouteOwnership.Validate(string.Equals(index.Policy.Mode, "auto", StringComparison.Ordinal) ? [] : baseline.Routes, claims);
+        RuntimeRoute Validate(string serviceId)
         {
             var resolved = NoConfPolicyResolver.Resolve(index, serviceId, domain);
             var identity = new RegisteredUpstreamIdentity(localNodeId, "validation", serviceId, "v1", new string('2', 32), new string('1', 32));
             var intent = new InstanceIntent(identity, "validation", "127.0.0.1", 1, "http1", "http", "/", "validation", 1, draining: false);
-            _ = CompileService(resolved, [intent], baseline, localNodeId, validateIngress: false);
+            return CompileService(resolved, [intent], baseline, localNodeId, validateIngress: false);
         }
     }
 

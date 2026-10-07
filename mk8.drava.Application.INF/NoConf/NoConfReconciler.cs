@@ -189,18 +189,20 @@ public sealed partial class NoConfReconciler : BackgroundService
         var ready = tracker.Record(intent.Identity, successful);
         if (!_availability.SetReadiness(intent.Identity, ready, TimeSpan.FromSeconds(_runtimePolicy.ReadinessValiditySeconds), work.Generation)) return;
         if (!ready || !ReferenceEquals(compiled, Compiled)) return;
+        var route = compiled.Services[intent.Identity.ServiceId].Route;
+        var address = new PublishedServiceAddress(route.Host, route.PathPrefix);
         var gateway = _gateway.ReadPublicationProof();
         if (gateway is null)
         {
-            PublishCurrent(work, compiled, new DestinationPublication(compiled.DesiredRevision, 0, false, false, _clock.GetUtcNow().AddSeconds(1)));
+            PublishCurrent(work, compiled, new DestinationPublication(compiled.DesiredRevision, 0, false, false, _clock.GetUtcNow().AddSeconds(1)) { Address = address });
             return;
         }
-        var host = compiled.Services[intent.Identity.ServiceId].Route.Host;
-        var dns = await _dns.VerifyAsync(host, cancellationToken).ConfigureAwait(false);
+        var dns = await _dns.VerifyAsync(address.Host, cancellationToken).ConfigureAwait(false);
         var until = _clock.GetUtcNow().Add(dns.Validity);
         if (until > gateway.ValidUntilUtc) until = gateway.ValidUntilUtc;
         if (!ReferenceEquals(compiled, Compiled)) return;
-        PublishCurrent(work, compiled, new DestinationPublication(compiled.DesiredRevision, gateway.Generation, dns.Verified, true, until));
+        var certificateVerified = gateway.HttpsPort == 0 || gateway.CoversCertificateHost(address.Host);
+        PublishCurrent(work, compiled, new DestinationPublication(compiled.DesiredRevision, gateway.Generation, dns.Verified, certificateVerified, until) { Address = address });
     }
 
     private void PublishCurrent(ProbeWork work, CompiledNoConfSnapshot compiled, DestinationPublication publication)

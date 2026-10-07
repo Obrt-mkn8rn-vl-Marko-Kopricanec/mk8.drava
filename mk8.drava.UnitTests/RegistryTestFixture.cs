@@ -42,7 +42,7 @@ internal sealed class RegistryTestFixture : IDisposable
     public void Publish(InstanceIntent intent)
     {
         Availability.SetReadiness(intent.Identity, true, TimeSpan.FromSeconds(120));
-        Availability.SetPublication(intent.Identity, new DestinationPublication(Registry.State.Revision, 1, true, true, Clock.GetUtcNow().AddHours(1)));
+        Availability.SetPublication(intent.Identity, new DestinationPublication(Registry.State.Revision, 1, true, true, Clock.GetUtcNow().AddHours(1)) { Address = new PublishedServiceAddress(intent.Identity.ServiceId + ".site.example", "/") });
     }
     public static RuntimeUpstream Upstream(InstanceIntent intent) => new(intent.Identity.ServiceId, intent.Identity.InstanceId, intent.Scheme, intent.Protocol,
         intent.Address, intent.Port, intent.Weight, RuntimeUpstreamTlsOptions.Default, RuntimeCircuitBreakerPolicy.Disabled, intent.Identity);

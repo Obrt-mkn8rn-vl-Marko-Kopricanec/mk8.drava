@@ -88,8 +88,8 @@ public sealed class SignedRegistrationHandler
             throw new InvalidDataException("Unknown or superseded instance boot.");
         var status = _availability.Status(identity);
         var gateway = _publication?.ReadPublicationProof();
-        var urls = gateway is not null && gateway.ValidUntilUtc > _clock.GetUtcNow() && status.Publication?.GatewayGeneration == gateway.Generation
-            ? AssignedUrls(identity, gateway) : [];
+        var urls = gateway is not null && gateway.ValidUntilUtc > _clock.GetUtcNow() && status.Publication?.GatewayGeneration == gateway.Generation && status.Publication.Address is { } address
+            ? AssignedUrls(address, gateway) : [];
         var phase = _registry.State.IsTombstoned(identity) ? RegistrationPhase.Revoked : current.Draining ? RegistrationPhase.Draining : status.Revoked ? RegistrationPhase.Revoked : !status.LeaseValid ? RegistrationPhase.LeaseExpired :
             !status.ReadinessValid ? RegistrationPhase.Checking : status.PublicationValid && urls.Count > 0 ? RegistrationPhase.Ready :
             status.Publication is { RouteRevision: > 0, CertificateVerified: false } ? RegistrationPhase.CertificatePending :
@@ -99,15 +99,23 @@ public sealed class SignedRegistrationHandler
             Identity = command.Identity, Phase = phase, DesiredRevision = _registry.State.Revision,
             LeaseSeconds = _policy.LeaseSeconds, RenewAfterSeconds = _policy.RenewAfterSeconds,
             AssignedUrls = phase == RegistrationPhase.Ready ? urls : [],
-            Reason = phase == RegistrationPhase.Checking ? "Readiness and acknowledged publication are required." : "",
+            Reason = PublicationReason(phase, status.Publication?.Address),
         };
     }
 
-    private static IReadOnlyList<string> AssignedUrls(RegisteredUpstreamIdentity identity, GatewayPublicationProof gateway)
+    private static string PublicationReason(RegistrationPhase phase, PublishedServiceAddress? address) => phase switch
     {
-        var host = identity.ServiceId + "." + gateway.Domain;
-        return gateway.HttpsPort > 0 ? ["https://" + host + (gateway.HttpsPort == 443 ? "" : ":" + gateway.HttpsPort.ToString(System.Globalization.CultureInfo.InvariantCulture)) + "/"] :
-            gateway.HttpPort > 0 ? ["http://" + host + (gateway.HttpPort == 80 ? "" : ":" + gateway.HttpPort.ToString(System.Globalization.CultureInfo.InvariantCulture)) + "/"] : [];
+        RegistrationPhase.Checking => "Readiness and acknowledged publication are required.",
+        RegistrationPhase.CertificatePending => "Acknowledged serving material must cover '" + (address?.Host ?? "the route hostname") + "'.",
+        RegistrationPhase.DnsPending => "DNS for '" + (address?.Host ?? "the route hostname") + "' must resolve to approved Gateway addresses.",
+        _ => "",
+    };
+
+    private static IReadOnlyList<string> AssignedUrls(PublishedServiceAddress address, GatewayPublicationProof gateway)
+    {
+        return gateway.HttpsPort > 0 ? gateway.CoversCertificateHost(address.Host)
+            ? ["https://" + address.Host + (gateway.HttpsPort == 443 ? "" : ":" + gateway.HttpsPort.ToString(System.Globalization.CultureInfo.InvariantCulture)) + address.PathPrefix] : [] :
+            gateway.HttpPort > 0 ? ["http://" + address.Host + (gateway.HttpPort == 80 ? "" : ":" + gateway.HttpPort.ToString(System.Globalization.CultureInfo.InvariantCulture)) + address.PathPrefix] : [];
     }
 
     private static RegisteredUpstreamIdentity ToDomain(RegistrationIdentity identity) => new(identity.NodeId, identity.OwnerId, identity.ServiceId,

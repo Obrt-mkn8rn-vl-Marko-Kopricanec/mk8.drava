@@ -5,6 +5,11 @@ namespace Mk8.Drava.Application.BLL.NoConf;
 
 public sealed record NoConfPolicyPatch
 {
+    public string? Host { get; init; }
+    public string? PathPrefix { get; init; }
+    public string? Action { get; init; }
+    public ProxyRedirectOptions? Redirect { get; init; }
+    public ProxyStaticResponseOptions? StaticResponse { get; init; }
     public BalancingAlgorithm? Algorithm { get; init; }
     public string? AffinityHeader { get; init; }
     public string? PreferredZone { get; init; }

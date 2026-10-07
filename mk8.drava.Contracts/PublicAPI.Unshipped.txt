@@ -2687,3 +2687,7 @@ override Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.GetHashCode() -> 
 override Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.ToString() -> string!
 static Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.operator !=(Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? left, Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? right) -> bool
 static Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint.operator ==(Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? left, Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint? right) -> bool
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Action.get -> string!
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Action.init -> void
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.PathPrefix.get -> string!
+Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.PathPrefix.init -> void

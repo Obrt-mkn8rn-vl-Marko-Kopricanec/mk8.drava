@@ -12,7 +12,7 @@ public sealed class PublicationFreshnessTests
         await fixture.InitializeAsync().ConfigureAwait(true);
         var intent = RegistryTestFixture.Intent();
         await fixture.ReadyAsync(intent).ConfigureAwait(true);
-        fixture.Availability.SetPublication(intent.Identity, new DestinationPublication(fixture.Registry.State.Revision, 1, true, true, fixture.Clock.GetUtcNow().AddSeconds(2)));
+        fixture.Availability.SetPublication(intent.Identity, new DestinationPublication(fixture.Registry.State.Revision, 1, true, true, fixture.Clock.GetUtcNow().AddSeconds(2)) { Address = new PublishedServiceAddress("svc.site.example", "/") });
         fixture.Clock.Advance(TimeSpan.FromSeconds(3));
         fixture.Clock.AdjustUtc(TimeSpan.FromMinutes(-1));
         Assert.True(fixture.Availability.Status(intent.Identity).LeaseValid);

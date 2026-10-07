@@ -84,6 +84,7 @@ public sealed partial class NoConfAdministration(NoConfReconciler reconciler, Re
         {
             var service = services[key];
             explanations.Add(new ServicePolicyResponse { ServiceId = key, Host = service.Route.Host,
+                PathPrefix = service.Route.PathPrefix, Action = service.Route.Action.ToString(),
                 Algorithm = service.Route.Balancing?.Algorithm.ToString() ?? "", Provenance = service.Provenance });
         }
         var history = new List<PolicyRevisionResponse>();

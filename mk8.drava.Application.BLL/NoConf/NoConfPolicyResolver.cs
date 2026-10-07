@@ -44,7 +44,12 @@ public static class NoConfPolicyResolver
             ChooseValue("requireLocalZone", static patch => patch.RequireLocalZone, false));
         var route = new ProxyRouteOptions
         {
-            Name = "registered-" + serviceId, SiteName = "registered", Host = serviceId + "." + domain,
+            Name = "registered-" + serviceId, SiteName = "registered",
+            Host = Choose("host", static patch => patch.Host, serviceId + "." + domain),
+            PathPrefix = Choose("pathPrefix", static patch => patch.PathPrefix, "/"),
+            Action = Choose("action", static patch => patch.Action, "proxy"),
+            Redirect = Choose("redirect", static patch => patch.Redirect, new ProxyRedirectOptions()),
+            StaticResponse = Choose("staticResponse", static patch => patch.StaticResponse, new ProxyStaticResponseOptions()),
             HeaderPolicy = Choose("headers", static patch => patch.Headers, new ProxyHeaderPolicyOptions()),
             PathRewrite = Choose("rewrite", static patch => patch.Rewrite, new ProxyPathRewriteOptions()),
             Cache = Choose("cache", static patch => patch.Cache, new ProxyCachePolicyOptions()),
@@ -60,7 +65,18 @@ public static class NoConfPolicyResolver
                 AccessLogEnabled = ChooseOptional("limits.accessLogEnabled", static patch => patch.Limits?.AccessLogEnabled),
             },
         };
+        ValidateRoute(route, domain);
         return new ResolvedNoConfInputs(balancing, route, Choose("upstreamTls", static patch => patch.UpstreamTls, new UpstreamTlsOptions()),
             Choose("circuitBreaker", static patch => patch.CircuitBreaker, new ProxyCircuitBreakerOptions()), provenance);
+    }
+
+    private static void ValidateRoute(ProxyRouteOptions route, string domain)
+    {
+        if (!string.Equals(route.Action, "proxy", StringComparison.OrdinalIgnoreCase) && !string.Equals(route.Action, "redirect", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(route.Action, "staticResponse", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Automatic route action must be proxy, redirect or staticResponse.");
+        _ = new PublishedServiceAddress(route.Host, route.PathPrefix);
+        if (string.Equals(route.Host, "register." + domain, StringComparison.Ordinal))
+            throw new InvalidDataException("The site registration hostname is reserved.");
     }
 }

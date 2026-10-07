@@ -17,7 +17,7 @@ internal static class RuntimeInitializer
             throw new InvalidDataException("The optional manual configuration is invalid: " + string.Join(" ", result.Errors));
         var options = new List<ListenerOptions>();
         if (bootstrap.HttpPort > 0) options.Add(new ListenerOptions { Name = "http", Address = bootstrap.IngressAddress, Port = bootstrap.HttpPort });
-        if (bootstrap.HttpsPort > 0) options.Add(new ListenerOptions { Name = "https", Address = bootstrap.IngressAddress, Port = bootstrap.HttpsPort, Transport = "https", Protocols = "http1,http2" });
+        if (bootstrap.HttpsPort > 0) options.Add(new ListenerOptions { Name = "https", Address = bootstrap.IngressAddress, Port = bootstrap.HttpsPort, Transport = "https", Protocols = "http1andhttp2" });
         var security = services.GetRequiredService<IProxyAdminSecurityOptionsReader>().Read();
         var urls = bootstrap.ManagementPort > 0 ? new[] { $"https://admin.{bootstrap.Controller!.Domain}:{bootstrap.ManagementPort}" } : [];
         var administrator = new RuntimeAdminSecurityOptions(urls, RequireAuthentication: true, HasConfiguredToken: security.Token is not null, security.Token,
