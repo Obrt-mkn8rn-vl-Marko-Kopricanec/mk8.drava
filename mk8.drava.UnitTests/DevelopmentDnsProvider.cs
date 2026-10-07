@@ -33,14 +33,8 @@ internal sealed class DevelopmentDnsProvider : HttpMessageHandler
         if (Block) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
         if (uri.AbsolutePath.EndsWith("/" + new string('a', 32), StringComparison.Ordinal))
             return Json(new { success = true, errors = Array.Empty<object>(), result = new { name = string.Equals(Failure, "zone", StringComparison.Ordinal) ? "foreign.example" : "site.example" } });
-        if (request.Method == HttpMethod.Post)
-        {
-            using var value = JsonDocument.Parse(body);
-            var root = value.RootElement;
-            var record = new ProviderRecord(root.GetProperty("name").GetString()!, root.GetProperty("type").GetString()!, root.GetProperty("content").GetString()!, false, root.GetProperty("comment").GetString()!);
-            lock (_gate) Records.Add(record);
-            return Json(new { success = true, errors = Array.Empty<object>(), result = Record(string.Equals(Failure, "created-host", StringComparison.Ordinal) ? record with { Name = "foreign.example" } : record) });
-        }
+        if (request.Method == HttpMethod.Post) return CreateRecord(body);
+        if (uri.AbsolutePath.Contains("/dns_records/", StringComparison.Ordinal)) return RecordById(request.Method, uri);
         Assert.Equal(HttpMethod.Get, request.Method);
         Assert.Contains("name.exact=", uri.Query, StringComparison.Ordinal);
         if (string.Equals(Failure, "redirect", StringComparison.Ordinal)) return new HttpResponseMessage(HttpStatusCode.Redirect) { Headers = { Location = new Uri("https://foreign.example/steal") } };
@@ -62,6 +56,40 @@ internal sealed class DevelopmentDnsProvider : HttpMessageHandler
             result_info = new { page = 1, total_count = found.Length, total_pages = string.Equals(Failure, "pagination", StringComparison.Ordinal) ? 2 : 1 } });
     }
 
-    private static object Record(ProviderRecord record) => new { id = new string('b', 32), name = record.Name, type = record.Type, content = record.Content, proxied = record.Proxied, comment = record.Comment };
+    private HttpResponseMessage CreateRecord(string body)
+    {
+        using var value = JsonDocument.Parse(body);
+        var root = value.RootElement;
+        var record = new ProviderRecord(root.GetProperty("name").GetString()!, root.GetProperty("type").GetString()!, root.GetProperty("content").GetString()!, false, root.GetProperty("comment").GetString()!) { Id = Guid.NewGuid().ToString("N") };
+        lock (_gate) Records.Add(record);
+        return Json(new { success = true, errors = Array.Empty<object>(), result = Record(string.Equals(Failure, "created-host", StringComparison.Ordinal) ? record with { Name = "foreign.example" } : record) });
+    }
+
+    private HttpResponseMessage RecordById(HttpMethod method, Uri uri)
+    {
+        var id = uri.AbsolutePath[(uri.AbsolutePath.LastIndexOf('/') + 1)..];
+        ProviderRecord? record;
+        lock (_gate) record = Records.Find(value => string.Equals(value.Id, id, StringComparison.Ordinal));
+        if (record is null) return new HttpResponseMessage(HttpStatusCode.NotFound);
+        if (method == HttpMethod.Delete)
+        {
+            lock (_gate) Records.Remove(record);
+            return Json(new { success = true, errors = Array.Empty<object>(), result = new { id = string.Equals(Failure, "delete-id", StringComparison.Ordinal) ? new string('c', 32) : id } });
+        }
+        Assert.Equal(HttpMethod.Get, method);
+        record = Failure switch
+        {
+            "read-owner" => record with { Comment = "foreign owner" },
+            "read-host" => record with { Name = "foreign.example" },
+            "read-value" => record with { Content = "foreign value" },
+            "read-type" => record with { Type = "A" },
+            "read-id" => record with { Id = new string('c', 32) },
+            "read-proxied" => record with { Proxied = true },
+            _ => record,
+        };
+        return Json(new { success = true, errors = Array.Empty<object>(), result = Record(record) });
+    }
+
+    private static object Record(ProviderRecord record) => new { id = record.Id, name = record.Name, type = record.Type, content = record.Content, proxied = record.Proxied, comment = record.Comment };
     private static HttpResponseMessage Json<T>(T value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
 }

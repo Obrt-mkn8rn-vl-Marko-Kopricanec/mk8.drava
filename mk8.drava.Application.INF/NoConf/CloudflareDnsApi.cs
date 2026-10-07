@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Mk8.Drava.Application.INF.NoConf;
 
-internal sealed class CloudflareDnsApi : IDisposable
+internal sealed partial class CloudflareDnsApi : IDisposable
 {
     private const int MaximumResponseBytes = 256 * 1024;
     private readonly HttpClient _client;
@@ -51,6 +51,11 @@ internal sealed class CloudflareDnsApi : IDisposable
 
     public async ValueTask<bool> CreateAsync(string host, string type, string address, int ttl, string ownership, CancellationToken cancellationToken)
     {
+        if (string.Equals(type, "TXT", StringComparison.Ordinal))
+        {
+            await CreateTxtAsync(host, address, ttl, ownership, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
         using var content = JsonContent.Create(new { name = host, type, content = address, ttl, proxied = false, comment = ownership });
         using var response = await SendAsync(HttpMethod.Post, _zonePath + "/dns_records", content, cancellationToken).ConfigureAwait(false);
         var record = response.RootElement.GetProperty("result");
