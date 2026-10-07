@@ -990,7 +990,7 @@ internal static class RouteDiagnosticsTests
     public static void RouteDiagnosticsRequestReaderAcceptsNormalizedInput()
     {
         var evaluatedAt = new DateTimeOffset(2026, 6, 13, 10, 0, 0, TimeSpan.Zero);
-        var headers = new Dictionary<string, string?>
+        var headers = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["Authorization"] = "secret",
             ["X-Test"] = "value"

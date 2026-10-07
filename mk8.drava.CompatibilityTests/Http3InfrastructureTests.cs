@@ -256,10 +256,10 @@ internal static class Http3InfrastructureTests
         AssertEx.True(tcpInput.Http1Enabled);
         AssertEx.True(tcpInput.Http2Enabled);
         AssertEx.True(quicInput.EnabledForTraffic);
-        AssertEx.True(tcpPolicy.Contains(ListenerProtocolAdvertisementPolicy.Http2Alpn));
-        AssertEx.True(tcpPolicy.Contains(ListenerProtocolAdvertisementPolicy.Http1Alpn));
-        AssertEx.False(tcpPolicy.Contains(ListenerProtocolAdvertisementPolicy.Http3Alpn));
-        AssertEx.True(quicPolicy.Contains(ListenerProtocolAdvertisementPolicy.Http3Alpn));
+        AssertEx.True(tcpPolicy.Contains(ListenerProtocolAdvertisementPolicy.Http2Alpn, StringComparer.Ordinal));
+        AssertEx.True(tcpPolicy.Contains(ListenerProtocolAdvertisementPolicy.Http1Alpn, StringComparer.Ordinal));
+        AssertEx.False(tcpPolicy.Contains(ListenerProtocolAdvertisementPolicy.Http3Alpn, StringComparer.Ordinal));
+        AssertEx.True(quicPolicy.Contains(ListenerProtocolAdvertisementPolicy.Http3Alpn, StringComparer.Ordinal));
         AssertEx.True(tcpAlpn.Contains(SslApplicationProtocol.Http2));
         AssertEx.True(tcpAlpn.Contains(SslApplicationProtocol.Http11));
         AssertEx.False(tcpAlpn.Any(static protocol => protocol.Protocol.Span.SequenceEqual("h3"u8)));
@@ -279,8 +279,8 @@ internal static class Http3InfrastructureTests
         AssertEx.Equal("default", statusProjection.Configured);
         AssertEx.True(statusProjection.EnabledForTraffic);
         AssertEx.Equal("default_enabled", statusProjection.DisabledReason);
-        AssertEx.False(statusProjection.DefaultReadinessBlockers.Contains("qpack_dynamic_table_unsupported"));
-        AssertEx.False(statusProjection.DefaultReadinessBlockers.Contains("request_body_buffered_not_streamed"));
+        AssertEx.False(statusProjection.DefaultReadinessBlockers.Contains("qpack_dynamic_table_unsupported", StringComparer.Ordinal));
+        AssertEx.False(statusProjection.DefaultReadinessBlockers.Contains("request_body_buffered_not_streamed", StringComparer.Ordinal));
         AssertEx.Equal("static_with_zero_dynamic_table", statusProjection.QpackMode);
         AssertEx.Equal("streaming", statusProjection.RequestBodyMode);
     }
@@ -301,8 +301,8 @@ internal static class Http3InfrastructureTests
         var projection = ProxyConfigurationProjectionMapper.ToProjection(snapshot, TestHttp3PlatformSupport.Project(snapshot)).Http3;
         AssertEx.Equal("default_enabled_for_eligible_tls_proxy_listeners", projection.ClientHttp3SupportLevel);
         AssertEx.Equal("opt_in_https_quic_reused_multiplexed", projection.UpstreamHttp3SupportLevel);
-        AssertEx.True(projection.ClientProtocols.SequenceEqual(["http1", "http2", "http3"]));
-        AssertEx.True(projection.UpstreamProtocols.SequenceEqual(["http1", "http2", "http3"]));
+        AssertEx.True(projection.ClientProtocols.SequenceEqual(["http1", "http2", "http3"], StringComparer.Ordinal));
+        AssertEx.True(projection.UpstreamProtocols.SequenceEqual(["http1", "http2", "http3"], StringComparer.Ordinal));
         AssertEx.True(projection.SupportedRouteActions.Contains("proxy", StringComparer.Ordinal));
         AssertEx.True(projection.SupportedRouteActions.Contains("redirect", StringComparer.Ordinal));
         AssertEx.True(projection.SupportedRouteActions.Contains("staticResponse", StringComparer.Ordinal));
@@ -311,7 +311,7 @@ internal static class Http3InfrastructureTests
         AssertEx.True(projection.SupportedPolicyFeatures.Contains("retry_circuit_safe_methods", StringComparer.Ordinal));
         AssertEx.True(projection.SupportedPolicyFeatures.Contains("weighted_balancing", StringComparer.Ordinal));
         AssertEx.True(projection.SupportedPolicyFeatures.Contains("health_checks", StringComparer.Ordinal));
-        AssertEx.True(projection.UnsupportedFeatures.SequenceEqual(RuntimeHttp3UnsupportedFeatureCodes.EffectiveConfig));
+        AssertEx.True(projection.UnsupportedFeatures.SequenceEqual(RuntimeHttp3UnsupportedFeatureCodes.EffectiveConfig, StringComparer.Ordinal));
         AssertEx.False(projection.UnsupportedFeatures.Contains("upstream_http3_multiplexing", StringComparer.Ordinal));
         AssertEx.Equal("reused_multiplexed", projection.UpstreamPoolingMode);
         AssertEx.True(projection.UpstreamMultiplexingEnabled);

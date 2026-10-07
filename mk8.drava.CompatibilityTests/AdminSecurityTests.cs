@@ -81,7 +81,7 @@ internal static class AdminSecurityTests
 
     public static void NonLocalAdminBindWithoutAuthIsRejected()
     {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [AdminBindWebHostConfigurator.AspNetCoreUrlsConfigurationKey] = "http://0.0.0.0:5041" }).Build();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { [AdminBindWebHostConfigurator.AspNetCoreUrlsConfigurationKey] = "http://0.0.0.0:5041" }).Build();
         try
         {
             AdminBindWebHostConfigurator.Resolve(configuration, new AdminStartupSecurityOptions([], false, false));

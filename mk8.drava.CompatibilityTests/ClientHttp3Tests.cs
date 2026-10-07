@@ -289,8 +289,8 @@ internal static class ClientHttp3Tests
         AssertEx.Equal("default", projection.Http3.Configured);
         AssertEx.True(projection.Http3.EnabledForTraffic);
         AssertEx.Equal("default_enabled", projection.Http3.DisabledReason);
-        AssertEx.False(projection.Http3.DefaultReadinessBlockers.Contains("qpack_dynamic_table_unsupported"));
-        AssertEx.False(projection.Http3.DefaultReadinessBlockers.Contains("request_body_buffered_not_streamed"));
+        AssertEx.False(projection.Http3.DefaultReadinessBlockers.Contains("qpack_dynamic_table_unsupported", StringComparer.Ordinal));
+        AssertEx.False(projection.Http3.DefaultReadinessBlockers.Contains("request_body_buffered_not_streamed", StringComparer.Ordinal));
         AssertEx.Equal("static_with_zero_dynamic_table", projection.Http3.QpackMode);
         AssertEx.Equal(0, projection.Http3.QpackDynamicTableCapacity);
         AssertEx.Equal(0, projection.Http3.QpackBlockedStreams);
@@ -1990,7 +1990,7 @@ internal static class ClientHttp3Tests
         return Host.CreateDefaultBuilder().ConfigureAppConfiguration(builder =>
         {
             builder.Sources.Clear();
-            builder.AddInMemoryCollection(new Dictionary<string, string?> { [$"{MdravaDataDirectoryOptions.SectionName}:DataDirectory"] = dataDirectory });
+            builder.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { [$"{MdravaDataDirectoryOptions.SectionName}:DataDirectory"] = dataDirectory });
         }).ConfigureLogging(logging => logging.ClearProviders()).ConfigureServices((context, services) =>
         {
             services.AddProxyDataPlane(context.Configuration);

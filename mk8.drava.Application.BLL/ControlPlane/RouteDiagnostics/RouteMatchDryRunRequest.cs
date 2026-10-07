@@ -17,7 +17,7 @@ public sealed record RouteMatchDryRunRequest
         this.Method = Method;
         this.Path = Path;
         this.Query = Query;
-        this.Headers = new ReadOnlyDictionary<string, string?>(new Dictionary<string, string?>(Headers));
+        this.Headers = new ReadOnlyDictionary<string, string?>(new Dictionary<string, string?>(Headers, StringComparer.Ordinal));
         this.ClientIp = ClientIp;
         this.ListenerName = ListenerName;
         this.Protocol = Protocol;

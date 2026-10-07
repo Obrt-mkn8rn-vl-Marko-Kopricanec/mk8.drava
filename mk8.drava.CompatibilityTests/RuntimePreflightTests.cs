@@ -33,7 +33,7 @@ internal static class RuntimePreflightTests
         var status = service.RunStartupChecks();
         var text = JsonSerializer.Serialize(status);
         AssertEx.Equal("degraded", status.State);
-        AssertEx.True(status.Reasons.Contains("directory_not_writable"), string.Join(",", status.Reasons));
+        AssertEx.True(status.Reasons.Contains("directory_not_writable", StringComparer.Ordinal), string.Join(",", status.Reasons));
         AssertEx.True(status.Checks.Any(static check => string.Equals(check.Name, "logs_directory", StringComparison.Ordinal) && string.Equals(check.Severity, "warning", StringComparison.Ordinal) && string.Equals(check.Reason, "directory_not_writable", StringComparison.Ordinal)));
         AssertEx.False(text.Contains(secret, StringComparison.Ordinal), text);
         AssertEx.False(text.Contains(temp.Path, StringComparison.OrdinalIgnoreCase), text);
@@ -48,7 +48,7 @@ internal static class RuntimePreflightTests
         var service = new ProxyRuntimePreflightService(provider, new ProxyDataDirectoryPathSafety(), new DelegateProbe(_ => ProxyRuntimeDirectoryProbeResult.Probed(created: false, canRead: true, canWrite: true)), TimeProvider.System);
         var status = service.RunStartupChecks();
         AssertEx.Equal("degraded", status.State);
-        AssertEx.True(status.Reasons.Contains("unsafe_path"), string.Join(",", status.Reasons));
+        AssertEx.True(status.Reasons.Contains("unsafe_path", StringComparer.Ordinal), string.Join(",", status.Reasons));
         AssertEx.True(status.Checks.Any(static check => string.Equals(check.Name, "logs_directory", StringComparison.Ordinal) && string.Equals(check.RelativePath, "logs", StringComparison.Ordinal) && string.Equals(check.Reason, "unsafe_path", StringComparison.Ordinal) && string.Equals(check.Severity, "warning", StringComparison.Ordinal)));
     }
 
@@ -58,7 +58,7 @@ internal static class RuntimePreflightTests
         var service = new ProxyRuntimePreflightService(Provider(temp.Path), new ProxyDataDirectoryPathSafety(), new ProxyRuntimeDirectoryProbe(), TimeProvider.System);
         var status = service.Inspect();
         AssertEx.Equal("failed", status.State);
-        AssertEx.True(status.Reasons.Contains("missing_directory"), string.Join(",", status.Reasons));
+        AssertEx.True(status.Reasons.Contains("missing_directory", StringComparer.Ordinal), string.Join(",", status.Reasons));
         AssertEx.False(Directory.Exists(Path.Combine(temp.Path, "config")));
         AssertEx.False(Directory.Exists(Path.Combine(temp.Path, "logs")));
     }

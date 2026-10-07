@@ -67,7 +67,7 @@ public sealed class ProxyBackupService : IProxyBackupOperations
             errors.Add(ProxyRestoreValidationFindingPolicy.ConfigurationError(fileError.Message, SafeRelativeOrNull(root, fileError.Path)));
         }
 
-        foreach (var error in configValidation.Errors.Except(configValidation.FileErrors.Select(static fileError => fileError.Message)))
+        foreach (var error in configValidation.Errors.Except(configValidation.FileErrors.Select(static fileError => fileError.Message), StringComparer.Ordinal))
         {
             errors.Add(ProxyRestoreValidationFindingPolicy.ConfigurationError(error, relativePath: null));
         }

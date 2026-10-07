@@ -705,8 +705,8 @@ internal static class OperatorStatusTests
         var input = new ProxyReadinessEvaluationInput(HasActiveConfiguration: true, ConfigGeneration: 77, IsShuttingDown: false, LastListenerReloadFailed: true, LogPersistenceState: ProxyStatusText.Healthy, RuntimePreflight: ProxyRuntimePreflightStatus.Unknown, Subsystems: HealthyReadinessSubsystems()with { Listeners = new ProxyListenerSubsystemSummary(1, 1, 1, 1, 0, 1, 0, 0, 0) }, EvaluatedAtUtc: evaluatedAt);
         var readiness = ProxyReadinessEvaluator.Evaluate(input);
         AssertEx.Equal("degraded", readiness.State);
-        AssertEx.True(readiness.Reasons.Contains("listener_start_failed"), string.Join(",", readiness.Reasons));
-        AssertEx.True(readiness.Reasons.Contains("last_listener_reload_failed"), string.Join(",", readiness.Reasons));
+        AssertEx.True(readiness.Reasons.Contains("listener_start_failed", StringComparer.Ordinal), string.Join(",", readiness.Reasons));
+        AssertEx.True(readiness.Reasons.Contains("last_listener_reload_failed", StringComparer.Ordinal), string.Join(",", readiness.Reasons));
         AssertEx.Equal(evaluatedAt, readiness.GeneratedAtUtc);
         AssertEx.Equal(77, readiness.ConfigGeneration);
     }
@@ -969,7 +969,7 @@ internal static class OperatorStatusTests
         var status = fixture.Controller().Get();
         var text = JsonSerializer.Serialize(status.Readiness) + JsonSerializer.Serialize(status.Subsystems);
         AssertEx.Equal("degraded", status.Readiness.State);
-        AssertEx.True(status.Readiness.Reasons.Contains("log_persistence_degraded"), string.Join(",", status.Readiness.Reasons));
+        AssertEx.True(status.Readiness.Reasons.Contains("log_persistence_degraded", StringComparer.Ordinal), string.Join(",", status.Readiness.Reasons));
         AssertEx.Equal("degraded", status.Subsystems.Logs.State);
         AssertEx.False(text.Contains(querySecret, StringComparison.Ordinal), text);
         AssertEx.False(text.Contains(AdminToken, StringComparison.Ordinal), text);
@@ -986,7 +986,7 @@ internal static class OperatorStatusTests
         fixture.Runtime.ReplaceListeners([ListenerStatus(listener, ProxyListenerState.Failed)], null);
         var status = fixture.Controller().Get();
         AssertEx.Equal("not_ready", status.Readiness.State);
-        AssertEx.True(status.Readiness.Reasons.Contains("no_active_listeners"), string.Join(",", status.Readiness.Reasons));
+        AssertEx.True(status.Readiness.Reasons.Contains("no_active_listeners", StringComparer.Ordinal), string.Join(",", status.Readiness.Reasons));
         AssertEx.Equal(1, status.Subsystems.Listeners.Failed);
         AssertEx.Equal(0, status.Subsystems.Listeners.Active);
         AssertEx.Equal(stoppedAtUtc, status.StoppedAt);
@@ -1001,7 +1001,7 @@ internal static class OperatorStatusTests
         fixture.Runtime.ReplaceListeners([active], ProxyListenerReloadResult.Failed(DateTimeOffset.UtcNow, added: 0, removed: 0, changed: 0, unchanged: 1, changes: [], errors: ["raw bind failure that should not be copied into readiness"]));
         var status = fixture.Controller().Get();
         AssertEx.Equal("degraded", status.Readiness.State);
-        AssertEx.True(status.Readiness.Reasons.Contains("last_listener_reload_failed"), string.Join(",", status.Readiness.Reasons));
+        AssertEx.True(status.Readiness.Reasons.Contains("last_listener_reload_failed", StringComparer.Ordinal), string.Join(",", status.Readiness.Reasons));
         AssertEx.Equal(1, status.Readiness.ConfigGeneration);
         AssertEx.True(status.Subsystems.Config.Active);
         AssertEx.False(status.Subsystems.Config.LastListenerReloadSucceeded!.Value);
@@ -1020,7 +1020,7 @@ internal static class OperatorStatusTests
         fixture.Health.RecordHealthCheckResult(HealthTarget(route, upstream), HealthCheckSample.UnhealthyResult("status_500"), DateTimeOffset.UtcNow);
         var status = fixture.Controller().Get();
         AssertEx.Equal("degraded", status.Readiness.State);
-        AssertEx.True(status.Readiness.Reasons.Contains("upstream_unhealthy"), string.Join(",", status.Readiness.Reasons));
+        AssertEx.True(status.Readiness.Reasons.Contains("upstream_unhealthy", StringComparer.Ordinal), string.Join(",", status.Readiness.Reasons));
         AssertEx.Equal(1, status.Subsystems.Upstreams.Total);
         AssertEx.Equal(1, status.Subsystems.Upstreams.Unhealthy);
         AssertEx.Equal(1, status.Subsystems.Upstreams.HealthChecksEnabled);
@@ -1043,7 +1043,7 @@ internal static class OperatorStatusTests
         fixture.Circuit.RecordFailure(acceptedAcquisition.Lease, "connect_failure");
         var status = fixture.Controller().Get();
         AssertEx.Equal("degraded", status.Readiness.State);
-        AssertEx.True(status.Readiness.Reasons.Contains("circuit_not_closed"), string.Join(",", status.Readiness.Reasons));
+        AssertEx.True(status.Readiness.Reasons.Contains("circuit_not_closed", StringComparer.Ordinal), string.Join(",", status.Readiness.Reasons));
         AssertEx.Equal(1, status.Subsystems.Circuits.Enabled);
         AssertEx.Equal(1, status.Subsystems.Circuits.Open);
     }
@@ -1056,7 +1056,7 @@ internal static class OperatorStatusTests
         fixture.Runtime.ReplaceListeners([ListenerStatus(listener, ProxyListenerState.Active)], null);
         var protocols = fixture.Controller().Get().Subsystems.Protocols;
         AssertEx.False(protocols.ClientHttp3Enabled);
-        AssertEx.True(protocols.UnsupportedHttp3Features.SequenceEqual(RuntimeHttp3UnsupportedFeatureCodes.StatusSummary), string.Join(",", protocols.UnsupportedHttp3Features));
+        AssertEx.True(protocols.UnsupportedHttp3Features.SequenceEqual(RuntimeHttp3UnsupportedFeatureCodes.StatusSummary, StringComparer.Ordinal), string.Join(",", protocols.UnsupportedHttp3Features));
     }
 
     public static void StatusProtocolSubsystemSummaryOwnsUnsupportedFeatureList()
@@ -1103,7 +1103,7 @@ internal static class OperatorStatusTests
         var status = fixture.Controller().Get();
         var text = JsonSerializer.Serialize(status.Readiness) + JsonSerializer.Serialize(status.Subsystems);
         AssertEx.Equal("degraded", status.Readiness.State);
-        AssertEx.True(status.Readiness.Reasons.Contains("certificate_reference_missing"), string.Join(",", status.Readiness.Reasons));
+        AssertEx.True(status.Readiness.Reasons.Contains("certificate_reference_missing", StringComparer.Ordinal), string.Join(",", status.Readiness.Reasons));
         AssertEx.Equal(1, status.Subsystems.Certificates.MissingReferences);
         AssertEx.NotNull(status.Subsystems.Certificates.LastIssue);
         AssertEx.Equal("certificate", status.Subsystems.Certificates.LastIssue!.Category);
@@ -1127,7 +1127,7 @@ internal static class OperatorStatusTests
         var status = fixture.Controller().Get();
         var text = JsonSerializer.Serialize(status.Readiness) + JsonSerializer.Serialize(status.Subsystems);
         AssertEx.Equal("degraded", status.Readiness.State);
-        AssertEx.True(status.Readiness.Reasons.Contains("acme_degraded"), string.Join(",", status.Readiness.Reasons));
+        AssertEx.True(status.Readiness.Reasons.Contains("acme_degraded", StringComparer.Ordinal), string.Join(",", status.Readiness.Reasons));
         AssertEx.True(status.Subsystems.Acme.Enabled);
         AssertEx.Equal(1, status.Subsystems.Acme.Configured);
         AssertEx.Equal(1, status.Subsystems.Acme.Failed);
@@ -1155,9 +1155,9 @@ internal static class OperatorStatusTests
         var status = fixture.Controller(preflight).Get();
         var text = JsonSerializer.Serialize(status.Readiness) + JsonSerializer.Serialize(status.RuntimePreflight);
         AssertEx.Equal("degraded", status.Readiness.State);
-        AssertEx.True(status.Readiness.Reasons.Contains("runtime_preflight_degraded"), string.Join(",", status.Readiness.Reasons));
+        AssertEx.True(status.Readiness.Reasons.Contains("runtime_preflight_degraded", StringComparer.Ordinal), string.Join(",", status.Readiness.Reasons));
         AssertEx.Equal("degraded", status.RuntimePreflight.State);
-        AssertEx.True(status.RuntimePreflight.Reasons.Contains("directory_not_writable"), string.Join(",", status.RuntimePreflight.Reasons));
+        AssertEx.True(status.RuntimePreflight.Reasons.Contains("directory_not_writable", StringComparer.Ordinal), string.Join(",", status.RuntimePreflight.Reasons));
         AssertEx.False(text.Contains(secret, StringComparison.Ordinal), text);
         AssertEx.False(text.Contains(fixture.DataDirectory, StringComparison.OrdinalIgnoreCase), text);
         AssertEx.False(text.Contains("Authorization", StringComparison.OrdinalIgnoreCase), text);

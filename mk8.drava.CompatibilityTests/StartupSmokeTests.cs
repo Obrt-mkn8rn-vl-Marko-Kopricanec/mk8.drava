@@ -83,7 +83,7 @@ internal static class StartupSmokeTests
         return Host.CreateDefaultBuilder().ConfigureAppConfiguration(builder =>
         {
             builder.Sources.Clear();
-            builder.AddInMemoryCollection(new Dictionary<string, string?> { [$"{MdravaDataDirectoryOptions.SectionName}:DataDirectory"] = dataDirectory });
+            builder.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { [$"{MdravaDataDirectoryOptions.SectionName}:DataDirectory"] = dataDirectory });
         }).ConfigureLogging(logging => logging.ClearProviders()).ConfigureServices((context, services) =>
         {
             services.AddProxyDataPlane(context.Configuration);
