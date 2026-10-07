@@ -55,7 +55,7 @@ public static partial class ProxyRouteDiagnosticsRequestReader
 
         foreach (var header in headers)
         {
-            if (string.Equals(header.Name, "Content-Length", StringComparison.OrdinalIgnoreCase) && long.TryParse(header.Value.Trim(), out var contentLength) && contentLength >= 0)
+            if (string.Equals(header.Name, "Content-Length", StringComparison.OrdinalIgnoreCase) && long.TryParse(header.Value.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var contentLength) && contentLength >= 0)
             {
                 return ProxyRouteDiagnosticsRequestFraming.FromContentLength(contentLength);
             }

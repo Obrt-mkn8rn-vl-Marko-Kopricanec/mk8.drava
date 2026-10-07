@@ -181,7 +181,7 @@ public static partial class ProxyCacheEligibilityPolicy
             return CacheTtlResolution.Reject(ReasonCacheControlMustRevalidate);
         }
 
-        if (directives.TryGetValue("max-age", out var maxAgeValue) && int.TryParse(maxAgeValue, out var maxAgeSeconds))
+        if (directives.TryGetValue("max-age", out var maxAgeValue) && int.TryParse(maxAgeValue, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var maxAgeSeconds))
         {
             ttl = TimeSpan.FromSeconds(maxAgeSeconds);
         }

@@ -999,7 +999,7 @@ internal static class ProxyIntegrationTests
             await WriteTextAsync(stream, SwitchingProtocolsResponse(), cancellationToken).ConfigureAwait(false);
             var buffer = new byte[1];
             var bytesRead = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            return new UpgradeUpstreamResult(request, bytesRead.ToString());
+            return new UpgradeUpstreamResult(request, bytesRead.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }, async (stream, cancellationToken) =>
         {
             await WriteTextAsync(stream, WebSocketRequest(), cancellationToken).ConfigureAwait(false);
@@ -2024,7 +2024,7 @@ internal static class ProxyIntegrationTests
         {
             if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
             {
-                return int.TryParse(line["Content-Length:".Length..].Trim(), out contentLength);
+                return int.TryParse(line["Content-Length:".Length..].Trim(), System.Globalization.CultureInfo.InvariantCulture, out contentLength);
             }
         }
 

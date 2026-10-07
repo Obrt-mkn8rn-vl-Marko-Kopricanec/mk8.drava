@@ -74,7 +74,7 @@ internal static class StartupSmokeTests
         AssertEx.Equal(1, store.Snapshot.Listeners.Count);
         AssertEx.Equal(1, store.Snapshot.Routes.Count);
         AssertEx.True(runtime.IsRunning);
-        AssertEx.Equal(proxyPort.ToString(), runtime.Endpoint?.Split(':').Last());
+        AssertEx.Equal(proxyPort.ToString(System.Globalization.CultureInfo.InvariantCulture), runtime.Endpoint?.Split(':').Last());
         await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
     }
 

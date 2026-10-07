@@ -889,7 +889,7 @@ internal static class CacheTests
     private static Http1ResponseHead Response(string status, IReadOnlyList<ProxyHeaderField> headers)
     {
         var split = status.Split(' ', 2);
-        return new Http1ResponseHead("HTTP/1.1", int.Parse(split[0]), split.Length > 1 ? split[1] : "", Http1ResponseFraming.FromContentLength(0), headers);
+        return new Http1ResponseHead("HTTP/1.1", int.Parse(split[0], System.Globalization.CultureInfo.InvariantCulture), split.Length > 1 ? split[1] : "", Http1ResponseFraming.FromContentLength(0), headers);
     }
 
     private static int GetFreeTcpPort()

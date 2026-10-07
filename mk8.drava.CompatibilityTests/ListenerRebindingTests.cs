@@ -201,7 +201,7 @@ internal static class ListenerRebindingTests
             var listenerReload = ProxyConfigurationReloadResultAssertions.Reloaded(reload, string.Join("; ", reload.Errors)).ListenerReload;
             AssertEx.Equal(0, listenerReload.Added);
             AssertEx.Equal(0, listenerReload.Removed);
-            AssertEx.True(listenerReload.Unchanged >= 1, listenerReload.Unchanged.ToString());
+            AssertEx.True(listenerReload.Unchanged >= 1, listenerReload.Unchanged.ToString(System.Globalization.CultureInfo.InvariantCulture));
             AssertEx.Equal(before.StartedAtUtc, after.StartedAtUtc);
         }
         finally

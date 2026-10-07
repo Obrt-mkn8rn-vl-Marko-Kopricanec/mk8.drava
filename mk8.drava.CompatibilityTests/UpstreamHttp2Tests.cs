@@ -104,7 +104,7 @@ internal static class UpstreamHttp2Tests
             """, sendSecondRequest: true).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("cache-h2", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.True(result.SecondClientResponse.Contains("cache-h2", StringComparison.Ordinal), result.SecondClientResponse);
-        AssertEx.True(result.Metrics.UpstreamHttp2.Requests >= 1, result.Metrics.UpstreamHttp2.Requests.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp2.Requests >= 1, result.Metrics.UpstreamHttp2.Requests.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task Http2UpstreamForwardsRequestBodyAsync()
@@ -147,7 +147,7 @@ internal static class UpstreamHttp2Tests
     public static async Task MetricsIncludeUpstreamHttp2CountersAsync()
     {
         var result = await RunProxyScenarioAsync("/metrics", 200, [("content-length", "2")], Encoding.ASCII.GetBytes("ok")).ConfigureAwait(false);
-        AssertEx.True(result.Metrics.UpstreamHttp2.Requests >= 1, result.Metrics.UpstreamHttp2.Requests.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp2.Requests >= 1, result.Metrics.UpstreamHttp2.Requests.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task Http2UpstreamCloseBeforeResponseHeadersReturnsSafeFailureAsync()
@@ -156,7 +156,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.True(result.ClientResponse.Contains("502 Bad Gateway", StringComparison.Ordinal) || result.ClientResponse.Contains("504 Gateway Timeout", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal("GET", result.Upstream.RequestHeaders[":method"]);
         AssertEx.Equal("/close-before-headers", result.Upstream.RequestHeaders[":path"]);
-        AssertEx.True(result.Metrics.UpstreamForwarding.Failures >= 1, result.Metrics.UpstreamForwarding.Failures.ToString());
+        AssertEx.True(result.Metrics.UpstreamForwarding.Failures >= 1, result.Metrics.UpstreamForwarding.Failures.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task Http2UpstreamCloseAfterResponseHeadersDoesNotRetryAfterHeadersAreSentAsync()
@@ -455,7 +455,7 @@ internal static class UpstreamHttp2Tests
         }
         else
         {
-            WriteLiteralWithIndexedName(memory, 8, statusCode.ToString());
+            WriteLiteralWithIndexedName(memory, 8, statusCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         foreach (var header in headers)

@@ -107,7 +107,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.FirstClientResponse.Contains("h3-reuse", StringComparison.Ordinal), result.FirstClientResponse);
         AssertEx.True(result.SecondClientResponse.Contains("h3-reuse", StringComparison.Ordinal), result.SecondClientResponse);
         AssertEx.Equal(1, result.Metrics.UpstreamHttp3.PoolConnectionsOpened);
-        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsReused >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsReused.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsReused >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsReused.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task ConcurrentHttp3UpstreamRequestsShareConnectionAsync()
@@ -123,7 +123,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.FirstClientResponse.Contains("h3-reuse", StringComparison.Ordinal), result.FirstClientResponse);
         AssertEx.True(result.SecondClientResponse.Contains("h3-reuse", StringComparison.Ordinal), result.SecondClientResponse);
         AssertEx.Equal(1, result.Metrics.UpstreamHttp3.PoolConnectionsOpened);
-        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsReused >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsReused.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsReused >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsReused.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task IdleHttp3UpstreamConnectionsExpireAsync()
@@ -134,11 +134,11 @@ internal static class UpstreamHttp3Tests
         }
 
         var result = await RunReusableProxyScenarioAsync(requestCount: 2, concurrent: false, upstreamIdleConnectionLifetimeMs: 100, delayBetweenRequests: TimeSpan.FromMilliseconds(175)).ConfigureAwait(false);
-        AssertEx.True(result.Upstream.ConnectionCount >= 2, result.Upstream.ConnectionCount.ToString());
+        AssertEx.True(result.Upstream.ConnectionCount >= 2, result.Upstream.ConnectionCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AssertEx.Equal(2, result.Upstream.Requests.Count);
-        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsOpened >= 2, result.Metrics.UpstreamHttp3.PoolConnectionsOpened.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsOpened >= 2, result.Metrics.UpstreamHttp3.PoolConnectionsOpened.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AssertEx.Equal(0, result.Metrics.UpstreamHttp3.PoolConnectionsReused);
-        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsClosed >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsClosed.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsClosed >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsClosed.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task UpstreamHttp3GoAwayDrainsConnectionWithoutBreakingActiveStreamAsync()
@@ -151,9 +151,9 @@ internal static class UpstreamHttp3Tests
         var result = await RunReusableProxyScenarioAsync(requestCount: 2, concurrent: false, delayBetweenRequests: TimeSpan.FromMilliseconds(200), sendGoAwayAfterFirstRequest: true).ConfigureAwait(false);
         AssertEx.True(result.FirstClientResponse.Contains("h3-reuse", StringComparison.Ordinal), result.FirstClientResponse);
         AssertEx.True(result.SecondClientResponse.Contains("h3-reuse", StringComparison.Ordinal), result.SecondClientResponse);
-        AssertEx.True(result.Upstream.ConnectionCount >= 2, result.Upstream.ConnectionCount.ToString());
+        AssertEx.True(result.Upstream.ConnectionCount >= 2, result.Upstream.ConnectionCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AssertEx.Equal(2, result.Upstream.Requests.Count);
-        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsOpened >= 2, result.Metrics.UpstreamHttp3.PoolConnectionsOpened.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsOpened >= 2, result.Metrics.UpstreamHttp3.PoolConnectionsOpened.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AssertEx.Equal(0, result.Metrics.UpstreamHttp3.PoolConnectionsReused);
     }
 
@@ -168,7 +168,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal(8, result.Upstream.Requests.Count);
         AssertEx.True(result.ClientResponses.Count(response => response.Contains("200 OK", StringComparison.Ordinal)) >= 8);
         AssertEx.True(result.ClientResponses.Any(response => response.Contains("502 Bad Gateway", StringComparison.Ordinal) || response.Contains("504 Gateway Timeout", StringComparison.Ordinal)), string.Join("\n---\n", result.ClientResponses));
-        AssertEx.True(result.Metrics.UpstreamHttp3.StreamLimitRejections >= 1, result.Metrics.UpstreamHttp3.StreamLimitRejections.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.StreamLimitRejections >= 1, result.Metrics.UpstreamHttp3.StreamLimitRejections.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task ConcurrentHttp3UpstreamReuseReleasesActiveStreamGaugeAsync()
@@ -210,7 +210,7 @@ internal static class UpstreamHttp3Tests
         var result = await RunReusableProxyScenarioAsync(requestCount: 2, concurrent: false, closeConnectionAfterFirstRequest: true).ConfigureAwait(false);
         AssertEx.True(result.FirstClientResponse.Contains("502 Bad Gateway", StringComparison.Ordinal) || result.FirstClientResponse.Contains("504 Gateway Timeout", StringComparison.Ordinal), result.FirstClientResponse);
         AssertEx.True(result.SecondClientResponse.Contains("h3-reuse", StringComparison.Ordinal), result.SecondClientResponse);
-        AssertEx.True(result.Upstream.ConnectionCount >= 2, result.Upstream.ConnectionCount.ToString());
+        AssertEx.True(result.Upstream.ConnectionCount >= 2, result.Upstream.ConnectionCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AssertEx.Equal(2, result.Upstream.Requests.Count);
         AssertEx.Equal(0L, result.Metrics.UpstreamHttp3.ActiveStreams);
     }
@@ -296,7 +296,7 @@ internal static class UpstreamHttp3Tests
             """, sendSecondRequest: true).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("cache-h3", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.True(result.SecondClientResponse.Contains("cache-h3", StringComparison.Ordinal), result.SecondClientResponse);
-        AssertEx.True(result.Metrics.UpstreamHttp3.Requests >= 1, result.Metrics.UpstreamHttp3.Requests.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.Requests >= 1, result.Metrics.UpstreamHttp3.Requests.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task MetricsIncludeUpstreamHttp3CountersAsync()
@@ -307,12 +307,12 @@ internal static class UpstreamHttp3Tests
         }
 
         var result = await RunProxyScenarioAsync("/metrics", 200, [("content-length", "2")], Encoding.ASCII.GetBytes("ok")).ConfigureAwait(false);
-        AssertEx.True(result.Metrics.UpstreamHttp3.Requests >= 1, result.Metrics.UpstreamHttp3.Requests.ToString());
-        AssertEx.True(result.Metrics.UpstreamHttp3.ConnectionAttempts >= 1, result.Metrics.UpstreamHttp3.ConnectionAttempts.ToString());
-        AssertEx.True(result.Metrics.UpstreamHttp3.ConnectionSuccesses >= 1, result.Metrics.UpstreamHttp3.ConnectionSuccesses.ToString());
-        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsOpened >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsOpened.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.Requests >= 1, result.Metrics.UpstreamHttp3.Requests.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AssertEx.True(result.Metrics.UpstreamHttp3.ConnectionAttempts >= 1, result.Metrics.UpstreamHttp3.ConnectionAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AssertEx.True(result.Metrics.UpstreamHttp3.ConnectionSuccesses >= 1, result.Metrics.UpstreamHttp3.ConnectionSuccesses.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsOpened >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsOpened.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AssertEx.Equal(0, result.Metrics.UpstreamHttp3.PoolConnectionsReused);
-        AssertEx.True(result.Metrics.UpstreamHttp3.ActiveConnections >= 1, result.Metrics.UpstreamHttp3.ActiveConnections.ToString());
+        AssertEx.True(result.Metrics.UpstreamHttp3.ActiveConnections >= 1, result.Metrics.UpstreamHttp3.ActiveConnections.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static async Task Http3UpstreamCloseBeforeResponseHeadersReturnsSafeFailureAsync()

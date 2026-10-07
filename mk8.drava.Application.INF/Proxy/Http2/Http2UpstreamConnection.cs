@@ -311,7 +311,7 @@ internal sealed class Http2UpstreamConnection
         {
             if (string.Equals(header.Name, ":status", StringComparison.Ordinal))
             {
-                if (!int.TryParse(header.Value, out var parsed) || parsed is < 100 or > 599)
+                if (header.Value.Length != 3 || !int.TryParse(header.Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed) || parsed is < 100 or > 599)
                 {
                     throw new Http2UpstreamProtocolException("Upstream sent an invalid HTTP/2 :status pseudo-header.");
                 }

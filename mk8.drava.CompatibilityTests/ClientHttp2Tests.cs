@@ -350,7 +350,7 @@ internal static class ClientHttp2Tests
                 AssertEx.Equal(200, response.StatusCode);
                 AssertEx.Equal("retried", response.BodyText);
                 AssertEx.True(upstreamRequest.StartsWith("GET /retry HTTP/1.1", StringComparison.Ordinal), upstreamRequest);
-                AssertEx.True(metrics.Resilience.RetryAttempts >= 1, metrics.Resilience.RetryAttempts.ToString());
+                AssertEx.True(metrics.Resilience.RetryAttempts >= 1, metrics.Resilience.RetryAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
             finally
             {
@@ -441,8 +441,8 @@ internal static class ClientHttp2Tests
             request.Authority = "home.test";
             request.Path = "/metrics";
         }).ConfigureAwait(false);
-        AssertEx.True(result.Metrics.Http2.AcceptedConnections >= 1, result.Metrics.Http2.AcceptedConnections.ToString());
-        AssertEx.True(result.Metrics.Http2.Requests >= 1, result.Metrics.Http2.Requests.ToString());
+        AssertEx.True(result.Metrics.Http2.AcceptedConnections >= 1, result.Metrics.Http2.AcceptedConnections.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AssertEx.True(result.Metrics.Http2.Requests >= 1, result.Metrics.Http2.Requests.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AssertEx.Equal(0L, result.Metrics.Http2.ActiveStreams);
     }
 
@@ -933,7 +933,7 @@ internal static class ClientHttp2Tests
                 continue;
             }
 
-            return int.TryParse(line["Content-Length:".Length..].Trim(), out var value) ? value : 0;
+            return int.TryParse(line["Content-Length:".Length..].Trim(), System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : 0;
         }
 
         return 0;
@@ -1204,7 +1204,7 @@ internal static class ClientHttp2Tests
                         {
                             if (string.Equals(header.Name, ":status", StringComparison.Ordinal))
                             {
-                                statusCode = int.Parse(header.Value);
+                                statusCode = int.Parse(header.Value, System.Globalization.CultureInfo.InvariantCulture);
                             }
                             else
                             {
@@ -1551,7 +1551,7 @@ internal static class ClientHttp2Tests
                 {
                     if (string.Equals(header.Name, ":status", StringComparison.Ordinal))
                     {
-                        StatusCode = int.Parse(header.Value);
+                        StatusCode = int.Parse(header.Value, System.Globalization.CultureInfo.InvariantCulture);
                     }
                     else
                     {

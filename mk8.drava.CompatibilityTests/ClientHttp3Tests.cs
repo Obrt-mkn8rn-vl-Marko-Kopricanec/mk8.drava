@@ -1963,7 +1963,7 @@ internal static class ClientHttp3Tests
                 continue;
             }
 
-            return int.TryParse(line[(colon + 1)..].Trim(), out var parsed) && parsed > 0 ? parsed : 0;
+            return int.TryParse(line[(colon + 1)..].Trim(), System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : 0;
         }
 
         return 0;

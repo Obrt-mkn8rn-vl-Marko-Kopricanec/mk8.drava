@@ -74,7 +74,7 @@ public sealed class ProxyForwardedHeadersAddressPolicy : IProxyTrustedProxyPolic
         if (slashIndex >= 0)
         {
             var prefixText = trimmed[(slashIndex + 1)..];
-            if (!int.TryParse(prefixText, out prefixLength) || prefixLength < 0 || prefixLength > maxPrefix)
+            if (!int.TryParse(prefixText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out prefixLength) || prefixLength < 0 || prefixLength > maxPrefix)
             {
                 return false;
             }
