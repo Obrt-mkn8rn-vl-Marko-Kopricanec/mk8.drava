@@ -72,8 +72,8 @@ internal static class ClientHttp3Tests
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Failed, timeout.Token).ConfigureAwait(false);
             var snapshot = runtime.Snapshot();
             AssertEx.True(snapshot.IsRunning);
-            AssertEx.True(snapshot.Listeners.Any(static listener => listener.Kind == "tcp" && listener.State == ProxyListenerState.Active));
-            AssertEx.True(snapshot.Listeners.Any(static listener => listener.Kind == "quic" && listener.State == ProxyListenerState.Failed));
+            AssertEx.True(snapshot.Listeners.Any(static listener => string.Equals(listener.Kind, "tcp", StringComparison.Ordinal) && listener.State == ProxyListenerState.Active));
+            AssertEx.True(snapshot.Listeners.Any(static listener => string.Equals(listener.Kind, "quic", StringComparison.Ordinal) && listener.State == ProxyListenerState.Failed));
         }
         finally
         {
@@ -343,7 +343,7 @@ internal static class ClientHttp3Tests
     {
         var result = Http3AltSvcPolicy.ApplyHeader([new ProxyHeaderField("Content-Type", "text/plain"), new ProxyHeaderField("Alt-Svc", "h3=\":443\"; ma=1")], Http3AltSvcHeaderResult.Emitted(new ProxyHeaderField("Alt-Svc", "h3=\":8443\"; ma=60")));
         AssertEx.Equal(2, result.Count);
-        AssertEx.True(result.Any(static header => header.Name == "Content-Type" && header.Value == "text/plain"));
+        AssertEx.True(result.Any(static header => string.Equals(header.Name, "Content-Type", StringComparison.Ordinal) && string.Equals(header.Value, "text/plain", StringComparison.Ordinal)));
         AssertEx.Equal("h3=\":8443\"; ma=60", result.Single(static header => string.Equals(header.Name, "Alt-Svc", StringComparison.OrdinalIgnoreCase)).Value);
         var suppressed = Http3AltSvcPolicy.ApplyHeader(result, Http3AltSvcHeaderResult.Suppressed);
         AssertEx.Equal(1, suppressed.Count);
@@ -1049,7 +1049,7 @@ internal static class ClientHttp3Tests
             var metrics = host.Services.GetRequiredService<ProxyMetrics>().Snapshot();
             var status = HeaderValue(response.Headers, ":status");
             AssertEx.True(status is "502" or "504", status);
-            AssertEx.True(metrics.Resilience.RetrySkipped.Any(static skipped => skipped.Reason == "request_body"));
+            AssertEx.True(metrics.Resilience.RetrySkipped.Any(static skipped => string.Equals(skipped.Reason, "request_body", StringComparison.Ordinal)));
             AssertEx.Equal(0L, metrics.Resilience.RetryAttempts);
         }
         finally
@@ -1291,7 +1291,7 @@ internal static class ClientHttp3Tests
         var headerBlock = Http3Codec.EncodeHeaderBlock([new ProxyHeaderField(":method", "GET"), new ProxyHeaderField(":scheme", "https"), new ProxyHeaderField(":authority", "localhost"), new ProxyHeaderField(":path", "/boundary"), new ProxyHeaderField("x-boundary", "ok")]);
         var ok = Http3Codec.TryDecodeHeaderBlock(headerBlock, maxHeaderBytes: headerBlock.Length, out var headers, out var reason);
         AssertEx.True(ok, reason);
-        AssertEx.Equal("/boundary", headers.Single(static header => header.Name == ":path").Value);
+        AssertEx.Equal("/boundary", headers.Single(static header => string.Equals(header.Name, ":path", StringComparison.Ordinal)).Value);
     }
 
     public static void UnsupportedQpackDynamicTableUsageIsRejected()
@@ -1533,7 +1533,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal(1L, snapshot.Http3.AcceptedConnections);
         AssertEx.Equal(0L, snapshot.Http3.ActiveConnections);
         AssertEx.Equal(1L, snapshot.Http3.Requests);
-        AssertEx.Equal(1L, snapshot.Http3.RequestsByOutcome.Single(static item => item.Method == "GET" && item.Outcome == "success" && item.StatusClass == "2xx").Count);
+        AssertEx.Equal(1L, snapshot.Http3.RequestsByOutcome.Single(static item => string.Equals(item.Method, "GET", StringComparison.Ordinal) && string.Equals(item.Outcome, "success", StringComparison.Ordinal) && string.Equals(item.StatusClass, "2xx", StringComparison.Ordinal)).Count);
         AssertEx.Equal(1L, snapshot.Http3.ProxiedRequests);
         AssertEx.Equal(1L, snapshot.Http3.GeneratedResponses);
         AssertEx.Equal(0L, snapshot.Http3.ActiveStreams);

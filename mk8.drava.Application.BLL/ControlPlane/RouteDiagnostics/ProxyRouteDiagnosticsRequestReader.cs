@@ -90,7 +90,7 @@ public static partial class ProxyRouteDiagnosticsRequestReader
             return ProxyRouteDiagnosticsRequestDecision.Rejected(Failure(evaluatedAtUtc, "invalid_protocol", "Protocol must be 'http1', 'http2', or 'http3' when supplied."));
         }
 
-        if (protocol == "http3" && scheme != "https")
+        if (string.Equals(protocol, "http3", StringComparison.Ordinal) && !string.Equals(scheme, "https", StringComparison.Ordinal))
         {
             return ProxyRouteDiagnosticsRequestDecision.Rejected(Failure(evaluatedAtUtc, "invalid_protocol", "HTTP/3 dry-runs must use the https scheme."));
         }

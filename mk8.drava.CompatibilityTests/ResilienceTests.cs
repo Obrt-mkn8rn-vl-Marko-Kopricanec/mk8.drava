@@ -109,7 +109,7 @@ internal static class ResilienceTests
         var result = await RunClosedUpstreamScenarioAsync("POST /retry HTTP/1.1\r\nHost: resilience.test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", RetryJson(maxAttempts: 2, retryOnConnectFailure: true)).ConfigureAwait(false);
         AssertEx.True(result.Response.Contains("502 Bad Gateway", StringComparison.Ordinal), result.Response);
         AssertEx.Equal(0L, result.Metrics.Resilience.RetryAttempts);
-        AssertEx.True(result.Metrics.Resilience.RetrySkipped.Any(static item => item.Reason == "method"));
+        AssertEx.True(result.Metrics.Resilience.RetrySkipped.Any(static item => string.Equals(item.Reason, "method", StringComparison.Ordinal)));
     }
 
     public static async Task UpgradeIsNotRetriedAsync()
@@ -192,7 +192,7 @@ internal static class ResilienceTests
             AssertEx.True(response.Contains("503 Service Unavailable", StringComparison.Ordinal), response);
             AssertEx.Equal(1, firstRequests.Count);
             AssertEx.Equal(0L, metrics.Resilience.RetryAttempts);
-            AssertEx.True(metrics.Resilience.RetrySkipped.Any(static item => item.Reason == "method"));
+            AssertEx.True(metrics.Resilience.RetrySkipped.Any(static item => string.Equals(item.Reason, "method", StringComparison.Ordinal)));
         }
         finally
         {
@@ -830,7 +830,7 @@ internal static class ResilienceTests
 
     private static RuntimeUpstream Upstream(string name, int weight, RuntimeCircuitBreakerPolicy? circuit = null, string scheme = "http", string protocol = RuntimeUpstreamProtocol.Http1, RuntimeUpstreamTlsOptions? tls = null)
     {
-        return new RuntimeUpstream("route", name, scheme, protocol, "127.0.0.1", name == "first" ? 15000 : 15001, weight, tls ?? new RuntimeUpstreamTlsOptions(true, null), circuit ?? RuntimeCircuitBreakerPolicy.Disabled);
+        return new RuntimeUpstream("route", name, scheme, protocol, "127.0.0.1", string.Equals(name, "first", StringComparison.Ordinal) ? 15000 : 15001, weight, tls ?? new RuntimeUpstreamTlsOptions(true, null), circuit ?? RuntimeCircuitBreakerPolicy.Disabled);
     }
 
     private static RuntimeCircuitBreakerPolicy Circuit(int threshold, int openSeconds = 30, IReadOnlyList<int>? failureStatusCodes = null)

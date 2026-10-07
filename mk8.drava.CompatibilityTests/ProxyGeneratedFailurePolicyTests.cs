@@ -78,9 +78,9 @@ internal static class ProxyGeneratedFailurePolicyTests
     {
         var response = new ProxyGeneratedFailureResponse(502, "Bad Gateway", ProxyFailureKind.UpstreamConnectFailed);
         var headers = ProxyGeneratedFailurePolicy.BuildFramedResponseHeaders(response, "req-789", 11);
-        AssertEx.Equal("text/plain", headers.Single(static header => header.Name == "content-type").Value);
-        AssertEx.Equal("req-789", headers.Single(static header => header.Name == "x-request-id").Value);
-        AssertEx.Equal("11", headers.Single(static header => header.Name == "content-length").Value);
+        AssertEx.Equal("text/plain", headers.Single(static header => string.Equals(header.Name, "content-type", StringComparison.Ordinal)).Value);
+        AssertEx.Equal("req-789", headers.Single(static header => string.Equals(header.Name, "x-request-id", StringComparison.Ordinal)).Value);
+        AssertEx.Equal("11", headers.Single(static header => string.Equals(header.Name, "content-length", StringComparison.Ordinal)).Value);
     }
 
     public static async Task GeneratedFailureWriterSerializesDescriptorBodyAsync()

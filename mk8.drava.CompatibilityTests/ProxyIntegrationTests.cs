@@ -1126,7 +1126,7 @@ internal static class ProxyIntegrationTests
         var result = await RunTwoUpstreamHttpScenarioAsync(healthCheckEnabled: true, requestsToSend: 2, startFirstUpstream: false, waitForFirstUnhealthy: true).ConfigureAwait(false);
         AssertEx.Equal(0, result.FirstRequests);
         AssertEx.Equal(2, result.SecondRequests);
-        AssertEx.True(result.Upstreams.Any(static upstream => upstream.UpstreamName == "first" && upstream.HealthState == UpstreamHealthState.Unhealthy));
+        AssertEx.True(result.Upstreams.Any(static upstream => string.Equals(upstream.UpstreamName, "first", StringComparison.Ordinal) && upstream.HealthState == UpstreamHealthState.Unhealthy));
     }
 
     public static async Task AllUnhealthyUpstreamsReturnServiceUnavailableAsync()
@@ -1397,7 +1397,7 @@ internal static class ProxyIntegrationTests
             await host.StartAsync(timeout.Token).ConfigureAwait(false);
             if (waitForFirstUnhealthy)
             {
-                await WaitForUpstreamStatusAsync(host, statuses => statuses.Any(static status => status.UpstreamName == "first" && status.HealthState == UpstreamHealthState.Unhealthy), timeout.Token).ConfigureAwait(false);
+                await WaitForUpstreamStatusAsync(host, statuses => statuses.Any(static status => string.Equals(status.UpstreamName, "first", StringComparison.Ordinal) && status.HealthState == UpstreamHealthState.Unhealthy), timeout.Token).ConfigureAwait(false);
             }
 
             for (var index = 0; index < requestsToSend; index++)
@@ -2068,13 +2068,13 @@ internal static class ProxyIntegrationTests
             {
                 var line = await ReadLineAsync(stream, cancellationToken).ConfigureAwait(false);
                 body.Append(line);
-                if (line == "0\r\n")
+                if (string.Equals(line, "0\r\n", StringComparison.Ordinal))
                 {
                     while (true)
                     {
                         var trailerLine = await ReadLineAsync(stream, cancellationToken).ConfigureAwait(false);
                         body.Append(trailerLine);
-                        if (trailerLine == "\r\n")
+                        if (string.Equals(trailerLine, "\r\n", StringComparison.Ordinal))
                         {
                             return head + body;
                         }

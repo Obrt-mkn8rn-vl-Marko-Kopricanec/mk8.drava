@@ -253,9 +253,9 @@ internal static class ListenerRebindingTests
             AssertEx.Equal(1, listenerReload.Added);
             AssertEx.Equal(1, listenerReload.Removed);
             AssertEx.Equal(1, listenerReload.Changed);
-            AssertEx.True(listenerReload.Changes.Any(static change => change.Action == "added" && change.Name == "added"));
-            AssertEx.True(listenerReload.Changes.Any(static change => change.Action == "removed" && change.Name == "removed"));
-            AssertEx.True(listenerReload.Changes.Any(static change => change.Action == "changed" && change.Name == "main"));
+            AssertEx.True(listenerReload.Changes.Any(static change => string.Equals(change.Action, "added", StringComparison.Ordinal) && string.Equals(change.Name, "added", StringComparison.Ordinal)));
+            AssertEx.True(listenerReload.Changes.Any(static change => string.Equals(change.Action, "removed", StringComparison.Ordinal) && string.Equals(change.Name, "removed", StringComparison.Ordinal)));
+            AssertEx.True(listenerReload.Changes.Any(static change => string.Equals(change.Action, "changed", StringComparison.Ordinal) && string.Equals(change.Name, "main", StringComparison.Ordinal)));
         }
         finally
         {

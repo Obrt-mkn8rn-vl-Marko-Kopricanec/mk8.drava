@@ -271,13 +271,13 @@ internal static class RouteDiagnosticsTests
         var response = new GeneratedRouteResponse(302, "Found", "text/plain", "go", responseHeaders);
         responseHeaders.Clear();
         var headers = GeneratedRouteResponseHeaderPolicy.BuildFramedResponseHeaders(response, "req-456", 2);
-        AssertEx.Equal("text/plain", headers.Single(static header => header.Name == "content-type").Value);
-        AssertEx.Equal("req-456", headers.Single(static header => header.Name == "x-request-id").Value);
-        AssertEx.Equal("2", headers.Single(static header => header.Name == "content-length").Value);
+        AssertEx.Equal("text/plain", headers.Single(static header => string.Equals(header.Name, "content-type", StringComparison.Ordinal)).Value);
+        AssertEx.Equal("req-456", headers.Single(static header => string.Equals(header.Name, "x-request-id", StringComparison.Ordinal)).Value);
+        AssertEx.Equal("2", headers.Single(static header => string.Equals(header.Name, "content-length", StringComparison.Ordinal)).Value);
         AssertEx.Equal(302, response.StatusCode);
         AssertEx.Equal("Found", response.ReasonPhrase);
         AssertEx.Equal("go", response.Body);
-        AssertEx.True(headers.Any(static header => header.Name == "Location" && header.Value == "/next"));
+        AssertEx.True(headers.Any(static header => string.Equals(header.Name, "Location", StringComparison.Ordinal) && string.Equals(header.Value, "/next", StringComparison.Ordinal)));
         AssertEx.False(headers.Any(static header => string.Equals(header.Name, "Connection", StringComparison.OrdinalIgnoreCase)));
         AssertEx.False(headers.Any(static header => string.Equals(header.Name, "Keep-Alive", StringComparison.OrdinalIgnoreCase)));
         AssertEx.False(response.Headers is ProxyHeaderField[], "Generated route response headers should not expose a mutable array.");
@@ -376,7 +376,7 @@ internal static class RouteDiagnosticsTests
         var service = CreateRouteService(BaseOptions([ProxyRoute("private", "diag.test", "/private", cache: CachePolicy())]), out _, out _);
         var result = service.Explain(new RouteMatchDryRunRequest("http", "diag.test", 8080, "GET", "/private", "", new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase) { ["Authorization"] = "Bearer secret-token" }, null, null));
         AssertEx.Equal("authorization", result.Cache.Reason);
-        AssertEx.True(result.Findings.Any(static finding => finding.Code == "sensitive_header_redacted"));
+        AssertEx.True(result.Findings.Any(static finding => string.Equals(finding.Code, "sensitive_header_redacted", StringComparison.Ordinal)));
         AssertEx.False(result.Findings is List<RouteMatchDryRunFinding>, "Route diagnostics result findings should not expose a mutable list.");
         AssertEx.False(result.ToString()!.Contains("secret-token", StringComparison.Ordinal));
     }
@@ -390,7 +390,7 @@ internal static class RouteDiagnosticsTests
         AssertEx.Equal("no_matching_listener", noListener.NoMatchReason);
         AssertEx.Equal("/api", noListener.OriginalTarget);
         AssertEx.Equal("no_route", result.Cache.Reason);
-        AssertEx.True(result.Findings.Any(static finding => finding.Code == "no_matching_listener"));
+        AssertEx.True(result.Findings.Any(static finding => string.Equals(finding.Code, "no_matching_listener", StringComparison.Ordinal)));
         AssertEx.Equal("no_matching_listener", metrics.LastFailureReason!);
     }
 
@@ -416,7 +416,7 @@ internal static class RouteDiagnosticsTests
         var authorization = requestHead.Headers.First(static header => string.Equals(header.Name, "Authorization", StringComparison.OrdinalIgnoreCase));
         AssertEx.Equal("redacted", authorization.Value);
         AssertEx.Equal("authorization", result.Cache.Reason);
-        AssertEx.True(result.Findings.Any(static finding => finding.Code == "sensitive_header_redacted"));
+        AssertEx.True(result.Findings.Any(static finding => string.Equals(finding.Code, "sensitive_header_redacted", StringComparison.Ordinal)));
         AssertEx.False(result.ToString()!.Contains("secret-token", StringComparison.Ordinal));
     }
 
@@ -753,7 +753,7 @@ internal static class RouteDiagnosticsTests
     {
         var service = CreateLintService(BaseOptions([ProxyRoute("catch-all", "*", "/"), ProxyRoute("api", "diag.test", "/api")]));
         var result = service.LintActive();
-        var finding = result.Findings.First(static item => item.Code == "route_shadowed");
+        var finding = result.Findings.First(static item => string.Equals(item.Code, "route_shadowed", StringComparison.Ordinal));
         AssertEx.Equal("warning", finding.Severity);
         AssertEx.True(result.Summary.Warning > 0);
     }
@@ -782,11 +782,11 @@ internal static class RouteDiagnosticsTests
         var result = service.LintActive();
         AssertAccepted(result);
         AssertFinding(result, "route_shadowed", "warning");
-        AssertEx.Equal("active.json", result.Findings.First(static finding => finding.Code == "route_shadowed").Source);
+        AssertEx.Equal("active.json", result.Findings.First(static finding => string.Equals(finding.Code, "route_shadowed", StringComparison.Ordinal)).Source);
         AssertEx.Equal(result.Summary, service.LastActiveStatus.LastActiveLintSummary);
         AssertEx.Equal(result.Findings.Count, metrics.LastFindings.Count);
         var missingResult = new ConfigLintService(new FixedConfigLintActiveConfigurationSource(null), new FixedConfigLintSubmittedConfigurationSource(null), new FixedConfigLintRuntimeStateSource([]), metrics, new ProxyConfigLintSourceNameFormatter(), new ProxyAdminUrlPolicy(), TimeProvider.System).LintActive();
-        var missingFinding = missingResult.Findings.First(static finding => finding.Code == "no_active_config");
+        var missingFinding = missingResult.Findings.First(static finding => string.Equals(finding.Code, "no_active_config", StringComparison.Ordinal));
         AssertEx.Equal("Load a valid config before linting the active configuration source.", missingFinding.SuggestedFix);
     }
 
@@ -862,7 +862,7 @@ internal static class RouteDiagnosticsTests
         AssertEx.Equal(ProxyConfigurationNormalizeFormat.Yaml, source.LastFormat);
         AssertFinding(result, "validation_error", "error");
         AssertFinding(result, "route_shadowed", "warning");
-        AssertEx.Equal("lint-input", result.Findings.First(static finding => finding.Code == "route_shadowed").Source);
+        AssertEx.Equal("lint-input", result.Findings.First(static finding => string.Equals(finding.Code, "route_shadowed", StringComparison.Ordinal)).Source);
         AssertEx.Equal("lint-input", result.ValidationErrors[0].Path);
     }
 
@@ -970,7 +970,7 @@ internal static class RouteDiagnosticsTests
         var badRequest = (BadRequestObjectResult)AssertEx.NotNull(actionResult.Result);
         var result = (RouteMatchDryRunResponse)AssertEx.NotNull(badRequest.Value);
         AssertEx.False(result.Succeeded);
-        AssertEx.True(result.Findings.Any(static finding => finding.Code == "missing_request" && finding.Severity == "error"));
+        AssertEx.True(result.Findings.Any(static finding => string.Equals(finding.Code, "missing_request", StringComparison.Ordinal) && string.Equals(finding.Severity, "error", StringComparison.Ordinal)));
         AssertEx.False(result.Findings is RouteMatchDryRunFindingResponse[], "Route diagnostics API findings should not expose a mutable array.");
         var findings = new List<RouteMatchDryRunFindingResponse>
         {
@@ -1004,7 +1004,7 @@ internal static class RouteDiagnosticsTests
         AssertEx.Equal("http3", accepted.Input.Protocol!);
         AssertEx.Equal("/api?id=1", accepted.Input.Target);
         AssertEx.Equal("diag.test", accepted.Input.RequestHead.Host);
-        AssertEx.True(accepted.Input.Findings.Any(static finding => finding.Code == "sensitive_header_redacted"));
+        AssertEx.True(accepted.Input.Findings.Any(static finding => string.Equals(finding.Code, "sensitive_header_redacted", StringComparison.Ordinal)));
         AssertEx.False(accepted.Input.Findings is List<RouteMatchDryRunFinding>, "Route diagnostics request findings should not expose a mutable list.");
         AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestDecision.AcceptedDecision(null!));
         AssertEx.Throws<ArgumentNullException>(() => ProxyRouteDiagnosticsRequestDecision.Accepted(null!));
@@ -1104,7 +1104,7 @@ internal static class RouteDiagnosticsTests
         var snapshot = metrics.Snapshot();
         AssertEx.Equal(1L, snapshot.RouteDiagnostics.DryRuns);
         AssertEx.Equal(1L, snapshot.ConfigLint.Runs);
-        AssertEx.True(snapshot.ConfigLint.Findings.Any(static finding => finding.Code == "route_shadowed"));
+        AssertEx.True(snapshot.ConfigLint.Findings.Any(static finding => string.Equals(finding.Code, "route_shadowed", StringComparison.Ordinal)));
     }
 
     private static RouteMatchDiagnosticsService CreateRouteService(ProxyOptions options, out ProxyConfigurationStore store, out ProxyMetrics metrics)
@@ -1354,7 +1354,7 @@ internal static class RouteDiagnosticsTests
 
     private static ProxyListenerStatus ListenerStatus(string identity, string kind, ProxyListenerState state)
     {
-        return new ProxyListenerStatus("main", identity, $"{identity}|bind", kind, "127.0.0.1", 18080, kind == "quic" ? "udp/quic" : "http", TlsEnabled: false, RuntimeListenerProtocols.Http1.ToConfigText(), new ProxyListenerHttp3Status(Configured: false, DefaultEnabled: false, EnablementLevel: "disabled", EnabledForTraffic: false, DisabledReason: "disabled", AltSvcConfigured: false, AltSvcMaxAgeSeconds: 0, UdpQuicListenerIdentityModeled: false, QuicIdentity: null), Http2MaxConcurrentStreams: 100, Http2MaxHeaderListBytes: 32768, Http2MaxFrameSize: 16384, state, ActiveConnections: 0, StartedAtUtc: null, StoppedAtUtc: null, LastError: state == ProxyListenerState.Failed ? "bind_failed" : null);
+        return new ProxyListenerStatus("main", identity, $"{identity}|bind", kind, "127.0.0.1", 18080, string.Equals(kind, "quic", StringComparison.Ordinal) ? "udp/quic" : "http", TlsEnabled: false, RuntimeListenerProtocols.Http1.ToConfigText(), new ProxyListenerHttp3Status(Configured: false, DefaultEnabled: false, EnablementLevel: "disabled", EnabledForTraffic: false, DisabledReason: "disabled", AltSvcConfigured: false, AltSvcMaxAgeSeconds: 0, UdpQuicListenerIdentityModeled: false, QuicIdentity: null), Http2MaxConcurrentStreams: 100, Http2MaxHeaderListBytes: 32768, Http2MaxFrameSize: 16384, state, ActiveConnections: 0, StartedAtUtc: null, StoppedAtUtc: null, LastError: state == ProxyListenerState.Failed ? "bind_failed" : null);
     }
 
     private sealed record FixedRouteDiagnosticsConfigurationSnapshot(IReadOnlyList<IProxyRouteDiagnosticsListener> Listeners, IReadOnlyList<IProxyRouteDiagnosticsRoute> Routes) : IProxyRouteDiagnosticsConfigurationSnapshot;
@@ -1449,17 +1449,17 @@ internal static class RouteDiagnosticsTests
 
     private static void AssertFinding(ConfigLintResult result, string code, string severity)
     {
-        AssertEx.True(result.Findings.Any(finding => finding.Code == code && finding.Severity == severity), string.Join("; ", result.Findings.Select(static finding => $"{finding.Severity}:{finding.Code}:{finding.Message}")));
+        AssertEx.True(result.Findings.Any(finding => string.Equals(finding.Code, code, StringComparison.Ordinal) && string.Equals(finding.Severity, severity, StringComparison.Ordinal)), string.Join("; ", result.Findings.Select(static finding => $"{finding.Severity}:{finding.Code}:{finding.Message}")));
     }
 
     private static void AssertFinding(ConfigLintResponse result, string code, string severity)
     {
-        AssertEx.True(result.Findings.Any(finding => finding.Code == code && finding.Severity == severity), string.Join("; ", result.Findings.Select(static finding => $"{finding.Severity}:{finding.Code}:{finding.Message}")));
+        AssertEx.True(result.Findings.Any(finding => string.Equals(finding.Code, code, StringComparison.Ordinal) && string.Equals(finding.Severity, severity, StringComparison.Ordinal)), string.Join("; ", result.Findings.Select(static finding => $"{finding.Severity}:{finding.Code}:{finding.Message}")));
     }
 
     private static void AssertNoFinding(ConfigLintResult result, string code)
     {
-        AssertEx.False(result.Findings.Any(finding => finding.Code == code), string.Join("; ", result.Findings.Select(static finding => $"{finding.Severity}:{finding.Code}:{finding.Message}")));
+        AssertEx.False(result.Findings.Any(finding => string.Equals(finding.Code, code, StringComparison.Ordinal)), string.Join("; ", result.Findings.Select(static finding => $"{finding.Severity}:{finding.Code}:{finding.Message}")));
     }
 
     private static void AssertAccepted(ConfigLintResult result, string? message = null)

@@ -501,7 +501,7 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
     {
         var listeners = Snapshot();
         _metrics.SetActiveListeners(listeners.Count(static listener => listener.State == ProxyListenerState.Active));
-        _metrics.SetActiveQuicListeners(listeners.Count(static listener => listener.Kind == "quic" && listener.State == ProxyListenerState.Active));
+        _metrics.SetActiveQuicListeners(listeners.Count(static listener => string.Equals(listener.Kind, "quic", StringComparison.Ordinal) && listener.State == ProxyListenerState.Active));
         _runtimeState.ReplaceListeners(listeners, lastReload);
     }
 

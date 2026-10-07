@@ -111,7 +111,7 @@ internal static class ObservabilityTests
 
     private static ProxyRecentRequestDiagnosticEvent CreateSourceEvent(string requestId, string target)
     {
-        return new ProxyRecentRequestDiagnosticEvent(DateTimeOffset.UnixEpoch.AddSeconds(requestId == "new" ? 2 : 1), requestId, $"client-{requestId}", 2, "main", "quic", "10.0.0.1:12345", "POST", "example.test", target, "home", "upstream", "127.0.0.1:5000", 502, 42, "UpstreamConnectFailed", true, true, true, true, "client_closed", 11, 12);
+        return new ProxyRecentRequestDiagnosticEvent(DateTimeOffset.UnixEpoch.AddSeconds(string.Equals(requestId, "new", StringComparison.Ordinal) ? 2 : 1), requestId, $"client-{requestId}", 2, "main", "quic", "10.0.0.1:12345", "POST", "example.test", target, "home", "upstream", "127.0.0.1:5000", 502, 42, "UpstreamConnectFailed", true, true, true, true, "client_closed", 11, 12);
     }
 
     private sealed class FixedRequestDiagnosticsSource : IProxyRequestDiagnosticsSource

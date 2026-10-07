@@ -14,7 +14,7 @@ public sealed class ProxyDataDirectoryPathSafety : IProxyDataDirectoryPathSafety
         }
 
         var relative = Path.GetRelativePath(fullRoot, fullPath).Replace(Path.DirectorySeparatorChar, '/');
-        if (relative.Length == 0 || relative == "." || relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+        if (relative.Length == 0 || string.Equals(relative, ".", StringComparison.Ordinal) || relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative))
         {
             return ProxySafeRelativePathResult.Unsafe;
         }

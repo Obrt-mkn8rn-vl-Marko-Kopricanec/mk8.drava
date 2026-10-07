@@ -56,14 +56,14 @@ internal static class HeaderPolicyTests
         var policy = new ProxyHeaderMutationPolicyInput([new ProxyHeaderField("X-Set", "new")], ["X-Remove"], [], []);
         var forwardedHeaders = new ForwardedHeadersContext("203.0.113.10", "203.0.113.10:443", [new ProxyHeaderField("Forwarded", "for=203.0.113.10;proto=https"), new ProxyHeaderField("X-Forwarded-For", "203.0.113.10")]);
         var result = ProxyHeaderMutationPolicy.ApplyRequestHeaders([new ProxyHeaderField("Host", "example.test"), new ProxyHeaderField("X-Remove", "old"), new ProxyHeaderField("X-Set", "old"), new ProxyHeaderField("Forwarded", "for=10.0.0.1"), new ProxyHeaderField("X-Keep", "yes")], policy, forwardedHeaders);
-        AssertEx.True(result.Any(static header => header.Name == "Host" && header.Value == "example.test"));
-        AssertEx.True(result.Any(static header => header.Name == "X-Keep" && header.Value == "yes"));
-        AssertEx.True(result.Any(static header => header.Name == "X-Set" && header.Value == "new"));
-        AssertEx.True(result.Any(static header => header.Name == "Forwarded" && header.Value == "for=203.0.113.10;proto=https"));
-        AssertEx.True(result.Any(static header => header.Name == "X-Forwarded-For" && header.Value == "203.0.113.10"));
-        AssertEx.False(result.Any(static header => header.Name == "X-Remove"));
-        AssertEx.False(result.Any(static header => header.Name == "X-Set" && header.Value == "old"));
-        AssertEx.False(result.Any(static header => header.Name == "Forwarded" && header.Value == "for=10.0.0.1"));
+        AssertEx.True(result.Any(static header => string.Equals(header.Name, "Host", StringComparison.Ordinal) && string.Equals(header.Value, "example.test", StringComparison.Ordinal)));
+        AssertEx.True(result.Any(static header => string.Equals(header.Name, "X-Keep", StringComparison.Ordinal) && string.Equals(header.Value, "yes", StringComparison.Ordinal)));
+        AssertEx.True(result.Any(static header => string.Equals(header.Name, "X-Set", StringComparison.Ordinal) && string.Equals(header.Value, "new", StringComparison.Ordinal)));
+        AssertEx.True(result.Any(static header => string.Equals(header.Name, "Forwarded", StringComparison.Ordinal) && string.Equals(header.Value, "for=203.0.113.10;proto=https", StringComparison.Ordinal)));
+        AssertEx.True(result.Any(static header => string.Equals(header.Name, "X-Forwarded-For", StringComparison.Ordinal) && string.Equals(header.Value, "203.0.113.10", StringComparison.Ordinal)));
+        AssertEx.False(result.Any(static header => string.Equals(header.Name, "X-Remove", StringComparison.Ordinal)));
+        AssertEx.False(result.Any(static header => string.Equals(header.Name, "X-Set", StringComparison.Ordinal) && string.Equals(header.Value, "old", StringComparison.Ordinal)));
+        AssertEx.False(result.Any(static header => string.Equals(header.Name, "Forwarded", StringComparison.Ordinal) && string.Equals(header.Value, "for=10.0.0.1", StringComparison.Ordinal)));
     }
 
     public static void ForwardedHeadersContextCopiesHeaders()
@@ -105,10 +105,10 @@ internal static class HeaderPolicyTests
     {
         var policy = new ProxyHeaderMutationPolicyInput([], [], [new ProxyHeaderField("X-Set", "new")], ["X-Remove"]);
         var result = ProxyHeaderMutationPolicy.ApplyResponseHeaders([new ProxyHeaderField("Content-Type", "text/plain"), new ProxyHeaderField("X-Remove", "old"), new ProxyHeaderField("X-Set", "old")], policy);
-        AssertEx.True(result.Any(static header => header.Name == "Content-Type" && header.Value == "text/plain"));
-        AssertEx.True(result.Any(static header => header.Name == "X-Set" && header.Value == "new"));
-        AssertEx.False(result.Any(static header => header.Name == "X-Remove"));
-        AssertEx.False(result.Any(static header => header.Name == "X-Set" && header.Value == "old"));
+        AssertEx.True(result.Any(static header => string.Equals(header.Name, "Content-Type", StringComparison.Ordinal) && string.Equals(header.Value, "text/plain", StringComparison.Ordinal)));
+        AssertEx.True(result.Any(static header => string.Equals(header.Name, "X-Set", StringComparison.Ordinal) && string.Equals(header.Value, "new", StringComparison.Ordinal)));
+        AssertEx.False(result.Any(static header => string.Equals(header.Name, "X-Remove", StringComparison.Ordinal)));
+        AssertEx.False(result.Any(static header => string.Equals(header.Name, "X-Set", StringComparison.Ordinal) && string.Equals(header.Value, "old", StringComparison.Ordinal)));
     }
 
     public static void HeaderMutationPolicyInputCopiesCollections()

@@ -21,7 +21,7 @@ internal static class RuntimePreflightTests
         AssertEx.True(Directory.Exists(Path.Combine(temp.Path, "certs")));
         AssertEx.True(Directory.Exists(Path.Combine(temp.Path, "state")));
         AssertEx.True(status.Checks.All(static check => !Path.IsPathRooted(check.RelativePath)));
-        AssertEx.True(status.Checks.All(static check => check.Reason == "ok"));
+        AssertEx.True(status.Checks.All(static check => string.Equals(check.Reason, "ok", StringComparison.Ordinal)));
     }
 
     public static void RuntimePreflightReportsUnwritableDirectorySafely()
@@ -34,7 +34,7 @@ internal static class RuntimePreflightTests
         var text = JsonSerializer.Serialize(status);
         AssertEx.Equal("degraded", status.State);
         AssertEx.True(status.Reasons.Contains("directory_not_writable"), string.Join(",", status.Reasons));
-        AssertEx.True(status.Checks.Any(static check => check.Name == "logs_directory" && check.Severity == "warning" && check.Reason == "directory_not_writable"));
+        AssertEx.True(status.Checks.Any(static check => string.Equals(check.Name, "logs_directory", StringComparison.Ordinal) && string.Equals(check.Severity, "warning", StringComparison.Ordinal) && string.Equals(check.Reason, "directory_not_writable", StringComparison.Ordinal)));
         AssertEx.False(text.Contains(secret, StringComparison.Ordinal), text);
         AssertEx.False(text.Contains(temp.Path, StringComparison.OrdinalIgnoreCase), text);
         AssertEx.False(text.Contains("Authorization", StringComparison.OrdinalIgnoreCase), text);
@@ -49,7 +49,7 @@ internal static class RuntimePreflightTests
         var status = service.RunStartupChecks();
         AssertEx.Equal("degraded", status.State);
         AssertEx.True(status.Reasons.Contains("unsafe_path"), string.Join(",", status.Reasons));
-        AssertEx.True(status.Checks.Any(static check => check.Name == "logs_directory" && check.RelativePath == "logs" && check.Reason == "unsafe_path" && check.Severity == "warning"));
+        AssertEx.True(status.Checks.Any(static check => string.Equals(check.Name, "logs_directory", StringComparison.Ordinal) && string.Equals(check.RelativePath, "logs", StringComparison.Ordinal) && string.Equals(check.Reason, "unsafe_path", StringComparison.Ordinal) && string.Equals(check.Severity, "warning", StringComparison.Ordinal)));
     }
 
     public static void RuntimePreflightInspectDoesNotCreateMissingDirectories()
@@ -119,9 +119,9 @@ internal static class RuntimePreflightTests
     {
         var directories = ProxyRuntimePreflightDirectoryPolicy.ExpectedDirectories();
         AssertEx.Equal(6, directories.Count);
-        AssertEx.True(directories.Any(static directory => directory.Kind == ProxyRuntimePreflightDirectoryKind.Data && directory.Name == "data_directory" && directory.RelativePath == "." && directory.Critical));
-        AssertEx.True(directories.Any(static directory => directory.Kind == ProxyRuntimePreflightDirectoryKind.Sites && directory.Name == "sites_directory" && directory.RelativePath == "config/sites" && directory.Critical));
-        AssertEx.True(directories.Any(static directory => directory.Kind == ProxyRuntimePreflightDirectoryKind.Logs && directory.Name == "logs_directory" && directory.RelativePath == "logs" && !directory.Critical));
+        AssertEx.True(directories.Any(static directory => directory.Kind == ProxyRuntimePreflightDirectoryKind.Data && string.Equals(directory.Name, "data_directory", StringComparison.Ordinal) && string.Equals(directory.RelativePath, ".", StringComparison.Ordinal) && directory.Critical));
+        AssertEx.True(directories.Any(static directory => directory.Kind == ProxyRuntimePreflightDirectoryKind.Sites && string.Equals(directory.Name, "sites_directory", StringComparison.Ordinal) && string.Equals(directory.RelativePath, "config/sites", StringComparison.Ordinal) && directory.Critical));
+        AssertEx.True(directories.Any(static directory => directory.Kind == ProxyRuntimePreflightDirectoryKind.Logs && string.Equals(directory.Name, "logs_directory", StringComparison.Ordinal) && string.Equals(directory.RelativePath, "logs", StringComparison.Ordinal) && !directory.Critical));
     }
 
     public static void RuntimePreflightStatusBuilderBuildsStateAndBoundedReasons()

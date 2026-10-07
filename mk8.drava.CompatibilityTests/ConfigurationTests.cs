@@ -1452,7 +1452,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(jsonSnapshot.Listeners[0].Port, yamlSnapshot.Listeners[0].Port);
         AssertEx.Equal(jsonSnapshot.Routes[0].Name, yamlSnapshot.Routes[0].Name);
         AssertEx.Equal(jsonSnapshot.Routes[0].Upstreams[0].Endpoint, yamlSnapshot.Routes[0].Upstreams[0].Endpoint);
-        AssertEx.True(yamlSnapshot.Discovery.Files.Any(static file => file.Format == "yaml" && file.Status == "loaded"));
+        AssertEx.True(yamlSnapshot.Discovery.Files.Any(static file => string.Equals(file.Format, "yaml", StringComparison.Ordinal) && string.Equals(file.Status, "loaded", StringComparison.Ordinal)));
     }
 
     public static async Task LoaderReportsYamlParseErrorsWithPerFileDiagnosticsAsync()
@@ -1468,7 +1468,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(attemptedAtUtc, result.AttemptedAtUtc);
         AssertEx.True(result.FileErrors.Any(error => string.Equals(error.Path, yamlPath, StringComparison.OrdinalIgnoreCase)));
         AssertEx.True(result.Errors.Any(static error => error.Contains("YAML", StringComparison.OrdinalIgnoreCase)), string.Join("; ", result.Errors));
-        AssertEx.True(result.Discovery.Files.Any(file => string.Equals(file.Path, yamlPath, StringComparison.OrdinalIgnoreCase) && file.Format == "yaml" && file.Status == "failed"));
+        AssertEx.True(result.Discovery.Files.Any(file => string.Equals(file.Path, yamlPath, StringComparison.OrdinalIgnoreCase) && string.Equals(file.Format, "yaml", StringComparison.Ordinal) && string.Equals(file.Status, "failed", StringComparison.Ordinal)));
     }
 
     public static async Task LoaderLoadsRouteLoadBalancingAndHealthCheckSettingsAsync()
@@ -1503,7 +1503,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(0, snapshot.Routes.Count);
         AssertEx.Equal(0, snapshot.SourceFiles.Count);
         AssertEx.True(snapshot.Discovery.CreatedPaths.Count > 0);
-        AssertEx.True(snapshot.Discovery.Files.Any(static file => file.Status == "skipped" && file.Format == "yaml"));
+        AssertEx.True(snapshot.Discovery.Files.Any(static file => string.Equals(file.Status, "skipped", StringComparison.Ordinal) && string.Equals(file.Format, "yaml", StringComparison.Ordinal)));
     }
 
     public static async Task LoaderDoesNotOverwriteExistingPlaceholderFilesAsync()

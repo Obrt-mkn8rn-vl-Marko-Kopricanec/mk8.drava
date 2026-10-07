@@ -34,11 +34,11 @@ internal static class BackupRestoreTests
         AssertEx.Equal(generatedAtUtc, manifest.GeneratedAtUtc);
         AssertEx.True(manifest.Entries.All(static entry => !Path.IsPathRooted(entry.RelativePath)));
         AssertEx.True(manifest.Entries.All(static entry => !entry.RelativePath.StartsWith("..", StringComparison.Ordinal)));
-        AssertEx.True(manifest.Entries.Any(static entry => entry.RelativePath == "config/proxy.json" && entry.Category == "config" && entry.Classification == "must_backup" && !entry.Sensitive));
-        AssertEx.True(manifest.Entries.Any(static entry => entry.RelativePath == "logs/access.log" && entry.Category == "logs" && entry.Classification == "should_backup"));
-        AssertEx.True(manifest.Entries.Any(static entry => entry.RelativePath == "certs/manual.pfx" && entry.Category == "manual_certificate_material" && entry.Classification == "never_export_by_default_sensitive" && entry.Sensitive));
-        AssertEx.True(manifest.Entries.Any(static entry => entry.RelativePath == "certs/acme/private-keys/home/current.pfx" && entry.Category == "acme_secret_material" && entry.Sensitive));
-        AssertEx.True(manifest.Entries.Any(static entry => entry.RelativePath == "state/runtime.json" && entry.Category == "state"));
+        AssertEx.True(manifest.Entries.Any(static entry => string.Equals(entry.RelativePath, "config/proxy.json", StringComparison.Ordinal) && string.Equals(entry.Category, "config", StringComparison.Ordinal) && string.Equals(entry.Classification, "must_backup", StringComparison.Ordinal) && !entry.Sensitive));
+        AssertEx.True(manifest.Entries.Any(static entry => string.Equals(entry.RelativePath, "logs/access.log", StringComparison.Ordinal) && string.Equals(entry.Category, "logs", StringComparison.Ordinal) && string.Equals(entry.Classification, "should_backup", StringComparison.Ordinal)));
+        AssertEx.True(manifest.Entries.Any(static entry => string.Equals(entry.RelativePath, "certs/manual.pfx", StringComparison.Ordinal) && string.Equals(entry.Category, "manual_certificate_material", StringComparison.Ordinal) && string.Equals(entry.Classification, "never_export_by_default_sensitive", StringComparison.Ordinal) && entry.Sensitive));
+        AssertEx.True(manifest.Entries.Any(static entry => string.Equals(entry.RelativePath, "certs/acme/private-keys/home/current.pfx", StringComparison.Ordinal) && string.Equals(entry.Category, "acme_secret_material", StringComparison.Ordinal) && entry.Sensitive));
+        AssertEx.True(manifest.Entries.Any(static entry => string.Equals(entry.RelativePath, "state/runtime.json", StringComparison.Ordinal) && string.Equals(entry.Category, "state", StringComparison.Ordinal)));
         AssertEx.False(text.Contains(secret, StringComparison.Ordinal), text);
         AssertEx.False(text.Contains("Authorization", StringComparison.OrdinalIgnoreCase), text);
     }
@@ -47,10 +47,10 @@ internal static class BackupRestoreTests
     {
         using var temp = TemporaryDirectory.Create();
         var manifest = CreateService(temp.Path).CreateManifest();
-        AssertEx.True(manifest.Directories.Any(static directory => directory.RelativePath == "config" && !directory.Exists));
-        AssertEx.True(manifest.Directories.Any(static directory => directory.RelativePath == "logs" && !directory.Exists));
+        AssertEx.True(manifest.Directories.Any(static directory => string.Equals(directory.RelativePath, "config", StringComparison.Ordinal) && !directory.Exists));
+        AssertEx.True(manifest.Directories.Any(static directory => string.Equals(directory.RelativePath, "logs", StringComparison.Ordinal) && !directory.Exists));
         AssertEx.True(manifest.Warnings.Count <= 64);
-        AssertEx.True(manifest.Warnings.Any(static warning => warning.Code == "missing_directory"));
+        AssertEx.True(manifest.Warnings.Any(static warning => string.Equals(warning.Code, "missing_directory", StringComparison.Ordinal)));
         AssertEx.True(manifest.Warnings.All(static warning => warning.RelativePath is null || !Path.IsPathRooted(warning.RelativePath)));
     }
 
@@ -362,7 +362,7 @@ internal static class BackupRestoreTests
         File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope");
         var result = await CreateService(temp.Path).ValidateAsync(CancellationToken.None).ConfigureAwait(false);
         AssertRejected(result);
-        AssertEx.True(result.Errors.Any(static error => error.Code == "config_parse_failed"), string.Join(",", result.Errors.Select(static error => error.Code)));
+        AssertEx.True(result.Errors.Any(static error => string.Equals(error.Code, "config_parse_failed", StringComparison.Ordinal)), string.Join(",", result.Errors.Select(static error => error.Code)));
         AssertEx.False(File.Exists(Path.Combine(temp.Path, "config", "proxy.json")));
         AssertEx.False(File.Exists(Path.Combine(temp.Path, "config", "sites", "example.site.yaml")));
     }
@@ -374,7 +374,7 @@ internal static class BackupRestoreTests
         ConfigurationTests.WriteOperationalConfig(temp.Path, certificateId: "home-cert", certificatePath: "certs/missing.pfx");
         var result = await CreateService(temp.Path).ValidateAsync(CancellationToken.None).ConfigureAwait(false);
         AssertRejected(result);
-        AssertEx.True(result.Errors.Any(static error => error.Code == "certificate_file_missing"), string.Join(",", result.Errors.Select(static error => error.Code)));
+        AssertEx.True(result.Errors.Any(static error => string.Equals(error.Code, "certificate_file_missing", StringComparison.Ordinal)), string.Join(",", result.Errors.Select(static error => error.Code)));
         AssertEx.False(JsonSerializer.Serialize(result).Contains("missing.pfx", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -406,7 +406,7 @@ internal static class BackupRestoreTests
         AssertAccepted(result, string.Join(",", result.Errors.Select(static error => error.Code)));
         AssertEx.Equal(generatedAtUtc, result.GeneratedAtUtc);
         AssertEx.Equal(generatedAtUtc, result.Manifest.GeneratedAtUtc);
-        AssertEx.True(result.Manifest.Directories.Where(static directory => directory.RelativePath != "certs/acme").All(static directory => directory.Exists));
+        AssertEx.True(result.Manifest.Directories.Where(static directory => !string.Equals(directory.RelativePath, "certs/acme", StringComparison.Ordinal)).All(static directory => directory.Exists));
         AssertEx.True(File.Exists(Path.Combine(temp.Path, "config", "proxy.json")));
         AssertEx.True(File.Exists(Path.Combine(temp.Path, "config", "sites", "example.site.yaml")));
     }

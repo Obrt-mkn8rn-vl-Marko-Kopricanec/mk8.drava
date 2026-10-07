@@ -243,7 +243,7 @@ internal static class AdminSecurityTests
         AssertEx.Equal(2, recent.Count);
         AssertEx.Equal("/admin/proxy/metrics", recent[0].Path);
         AssertEx.Equal("/admin/proxy/config/effective", recent[1].Path);
-        AssertEx.False(recent.Any(static item => item.Path == "/admin/proxy/status"));
+        AssertEx.False(recent.Any(static item => string.Equals(item.Path, "/admin/proxy/status", StringComparison.Ordinal)));
         AssertEx.False(recent is List<ProxyAdminAuditEvent>, "Admin audit recent entries should not expose a mutable list.");
         var response = ProxyAdminAuditEventResponseMapper.FromEvents(recent);
         AssertEx.False(response is ProxyAdminAuditEventResponse[], "Admin audit API events should not expose a mutable array.");
@@ -307,7 +307,7 @@ internal static class AdminSecurityTests
     public static void AdminTokenResolutionNamesDirectEnvironmentAndNone()
     {
         var direct = ProxyAdminSecurityTokenPolicy.Resolve(new ProxyAdminOptions { Token = "direct-token", TokenEnvironmentVariable = " DIRECT_TOKEN " }, static _ => "environment-token");
-        var environment = ProxyAdminSecurityTokenPolicy.Resolve(new ProxyAdminOptions { TokenEnvironmentVariable = "MDRAVA_TEST_TOKEN" }, static name => name == "MDRAVA_TEST_TOKEN" ? "environment-token" : null);
+        var environment = ProxyAdminSecurityTokenPolicy.Resolve(new ProxyAdminOptions { TokenEnvironmentVariable = "MDRAVA_TEST_TOKEN" }, static name => string.Equals(name, "MDRAVA_TEST_TOKEN", StringComparison.Ordinal) ? "environment-token" : null);
         var none = ProxyAdminSecurityTokenPolicy.Resolve(new ProxyAdminOptions(), static _ => null);
         AssertEx.Equal("direct-token", direct.Token);
         AssertEx.Equal("DIRECT_TOKEN", direct.TokenEnvironmentVariable);

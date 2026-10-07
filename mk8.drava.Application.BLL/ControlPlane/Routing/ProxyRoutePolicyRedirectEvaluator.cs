@@ -27,7 +27,7 @@ public static class ProxyRoutePolicyRedirectEvaluator
             return ProxyRoutePolicyRedirectDecision.NoRedirect;
         }
 
-        if (scheme == "https" && input.HttpsRedirectPort.HasValue)
+        if (string.Equals(scheme, "https", StringComparison.Ordinal) && input.HttpsRedirectPort.HasValue)
         {
             host = ApplyPort(host, input.HttpsRedirectPort.Value, defaultPort: 443);
         }

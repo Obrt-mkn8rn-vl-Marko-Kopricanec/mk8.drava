@@ -23,7 +23,7 @@ internal static class StartupSmokeTests
         var store = host.Services.GetRequiredService<IProxyConfigurationStore>();
         var snapshot = store.Snapshot;
         var runtimeState = host.Services.GetRequiredService<ProxyRuntimeState>();
-        var runtime = await WaitForRuntimeAsync(runtimeState, static snapshot => snapshot.LastError == "No configured proxy listener.", CancellationToken.None).ConfigureAwait(false);
+        var runtime = await WaitForRuntimeAsync(runtimeState, static snapshot => string.Equals(snapshot.LastError, "No configured proxy listener.", StringComparison.Ordinal), CancellationToken.None).ConfigureAwait(false);
         AssertEx.True(Directory.Exists(configDirectory));
         AssertEx.True(Directory.Exists(sitesDirectory));
         AssertEx.True(Directory.Exists(Path.Combine(temp.Path, "logs")));

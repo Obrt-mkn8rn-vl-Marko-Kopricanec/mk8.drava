@@ -107,9 +107,9 @@ internal static class LogPersistenceTests
 
         var files = Directory.GetFiles(Path.Combine(temp.Path, "logs"), "audit*.log");
         AssertEx.Equal(2, files.Length);
-        AssertEx.True(files.Any(static file => Path.GetFileName(file) == "audit.log"));
-        AssertEx.True(files.Any(static file => Path.GetFileName(file) == "audit.1.log"));
-        AssertEx.False(files.Any(static file => Path.GetFileName(file) == "audit.2.log"));
+        AssertEx.True(files.Any(static file => string.Equals(Path.GetFileName(file), "audit.log", StringComparison.Ordinal)));
+        AssertEx.True(files.Any(static file => string.Equals(Path.GetFileName(file), "audit.1.log", StringComparison.Ordinal)));
+        AssertEx.False(files.Any(static file => string.Equals(Path.GetFileName(file), "audit.2.log", StringComparison.Ordinal)));
     }
 
     public static void LogPersistenceTruncatesLongFields()

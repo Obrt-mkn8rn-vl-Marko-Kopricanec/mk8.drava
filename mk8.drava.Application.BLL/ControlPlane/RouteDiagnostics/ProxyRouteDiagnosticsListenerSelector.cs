@@ -3,7 +3,7 @@ public static class ProxyRouteDiagnosticsListenerSelector
 {
     public static IProxyRouteDiagnosticsListener? Select(IReadOnlyList<IProxyRouteDiagnosticsListener> listeners, string? listenerName, string scheme, int? port, string? protocol)
     {
-        var transport = scheme == "https" ? "https" : "http";
+        var transport = string.Equals(scheme, "https", StringComparison.Ordinal) ? "https" : "http";
         IEnumerable<IProxyRouteDiagnosticsListener> candidates = listeners.Where(static listener => listener.Enabled);
         if (!string.IsNullOrWhiteSpace(listenerName))
         {

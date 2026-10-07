@@ -26,7 +26,7 @@ public sealed class SingleUpstreamRouteMatcher : IRouteMatcher
 
     private static bool HostMatches(string configuredHost, string requestHost)
     {
-        if (configuredHost == "*")
+        if (string.Equals(configuredHost, "*", StringComparison.Ordinal))
         {
             return true;
         }
