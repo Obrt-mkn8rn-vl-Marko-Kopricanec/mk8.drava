@@ -11,7 +11,7 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class StartupSmokeTests
 {
-    public static async Task StartsFromFreshDataDirectory()
+    public static async Task StartsFromFreshDataDirectoryAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var configDirectory = Path.Combine(temp.Path, "config");
@@ -39,7 +39,7 @@ internal static class StartupSmokeTests
         await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
-    public static async Task FailsStartupWhenExistingSiteConfigIsInvalid()
+    public static async Task FailsStartupWhenExistingSiteConfigIsInvalidAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var sites = Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites")).FullName;
@@ -61,7 +61,7 @@ internal static class StartupSmokeTests
         }
     }
 
-    public static async Task StartsWithValidSiteConfig()
+    public static async Task StartsWithValidSiteConfigAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var proxyPort = GetFreeTcpPort();

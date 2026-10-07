@@ -1342,7 +1342,7 @@ internal static class ConfigurationTests
         AssertEx.True(missing is not ProxyConfigurationReadResult<TestConfigurationProjection>.AvailableResult);
     }
 
-    public static async Task ConfigurationLoadResultNamesLoadedValidatedAndFailedOutcomes()
+    public static async Task ConfigurationLoadResultNamesLoadedValidatedAndFailedOutcomesAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1420,7 +1420,7 @@ internal static class ConfigurationTests
         }
     }
 
-    public static async Task LoaderLoadsValidSiteFiles()
+    public static async Task LoaderLoadsValidSiteFilesAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1438,7 +1438,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(TimeSpan.FromSeconds(10), snapshot.Timeouts.ClientRequestHeadTimeout);
     }
 
-    public static async Task LoaderLoadsEquivalentJsonAndYamlSiteFiles()
+    public static async Task LoaderLoadsEquivalentJsonAndYamlSiteFilesAsync()
     {
         using var jsonTemp = TemporaryDirectory.Create();
         using var yamlTemp = TemporaryDirectory.Create();
@@ -1455,7 +1455,7 @@ internal static class ConfigurationTests
         AssertEx.True(yamlSnapshot.Discovery.Files.Any(static file => file.Format == "yaml" && file.Status == "loaded"));
     }
 
-    public static async Task LoaderReportsYamlParseErrorsWithPerFileDiagnostics()
+    public static async Task LoaderReportsYamlParseErrorsWithPerFileDiagnosticsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var sites = Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites")).FullName;
@@ -1471,7 +1471,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Discovery.Files.Any(file => string.Equals(file.Path, yamlPath, StringComparison.OrdinalIgnoreCase) && file.Format == "yaml" && file.Status == "failed"));
     }
 
-    public static async Task LoaderLoadsRouteLoadBalancingAndHealthCheckSettings()
+    public static async Task LoaderLoadsRouteLoadBalancingAndHealthCheckSettingsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSiteWithTwoUpstreams(temp.Path, "pool.json", port: 18080, firstUpstreamPort: 15000, secondUpstreamPort: 15001, healthCheckEnabled: true);
@@ -1484,7 +1484,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(2, route.Upstreams[1].Weight);
     }
 
-    public static async Task LoaderCreatesMissingConfigDirectoriesAndLoadsEmptySnapshot()
+    public static async Task LoaderCreatesMissingConfigDirectoriesAndLoadsEmptySnapshotAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var configDirectory = Path.Combine(temp.Path, "config");
@@ -1506,7 +1506,7 @@ internal static class ConfigurationTests
         AssertEx.True(snapshot.Discovery.Files.Any(static file => file.Status == "skipped" && file.Format == "yaml"));
     }
 
-    public static async Task LoaderDoesNotOverwriteExistingPlaceholderFiles()
+    public static async Task LoaderDoesNotOverwriteExistingPlaceholderFilesAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var config = Directory.CreateDirectory(Path.Combine(temp.Path, "config")).FullName;
@@ -1523,7 +1523,7 @@ internal static class ConfigurationTests
         AssertEx.False(snapshot.Observability.AccessLogEnabled);
     }
 
-    public static async Task LoaderLoadsExistingEmptySitesDirectory()
+    public static async Task LoaderLoadsExistingEmptySitesDirectoryAsync()
     {
         using var temp = TemporaryDirectory.Create();
         Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites"));
@@ -1534,7 +1534,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(0, snapshot.Routes.Count);
     }
 
-    public static async Task LoaderUsesDefaultsWhenOperationalConfigIsMissing()
+    public static async Task LoaderUsesDefaultsWhenOperationalConfigIsMissingAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1545,7 +1545,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(TimeSpan.FromSeconds(10), snapshot.Timeouts.ClientRequestHeadTimeout);
     }
 
-    public static async Task LoaderLoadsExplicitOperationalTimeouts()
+    public static async Task LoaderLoadsExplicitOperationalTimeoutsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1557,7 +1557,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(TimeSpan.FromMilliseconds(750), snapshot.Timeouts.TunnelIdleTimeout);
     }
 
-    public static async Task LoaderLoadsObservabilityDefaults()
+    public static async Task LoaderLoadsObservabilityDefaultsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1572,7 +1572,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(8, observability.LogPersistence.MaxFiles);
     }
 
-    public static async Task LoaderLoadsExplicitObservabilitySettings()
+    public static async Task LoaderLoadsExplicitObservabilitySettingsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1588,7 +1588,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(3, observability.LogPersistence.MaxFiles);
     }
 
-    public static async Task LoaderRejectsInvalidObservabilityCapacity()
+    public static async Task LoaderRejectsInvalidObservabilityCapacityAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1599,7 +1599,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("RecentDiagnosticsCapacity", StringComparison.Ordinal)));
     }
 
-    public static async Task LoaderRejectsInvalidLogPersistenceSettings()
+    public static async Task LoaderRejectsInvalidLogPersistenceSettingsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1611,7 +1611,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("MaxFiles", StringComparison.Ordinal)), string.Join("; ", result.Errors));
     }
 
-    public static async Task LoaderLoadsLimitDefaults()
+    public static async Task LoaderLoadsLimitDefaultsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1624,7 +1624,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(TimeSpan.FromSeconds(15), limits.ShutdownGracePeriod);
     }
 
-    public static async Task LoaderRejectsInvalidLimitSettings()
+    public static async Task LoaderRejectsInvalidLimitSettingsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1635,7 +1635,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("MaxActiveClientConnections", StringComparison.Ordinal)));
     }
 
-    public static async Task LoaderRejectsInvalidOperationalTimeouts()
+    public static async Task LoaderRejectsInvalidOperationalTimeoutsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1646,7 +1646,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Count > 0);
     }
 
-    public static async Task LoaderRejectsInvalidTunnelLimit()
+    public static async Task LoaderRejectsInvalidTunnelLimitAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1657,7 +1657,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("MaxActiveUpgradedTunnels", StringComparison.Ordinal)));
     }
 
-    public static async Task LoaderLoadsHttpsListenerWithCertificate()
+    public static async Task LoaderLoadsHttpsListenerWithCertificateAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var certificatePath = Path.Combine(temp.Path, "certs", "home.pfx");
@@ -1674,7 +1674,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(true, projection.Certificates[0].HasConfiguredPassword);
     }
 
-    public static async Task LoaderRejectsHttpsListenerWithMissingCertificateReference()
+    public static async Task LoaderRejectsHttpsListenerWithMissingCertificateReferenceAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteHttpsSite(temp.Path, "home.json", port: 18443, upstreamPort: 15000, certificateId: "missing-cert");
@@ -1684,7 +1684,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("unknown certificate", StringComparison.OrdinalIgnoreCase)));
     }
 
-    public static async Task LoaderRejectsInvalidCertificatePath()
+    public static async Task LoaderRejectsInvalidCertificatePathAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteHttpsSite(temp.Path, "home.json", port: 18443, upstreamPort: 15000, certificateId: "home-cert");
@@ -1695,7 +1695,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("file does not exist", StringComparison.OrdinalIgnoreCase)));
     }
 
-    public static async Task LoaderRejectsInvalidCertificatePassword()
+    public static async Task LoaderRejectsInvalidCertificatePasswordAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var certificatePath = Path.Combine(temp.Path, "certs", "home.pfx");
@@ -1708,7 +1708,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("could not be loaded", StringComparison.OrdinalIgnoreCase)));
     }
 
-    public static async Task LoaderRejectsDuplicateSniCertificateMapping()
+    public static async Task LoaderRejectsDuplicateSniCertificateMappingAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var certificatePath = Path.Combine(temp.Path, "certs", "home.pfx");
@@ -1721,7 +1721,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("duplicated", StringComparison.OrdinalIgnoreCase)));
     }
 
-    public static async Task LoaderMergesSniMappingsFromSharedHttpsListener()
+    public static async Task LoaderMergesSniMappingsFromSharedHttpsListenerAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var certificatePath = Path.Combine(temp.Path, "certs", "home.pfx");
@@ -1737,7 +1737,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(2, snapshot.Routes.Count);
     }
 
-    public static async Task LoaderRejectsInvalidSiteFile()
+    public static async Task LoaderRejectsInvalidSiteFileAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var sites = Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites")).FullName;
@@ -1748,7 +1748,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Count > 0);
     }
 
-    public static async Task ReloadPreservesActiveSnapshotWhenLoadFails()
+    public static async Task ReloadPreservesActiveSnapshotWhenLoadFailsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1763,7 +1763,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(1, store.Snapshot.Version);
     }
 
-    public static async Task ReloadReplacesActiveSnapshotWhenLoadSucceeds()
+    public static async Task ReloadReplacesActiveSnapshotWhenLoadSucceedsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1778,7 +1778,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(18081, store.Snapshot.Listeners[0].Port);
     }
 
-    public static async Task ReloadReplacesActiveSnapshotWithEmptySitesDirectory()
+    public static async Task ReloadReplacesActiveSnapshotWithEmptySitesDirectoryAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1798,7 +1798,7 @@ internal static class ConfigurationTests
         AssertEx.Equal(0, store.Snapshot.Routes.Count);
     }
 
-    public static async Task ActiveInspectionProjectionReflectsStore()
+    public static async Task ActiveInspectionProjectionReflectsStoreAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -1844,7 +1844,7 @@ internal static class ConfigurationTests
         AssertRuntimeMetricsProjectionRejects(endpointPath: "/metrics");
     }
 
-    public static async Task ActiveInspectionProjectionUsesListenerReadModels()
+    public static async Task ActiveInspectionProjectionUsesListenerReadModelsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -2070,7 +2070,7 @@ internal static class ConfigurationTests
         }
     }
 
-    public static async Task ActiveInspectionProjectionUsesRouteReadModels()
+    public static async Task ActiveInspectionProjectionUsesRouteReadModelsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -2486,14 +2486,14 @@ internal static class ConfigurationTests
         }
     }
 
-    public static async Task ConfigReloadControllerReturnsConfigurationResponse()
+    public static async Task ConfigReloadControllerReturnsConfigurationResponseAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
         var store = new ProxyConfigurationStore();
         var service = CreateReloadService(temp.Path, store);
         var controller = new ProxyConfigurationController(new ProxyConfigurationAdministrationService(CreateNormalizer(), service), CreateReadAdministration(store), new ProxyConfigurationReloadAdministrationService<ProxyConfigurationProjection>(service));
-        var actionResult = await controller.Reload(CancellationToken.None).ConfigureAwait(false);
+        var actionResult = await controller.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         var ok = (OkObjectResult)AssertEx.NotNull(actionResult.Result);
         var response = (ProxyConfigurationReloadResponse)AssertEx.NotNull(ok.Value);
         var activeConfiguration = AssertEx.NotNull(response.ActiveConfiguration);
@@ -2521,7 +2521,7 @@ internal static class ConfigurationTests
         AssertEx.True(missingEffective is not ProxyConfigurationReadResult<TestConfigurationProjection>.AvailableResult);
     }
 
-    public static async Task LoaderRejectsUnsafeHeaderRule()
+    public static async Task LoaderRejectsUnsafeHeaderRuleAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteCustomSite(temp.Path, "unsafe.json", """
@@ -2565,7 +2565,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("restricted", StringComparison.OrdinalIgnoreCase)), string.Join("; ", result.Errors));
     }
 
-    public static async Task ResponseHeaderPolicyCannotEmitHopByHopHeaders()
+    public static async Task ResponseHeaderPolicyCannotEmitHopByHopHeadersAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteCustomSite(temp.Path, "unsafe-response.json", """
@@ -2608,7 +2608,7 @@ internal static class ConfigurationTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("restricted", StringComparison.OrdinalIgnoreCase)), string.Join("; ", result.Errors));
     }
 
-    public static async Task MultiFileConfigConflictReportingIsDeterministic()
+    public static async Task MultiFileConfigConflictReportingIsDeterministicAsync()
     {
         using var temp = TemporaryDirectory.Create();
         TestCertificates.WriteSelfSignedPfx(Path.Combine(temp.Path, "certs", "home.pfx"), "home.test");
@@ -2639,7 +2639,7 @@ internal static class ConfigurationTests
         AssertEx.True(first.Errors.Any(static error => error.Contains("default certificate", StringComparison.OrdinalIgnoreCase)), string.Join("; ", first.Errors));
     }
 
-    public static async Task ConfigValidateReportsValidWithoutApplying()
+    public static async Task ConfigValidateReportsValidWithoutApplyingAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -2654,14 +2654,14 @@ internal static class ConfigurationTests
         AssertEx.Equal(2, validation.WouldBeVersion);
         AssertEx.Equal(18080, store.Snapshot.Listeners[0].Port);
         var controller = new ProxyConfigurationController(new ProxyConfigurationAdministrationService(CreateNormalizer(), service), CreateReadAdministration(store), new ProxyConfigurationReloadAdministrationService<ProxyConfigurationProjection>(service));
-        var actionResult = await controller.Validate(CancellationToken.None).ConfigureAwait(false);
+        var actionResult = await controller.ValidateAsync(CancellationToken.None).ConfigureAwait(false);
         var ok = (OkObjectResult)AssertEx.NotNull(actionResult.Result);
         var response = (ProxyConfigurationValidationResponse)AssertEx.NotNull(ok.Value);
         AssertEx.True(response.Succeeded, string.Join("; ", response.Errors));
         AssertEx.Equal(2, response.WouldBeVersion);
     }
 
-    public static async Task ConfigValidateReportsInvalidWithoutReplacingActiveConfig()
+    public static async Task ConfigValidateReportsInvalidWithoutReplacingActiveConfigAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -2675,14 +2675,14 @@ internal static class ConfigurationTests
         AssertEx.Equal(1, store.Snapshot.Version);
         AssertEx.True(validation.FileErrors.Any(error => error.Path?.EndsWith("broken.json", StringComparison.OrdinalIgnoreCase) == true));
         var controller = new ProxyConfigurationController(new ProxyConfigurationAdministrationService(CreateNormalizer(), service), CreateReadAdministration(store), new ProxyConfigurationReloadAdministrationService<ProxyConfigurationProjection>(service));
-        var actionResult = await controller.Validate(CancellationToken.None).ConfigureAwait(false);
+        var actionResult = await controller.ValidateAsync(CancellationToken.None).ConfigureAwait(false);
         var badRequest = (BadRequestObjectResult)AssertEx.NotNull(actionResult.Result);
         var response = (ProxyConfigurationValidationResponse)AssertEx.NotNull(badRequest.Value);
         AssertEx.False(response.Succeeded);
         AssertEx.True(response.FileErrors.Any(error => error.Path?.EndsWith("broken.json", StringComparison.OrdinalIgnoreCase) == true));
     }
 
-    public static async Task ConfigNormalizeConvertsYamlToJsonWithoutApplying()
+    public static async Task ConfigNormalizeConvertsYamlToJsonWithoutApplyingAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -2753,7 +2753,7 @@ internal static class ConfigurationTests
         AssertEx.True(normalize.Errors.Any(static error => error.Contains("request body is required", StringComparison.Ordinal)), string.Join("; ", normalize.Errors));
     }
 
-    public static async Task EffectiveConfigResponseRedactsCertificateSecrets()
+    public static async Task EffectiveConfigResponseRedactsCertificateSecretsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var certificatePath = Path.Combine(temp.Path, "certs", "home.pfx");
@@ -2773,7 +2773,7 @@ internal static class ConfigurationTests
         AssertEx.False(projection.ToString().Contains("secret", StringComparison.OrdinalIgnoreCase));
     }
 
-    public static async Task ExpiredCertificateProjectionKeepsValidityWindowVisible()
+    public static async Task ExpiredCertificateProjectionKeepsValidityWindowVisibleAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var notBefore = DateTimeOffset.UtcNow.AddDays(-10);
@@ -2790,7 +2790,7 @@ internal static class ConfigurationTests
         AssertEx.True(projection.Certificates[0].NotBefore < projection.Certificates[0].NotAfter);
     }
 
-    public static async Task NotYetValidCertificateProjectionKeepsValidityWindowVisible()
+    public static async Task NotYetValidCertificateProjectionKeepsValidityWindowVisibleAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var notBefore = DateTimeOffset.UtcNow.AddDays(2);
@@ -2807,7 +2807,7 @@ internal static class ConfigurationTests
         AssertEx.True(projection.Certificates[0].NotAfter > projection.Certificates[0].NotBefore);
     }
 
-    public static async Task ReloadFailureReportsPerFileErrorAndPreservesActiveConfig()
+    public static async Task ReloadFailureReportsPerFileErrorAndPreservesActiveConfigAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -2825,7 +2825,7 @@ internal static class ConfigurationTests
         AssertEx.True(second.FileErrors.Any(error => error.Path?.EndsWith("broken.json", StringComparison.OrdinalIgnoreCase) == true));
     }
 
-    public static async Task ReloadWithInvalidLogPersistenceConfigPreservesActiveSnapshot()
+    public static async Task ReloadWithInvalidLogPersistenceConfigPreservesActiveSnapshotAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);

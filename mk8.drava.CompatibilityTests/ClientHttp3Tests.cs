@@ -56,7 +56,7 @@ internal static class ClientHttp3Tests
         AssertEx.False(string.Equals(tcp.BindKey, quic.BindKey, StringComparison.Ordinal));
     }
 
-    public static async Task FailedQuicListenerStartDoesNotBreakTcpListener()
+    public static async Task FailedQuicListenerStartDoesNotBreakTcpListenerAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var port = GetFreeTcpUdpPort();
@@ -81,7 +81,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task DefaultHttp3TlsListenerStartsQuicAndEmitsAltSvc()
+    public static async Task DefaultHttp3TlsListenerStartsQuicAndEmitsAltSvcAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -119,7 +119,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task SuccessfulReloadCanAddAndRemoveQuicListener()
+    public static async Task SuccessfulReloadCanAddAndRemoveQuicListenerAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -154,7 +154,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task FailedReloadPreservesOldQuicListenerSet()
+    public static async Task FailedReloadPreservesOldQuicListenerSetAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -184,7 +184,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task SuccessfulHttp3CertificateReloadKeepsQuicListenerAndUsesNewCertificate()
+    public static async Task SuccessfulHttp3CertificateReloadKeepsQuicListenerAndUsesNewCertificateAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -242,7 +242,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task FailedHttp3CertificateReloadPreservesPreviousQuicCertificate()
+    public static async Task FailedHttp3CertificateReloadPreservesPreviousQuicCertificateAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -350,7 +350,7 @@ internal static class ClientHttp3Tests
         AssertEx.False(suppressed.Any(static header => string.Equals(header.Name, "Alt-Svc", StringComparison.OrdinalIgnoreCase)));
     }
 
-    public static async Task AltSvcIsAbsentWhenHttp3ExplicitlyDisabled()
+    public static async Task AltSvcIsAbsentWhenHttp3ExplicitlyDisabledAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -377,7 +377,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task AltSvcIsEmittedOnlyWhenConfiguredAndReady()
+    public static async Task AltSvcIsEmittedOnlyWhenConfiguredAndReadyAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -415,7 +415,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task AltSvcIsNotEmittedWhenQuicListenerIsNotReady()
+    public static async Task AltSvcIsNotEmittedWhenQuicListenerIsNotReadyAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var port = GetFreeTcpUdpPort();
@@ -454,7 +454,7 @@ internal static class ClientHttp3Tests
         AssertEx.False(controller.Response.Headers.ContainsKey("Alt-Svc"));
     }
 
-    public static async Task MinimalHttp3GetCanReachGeneratedRoute()
+    public static async Task MinimalHttp3GetCanReachGeneratedRouteAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -468,7 +468,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.Metrics.Http3.Requests >= 1);
     }
 
-    public static async Task HeadReturnsHeadersWithoutBody()
+    public static async Task HeadReturnsHeadersWithoutBodyAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -481,7 +481,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal("", result.Body);
     }
 
-    public static async Task Http3GeneratedRedirectRouteWorks()
+    public static async Task Http3GeneratedRedirectRouteWorksAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -505,7 +505,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal("", result.Body);
     }
 
-    public static async Task Http3GeneratedMaintenanceRouteWorks()
+    public static async Task Http3GeneratedMaintenanceRouteWorksAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -536,7 +536,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal("maintenance-h3", result.Body);
     }
 
-    public static async Task Http3RouteMissReturnsSafe404()
+    public static async Task Http3RouteMissReturnsSafe404Async()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -559,7 +559,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal("Not Found", result.Body);
     }
 
-    public static async Task Http3RouteMissRemainsStableAcrossRepeatedReadyListenerRequests()
+    public static async Task Http3RouteMissRemainsStableAcrossRepeatedReadyListenerRequestsAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -601,7 +601,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task Http3GetProxyRouteWorks()
+    public static async Task Http3GetProxyRouteWorksAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -615,7 +615,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.Metrics.Http3.ProxiedRequests >= 1);
     }
 
-    public static async Task Http3HeadProxyRouteWorks()
+    public static async Task Http3HeadProxyRouteWorksAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -629,7 +629,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.UpstreamRequest.StartsWith("HEAD /head HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task Http3ProxyPreservesQueryString()
+    public static async Task Http3ProxyPreservesQueryStringAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -640,7 +640,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /search?q=one&sort=two HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task Http3ProxyStripsPseudoHeadersBeforeUpstream()
+    public static async Task Http3ProxyStripsPseudoHeadersBeforeUpstreamAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -654,7 +654,7 @@ internal static class ClientHttp3Tests
         AssertEx.False(result.UpstreamRequest.Contains(":path", StringComparison.OrdinalIgnoreCase));
     }
 
-    public static async Task Http3ResponseHeadersAreEncodedSafely()
+    public static async Task Http3ResponseHeadersAreEncodedSafelyAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -668,7 +668,7 @@ internal static class ClientHttp3Tests
         AssertEx.False(HeaderExists(result.Headers, "keep-alive"));
     }
 
-    public static async Task Http3ChunkedResponseStreamsBodyWithoutTransferEncoding()
+    public static async Task Http3ChunkedResponseStreamsBodyWithoutTransferEncodingAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -684,7 +684,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.Metrics.Http3.ResponseBytesSent >= "wikipedia".Length);
     }
 
-    public static async Task Http3ResponseStreamsBeforeUpstreamCompletes()
+    public static async Task Http3ResponseStreamsBeforeUpstreamCompletesAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -730,7 +730,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task Http3CacheInteractionUsesStoredResponse()
+    public static async Task Http3CacheInteractionUsesStoredResponseAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -775,7 +775,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task Http3OversizedCacheCandidateStreamsButIsNotCached()
+    public static async Task Http3OversizedCacheCandidateStreamsButIsNotCachedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -818,7 +818,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task Http3RetryForGetCanReachSecondUpstream()
+    public static async Task Http3RetryForGetCanReachSecondUpstreamAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -855,7 +855,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task UnsupportedConnectIsRejected()
+    public static async Task UnsupportedConnectIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -868,7 +868,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal("", result.UpstreamRequest);
     }
 
-    public static async Task MalformedHttp3ConnectIsRejected()
+    public static async Task MalformedHttp3ConnectIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -880,7 +880,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("invalid_connect_target"));
     }
 
-    public static async Task ExtendedHttp3ConnectWebSocketIsRejected()
+    public static async Task ExtendedHttp3ConnectWebSocketIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -903,7 +903,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task Http3PostWithBoundedBodyReachesUpstream()
+    public static async Task Http3PostWithBoundedBodyReachesUpstreamAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -918,7 +918,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.UpstreamRequest.EndsWith("hello=world", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task Http3PutPatchAndDeleteBodiesReachUpstream()
+    public static async Task Http3PutPatchAndDeleteBodiesReachUpstreamAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -960,7 +960,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task Http3PathRewriteAppliesToProxyRoute()
+    public static async Task Http3PathRewriteAppliesToProxyRouteAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -975,7 +975,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /api/users?id=1 HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task Http3BodySizeLimitApplies()
+    public static async Task Http3BodySizeLimitAppliesAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1025,7 +1025,7 @@ internal static class ClientHttp3Tests
         throw new InvalidOperationException("Expected removed HTTP/3 body buffer config to be rejected.");
     }
 
-    public static async Task Http3RequestWithBodyIsNotRetried()
+    public static async Task Http3RequestWithBodyIsNotRetriedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1060,7 +1060,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task InvalidFrameSequenceIsRejected()
+    public static async Task InvalidFrameSequenceIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1072,7 +1072,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unexpected_data"));
     }
 
-    public static async Task UnexpectedControlFrameOnRequestStreamIsRejected()
+    public static async Task UnexpectedControlFrameOnRequestStreamIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1084,7 +1084,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unexpected_control_frame"));
     }
 
-    public static async Task GoAwayFrameOnRequestStreamIsRejected()
+    public static async Task GoAwayFrameOnRequestStreamIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1096,7 +1096,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unexpected_control_frame"));
     }
 
-    public static async Task DuplicateHeadersAfterHeadersIsRejected()
+    public static async Task DuplicateHeadersAfterHeadersIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1109,7 +1109,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal(0L, result.Metrics.Http3.ActiveStreams);
     }
 
-    public static async Task UnknownFrameBeforeHeadersIsRejected()
+    public static async Task UnknownFrameBeforeHeadersIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1122,7 +1122,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal(0L, result.Metrics.Http3.ActiveStreams);
     }
 
-    public static async Task MaxPushFrameOnRequestStreamIsRejected()
+    public static async Task MaxPushFrameOnRequestStreamIsRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1135,7 +1135,7 @@ internal static class ClientHttp3Tests
         AssertEx.Equal(0L, result.Metrics.Http3.ActiveStreams);
     }
 
-    public static async Task StreamLevelProtocolErrorDoesNotPoisonConnection()
+    public static async Task StreamLevelProtocolErrorDoesNotPoisonConnectionAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1175,7 +1175,7 @@ internal static class ClientHttp3Tests
         await connection.CloseAsync(0, CancellationToken.None).ConfigureAwait(false);
     }
 
-    public static async Task ConcurrentStreamResetDoesNotLeakActiveStreams()
+    public static async Task ConcurrentStreamResetDoesNotLeakActiveStreamsAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1220,7 +1220,7 @@ internal static class ClientHttp3Tests
         }
     }
 
-    public static async Task QpackDecodeFailureDoesNotReachRouteSelection()
+    public static async Task QpackDecodeFailureDoesNotReachRouteSelectionAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -1235,7 +1235,7 @@ internal static class ClientHttp3Tests
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unsupported_qpack_index"));
     }
 
-    public static async Task ProtocolErrorBudgetClosesAbusiveConnection()
+    public static async Task ProtocolErrorBudgetClosesAbusiveConnectionAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {

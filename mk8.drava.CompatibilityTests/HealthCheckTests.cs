@@ -9,31 +9,31 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class HealthCheckTests
 {
-    public static async Task HealthCheck2xxIsHealthy()
+    public static async Task HealthCheck2xxIsHealthyAsync()
     {
         var sample = await RunHealthCheckAsync("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n").ConfigureAwait(false);
         AssertEx.True(sample.Healthy, sample.Result);
     }
 
-    public static async Task HealthCheck3xxIsHealthy()
+    public static async Task HealthCheck3xxIsHealthyAsync()
     {
         var sample = await RunHealthCheckAsync("HTTP/1.1 302 Found\r\nContent-Length: 0\r\n\r\n").ConfigureAwait(false);
         AssertEx.True(sample.Healthy, sample.Result);
     }
 
-    public static async Task HealthCheck4xxIsUnhealthy()
+    public static async Task HealthCheck4xxIsUnhealthyAsync()
     {
         var sample = await RunHealthCheckAsync("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n").ConfigureAwait(false);
         AssertEx.False(sample.Healthy, sample.Result);
     }
 
-    public static async Task HealthCheck5xxIsUnhealthy()
+    public static async Task HealthCheck5xxIsUnhealthyAsync()
     {
         var sample = await RunHealthCheckAsync("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n").ConfigureAwait(false);
         AssertEx.False(sample.Healthy, sample.Result);
     }
 
-    public static async Task HealthCheckTimeoutIsUnhealthy()
+    public static async Task HealthCheckTimeoutIsUnhealthyAsync()
     {
         var port = GetFreeTcpPort();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -109,7 +109,7 @@ internal static class HealthCheckTests
         AssertEx.True(store.IsUsable(HealthSource(upstream)));
     }
 
-    public static async Task HealthCheckCoordinatorRunsDueChecksAndRecordsMetrics()
+    public static async Task HealthCheckCoordinatorRunsDueChecksAndRecordsMetricsAsync()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var metrics = new ProxyMetrics();
@@ -132,7 +132,7 @@ internal static class HealthCheckTests
         AssertEx.Equal(UpstreamHealthState.Healthy, events.Events[0].State);
     }
 
-    public static async Task HealthCheckCoordinatorSkipsUntilIntervalElapses()
+    public static async Task HealthCheckCoordinatorSkipsUntilIntervalElapsesAsync()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
         var metrics = new ProxyMetrics();

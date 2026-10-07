@@ -35,7 +35,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(AssertEx.NotNull(validation.Failures).Any(static failure => failure.Contains("HTTP/3 upstreams require scheme 'https'", StringComparison.Ordinal)), string.Join("; ", validation.Failures ?? []));
     }
 
-    public static async Task Http3UpstreamConfigParsesAndValidates()
+    public static async Task Http3UpstreamConfigParsesAndValidatesAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteCustomSite(temp.Path, "upstream-h3.json", SiteJson(proxyPort: 18080, upstreamPort: 18443));
@@ -45,7 +45,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal("https", upstream.Scheme);
     }
 
-    public static async Task Http3EffectiveProjectionReportsReusedMultiplexedPooling()
+    public static async Task Http3EffectiveProjectionReportsReusedMultiplexedPoolingAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteCustomSite(temp.Path, "upstream-h3.json", SiteJson(proxyPort: 18080, upstreamPort: 18443));
@@ -77,7 +77,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.False(string.Equals(Http3UpstreamConnectionPool.GetKey(UpstreamTransportEndpointMapper.FromUpstream(first)), Http3UpstreamConnectionPool.GetKey(UpstreamTransportEndpointMapper.FromUpstream(third)), StringComparison.Ordinal));
     }
 
-    public static async Task Http3UpstreamProxyMapsHeadersQueryAndResponse()
+    public static async Task Http3UpstreamProxyMapsHeadersQueryAndResponseAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -94,7 +94,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.False(result.Upstream.RequestHeaders.ContainsKey("keep-alive"));
     }
 
-    public static async Task SequentialHttp3UpstreamRequestsReuseConnection()
+    public static async Task SequentialHttp3UpstreamRequestsReuseConnectionAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -110,7 +110,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsReused >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsReused.ToString());
     }
 
-    public static async Task ConcurrentHttp3UpstreamRequestsShareConnection()
+    public static async Task ConcurrentHttp3UpstreamRequestsShareConnectionAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -126,7 +126,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsReused >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsReused.ToString());
     }
 
-    public static async Task IdleHttp3UpstreamConnectionsExpire()
+    public static async Task IdleHttp3UpstreamConnectionsExpireAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -141,7 +141,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.Metrics.UpstreamHttp3.PoolConnectionsClosed >= 1, result.Metrics.UpstreamHttp3.PoolConnectionsClosed.ToString());
     }
 
-    public static async Task UpstreamHttp3GoAwayDrainsConnectionWithoutBreakingActiveStream()
+    public static async Task UpstreamHttp3GoAwayDrainsConnectionWithoutBreakingActiveStreamAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -157,7 +157,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal(0, result.Metrics.UpstreamHttp3.PoolConnectionsReused);
     }
 
-    public static async Task UpstreamHttp3PoolStreamLimitExhaustionReturnsSafeFailure()
+    public static async Task UpstreamHttp3PoolStreamLimitExhaustionReturnsSafeFailureAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -171,7 +171,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.Metrics.UpstreamHttp3.StreamLimitRejections >= 1, result.Metrics.UpstreamHttp3.StreamLimitRejections.ToString());
     }
 
-    public static async Task ConcurrentHttp3UpstreamReuseReleasesActiveStreamGauge()
+    public static async Task ConcurrentHttp3UpstreamReuseReleasesActiveStreamGaugeAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -186,7 +186,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal(0L, result.Metrics.UpstreamHttp3.ActiveStreams);
     }
 
-    public static async Task UpstreamHttp3StreamResetDoesNotPoisonUnrelatedActiveStream()
+    public static async Task UpstreamHttp3StreamResetDoesNotPoisonUnrelatedActiveStreamAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -200,7 +200,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal(0L, result.Metrics.UpstreamHttp3.ActiveStreams);
     }
 
-    public static async Task FailedHttp3UpstreamConnectionDoesNotReceiveNewStreams()
+    public static async Task FailedHttp3UpstreamConnectionDoesNotReceiveNewStreamsAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -215,7 +215,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal(0L, result.Metrics.UpstreamHttp3.ActiveStreams);
     }
 
-    public static async Task Http3UpstreamAlpnFailureDoesNotDowngrade()
+    public static async Task Http3UpstreamAlpnFailureDoesNotDowngradeAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -232,7 +232,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.False(result.Healthy, result.Result);
     }
 
-    public static async Task Http3UpstreamMalformedResponseHeadersAreRejected()
+    public static async Task Http3UpstreamMalformedResponseHeadersAreRejectedAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -244,7 +244,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.Metrics.UpstreamHttp3.ProtocolErrors.ContainsKey("protocol_failure"), "Expected upstream HTTP/3 protocol failure metric.");
     }
 
-    public static async Task Http3UpstreamForwardsRequestBody()
+    public static async Task Http3UpstreamForwardsRequestBodyAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -258,7 +258,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal("hello h3", Encoding.ASCII.GetString(result.Upstream.RequestBody));
     }
 
-    public static async Task Http3HealthCheckUsesH3()
+    public static async Task Http3HealthCheckUsesH3Async()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -278,7 +278,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal("/health", observation.RequestHeaders[":path"]);
     }
 
-    public static async Task CacheWorksWithHttp3Upstream()
+    public static async Task CacheWorksWithHttp3UpstreamAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -299,7 +299,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.Metrics.UpstreamHttp3.Requests >= 1, result.Metrics.UpstreamHttp3.Requests.ToString());
     }
 
-    public static async Task MetricsIncludeUpstreamHttp3Counters()
+    public static async Task MetricsIncludeUpstreamHttp3CountersAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -315,7 +315,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.True(result.Metrics.UpstreamHttp3.ActiveConnections >= 1, result.Metrics.UpstreamHttp3.ActiveConnections.ToString());
     }
 
-    public static async Task Http3UpstreamCloseBeforeResponseHeadersReturnsSafeFailure()
+    public static async Task Http3UpstreamCloseBeforeResponseHeadersReturnsSafeFailureAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -329,7 +329,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal(0L, result.Metrics.UpstreamHttp3.ActiveStreams);
     }
 
-    public static async Task Http3UpstreamCloseAfterResponseHeadersReleasesStreamSlot()
+    public static async Task Http3UpstreamCloseAfterResponseHeadersReleasesStreamSlotAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {
@@ -343,7 +343,7 @@ internal static class UpstreamHttp3Tests
         AssertEx.Equal(0L, result.Metrics.UpstreamHttp3.ActiveStreams);
     }
 
-    public static async Task Http3StreamingPostBodyIsNotRetriedAfterUpstreamFailure()
+    public static async Task Http3StreamingPostBodyIsNotRetriedAfterUpstreamFailureAsync()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
         {

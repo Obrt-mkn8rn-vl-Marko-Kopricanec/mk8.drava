@@ -83,7 +83,7 @@ internal static class ProxyGeneratedFailurePolicyTests
         AssertEx.Equal("11", headers.Single(static header => header.Name == "content-length").Value);
     }
 
-    public static async Task GeneratedFailureWriterSerializesDescriptorBody()
+    public static async Task GeneratedFailureWriterSerializesDescriptorBodyAsync()
     {
         var stream = new MemoryStream();
         await using var streamDisposal = stream.ConfigureAwait(false);

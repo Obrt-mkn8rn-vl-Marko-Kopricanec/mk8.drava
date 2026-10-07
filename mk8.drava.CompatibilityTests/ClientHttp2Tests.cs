@@ -21,7 +21,7 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class ClientHttp2Tests
 {
-    public static async Task ExistingHttp1BehaviorRemainsUnchanged()
+    public static async Task ExistingHttp1BehaviorRemainsUnchangedAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -66,14 +66,14 @@ internal static class ClientHttp2Tests
         AssertEx.True(AssertEx.NotNull(validation.Failures).Any(static failure => failure.Contains("HTTP/2 requires an HTTPS listener", StringComparison.Ordinal)));
     }
 
-    public static async Task AlpnSelectsHttp2WhenEnabled()
+    public static async Task AlpnSelectsHttp2WhenEnabledAsync()
     {
         var result = await RunHttp2ScenarioAsync(SiteWithStaticRoute, request => request.Authority = "home.test").ConfigureAwait(false);
         AssertEx.Equal(SslApplicationProtocol.Http2, result.NegotiatedProtocol);
         AssertEx.Equal(203, result.Response.StatusCode);
     }
 
-    public static async Task Http2RequestMapsToRouteMatcher()
+    public static async Task Http2RequestMapsToRouteMatcherAsync()
     {
         var result = await RunHttp2ScenarioAsync((dataDirectory, proxyPort, upstreamPort) => WriteHttpsProxySite(dataDirectory, proxyPort, upstreamPort), request =>
         {
@@ -85,7 +85,7 @@ internal static class ClientHttp2Tests
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /h2 HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task AuthorityMapsToHostRouting()
+    public static async Task AuthorityMapsToHostRoutingAsync()
     {
         var result = await RunHttp2ScenarioAsync((dataDirectory, proxyPort, upstreamPort) => WriteHttpsProxySite(dataDirectory, proxyPort, upstreamPort, host: "authority.test"), request =>
         {
@@ -96,7 +96,7 @@ internal static class ClientHttp2Tests
         AssertEx.True(result.UpstreamRequest.Contains("Host: authority.test", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
     }
 
-    public static async Task QueryStringIsPreserved()
+    public static async Task QueryStringIsPreservedAsync()
     {
         var result = await RunHttp2ScenarioAsync((dataDirectory, proxyPort, upstreamPort) => WriteHttpsProxySite(dataDirectory, proxyPort, upstreamPort), request =>
         {
@@ -106,7 +106,7 @@ internal static class ClientHttp2Tests
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /search?q=one&sort=two HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task InvalidPseudoHeadersAreRejected()
+    public static async Task InvalidPseudoHeadersAreRejectedAsync()
     {
         var result = await RunHttp2ScenarioAsync(SiteWithStaticRoute, request =>
         {
@@ -117,7 +117,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal(1L, result.Metrics.Http2.ProtocolErrors["invalid_pseudo_header"]);
     }
 
-    public static async Task ForbiddenConnectionHeadersAreRejected()
+    public static async Task ForbiddenConnectionHeadersAreRejectedAsync()
     {
         var result = await RunHttp2ScenarioAsync(SiteWithStaticRoute, request =>
         {
@@ -128,7 +128,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal(1L, result.Metrics.Http2.ProtocolErrors["forbidden_header"]);
     }
 
-    public static async Task HuffmanRequestHeaderValuesAreDecoded()
+    public static async Task HuffmanRequestHeaderValuesAreDecodedAsync()
     {
         var result = await RunHttp2ScenarioAsync((dataDirectory, proxyPort, upstreamPort) => WriteHttpsProxySite(dataDirectory, proxyPort, upstreamPort), request =>
         {
@@ -140,7 +140,7 @@ internal static class ClientHttp2Tests
         AssertEx.True(result.UpstreamRequest.Contains("x-huffman-hpack: mdrava", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
     }
 
-    public static async Task ResponseOmitsHopByHopHeaders()
+    public static async Task ResponseOmitsHopByHopHeadersAsync()
     {
         var result = await RunHttp2ScenarioAsync((dataDirectory, proxyPort, upstreamPort) => WriteHttpsProxySite(dataDirectory, proxyPort, upstreamPort), request =>
         {
@@ -152,7 +152,7 @@ internal static class ClientHttp2Tests
         AssertEx.False(result.Response.Headers.ContainsKey("keep-alive"));
     }
 
-    public static async Task StaticResponseRouteWorksOverHttp2()
+    public static async Task StaticResponseRouteWorksOverHttp2Async()
     {
         var result = await RunHttp2ScenarioAsync(SiteWithStaticRoute, request =>
         {
@@ -163,7 +163,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal("static-h2", result.Response.BodyText);
     }
 
-    public static async Task ActiveHttp2TrafficSurvivesCertificateReloadAndNewConnectionsUseReloadedCertificate()
+    public static async Task ActiveHttp2TrafficSurvivesCertificateReloadAndNewConnectionsUseReloadedCertificateAsync()
     {
         var dataDirectory = CreateDataDirectory();
         var proxyPort = GetFreeTcpPort();
@@ -205,7 +205,7 @@ internal static class ClientHttp2Tests
         }
     }
 
-    public static async Task FailedHttp2CertificateReloadPreservesPreviousActiveCertificate()
+    public static async Task FailedHttp2CertificateReloadPreservesPreviousActiveCertificateAsync()
     {
         var dataDirectory = CreateDataDirectory();
         var proxyPort = GetFreeTcpPort();
@@ -244,7 +244,7 @@ internal static class ClientHttp2Tests
         }
     }
 
-    public static async Task RedirectRouteWorksOverHttp2()
+    public static async Task RedirectRouteWorksOverHttp2Async()
     {
         var result = await RunHttp2ScenarioAsync(SiteWithRedirectRoute, request =>
         {
@@ -255,7 +255,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal("/new?id=1", result.Response.Header("location"));
     }
 
-    public static async Task MaintenanceRouteWorksOverHttp2()
+    public static async Task MaintenanceRouteWorksOverHttp2Async()
     {
         var result = await RunHttp2ScenarioAsync(SiteWithMaintenanceRoute, request =>
         {
@@ -266,7 +266,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal("maintenance", result.Response.BodyText);
     }
 
-    public static async Task HeadReturnsHeadersWithoutBody()
+    public static async Task HeadReturnsHeadersWithoutBodyAsync()
     {
         var result = await RunHttp2ScenarioAsync((dataDirectory, proxyPort, upstreamPort) => WriteHttpsProxySite(dataDirectory, proxyPort, upstreamPort), request =>
         {
@@ -279,7 +279,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal("", result.Response.BodyText);
     }
 
-    public static async Task CacheWorksOverHttp2()
+    public static async Task CacheWorksOverHttp2Async()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -325,7 +325,7 @@ internal static class ClientHttp2Tests
         }
     }
 
-    public static async Task RetryWorksForHttp2ProxyRequests()
+    public static async Task RetryWorksForHttp2ProxyRequestsAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var firstUpstreamPort = GetFreeTcpPort();
@@ -363,7 +363,7 @@ internal static class ClientHttp2Tests
         }
     }
 
-    public static async Task ExtendedConnectIsRejected()
+    public static async Task ExtendedConnectIsRejectedAsync()
     {
         var result = await RunHttp2ScenarioAsync(SiteWithStaticRoute, request =>
         {
@@ -376,7 +376,7 @@ internal static class ClientHttp2Tests
         AssertEx.True(result.Metrics.Http2.ProtocolErrors.ContainsKey("invalid_pseudo_header") || result.Metrics.Http2.ProtocolErrors.ContainsKey("extended_connect_unsupported"));
     }
 
-    public static async Task ConcurrentStreamsReachDifferentRoutes()
+    public static async Task ConcurrentStreamsReachDifferentRoutesAsync()
     {
         var result = await RunHttp2ManualScenarioAsync(SiteWithTwoStaticRoutes, async (client, _, cancellationToken) => await client.SendRequestsBeforeReadingAsync([new Http2RequestSpec { Authority = "home.test", Path = "/one" }, new Http2RequestSpec { Authority = "home.test", Path = "/two" }], cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
         AssertEx.Equal(2, result.Value.Count);
@@ -387,7 +387,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal(0L, result.Metrics.Http2.ActiveStreams);
     }
 
-    public static async Task DataBeforeHeadersIsRejectedSafely()
+    public static async Task DataBeforeHeadersIsRejectedSafelyAsync()
     {
         var result = await RunHttp2ManualScenarioAsync(SiteWithStaticRoute, async (client, _, cancellationToken) => await client.SendDataBeforeHeadersAsync(cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
         AssertEx.Equal(0, result.Value.StatusCode);
@@ -395,7 +395,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal(0L, result.Metrics.Http2.ActiveStreams);
     }
 
-    public static async Task ContinuationHeaderFragmentationIsAccepted()
+    public static async Task ContinuationHeaderFragmentationIsAcceptedAsync()
     {
         var result = await RunHttp2ManualScenarioAsync(SiteWithStaticRoute, async (client, _, cancellationToken) => await client.SendFragmentedHeadersRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/static" }, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
         AssertEx.Equal(203, result.Value.StatusCode);
@@ -403,7 +403,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal(0L, result.Metrics.Http2.ActiveStreams);
     }
 
-    public static async Task RstStreamReleasesStateAndKeepsConnectionUsable()
+    public static async Task RstStreamReleasesStateAndKeepsConnectionUsableAsync()
     {
         var result = await RunHttp2ManualScenarioAsync(SiteWithStaticRoute, async (client, _, cancellationToken) => await client.SendHeadersThenResetThenRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/static" }, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
         AssertEx.Equal(203, result.Value.StatusCode);
@@ -411,13 +411,13 @@ internal static class ClientHttp2Tests
         AssertEx.Equal(0L, result.Metrics.Http2.ActiveStreams);
     }
 
-    public static async Task GoAwayStopsNewStreamsSafely()
+    public static async Task GoAwayStopsNewStreamsSafelyAsync()
     {
         var result = await RunHttp2ManualScenarioAsync(SiteWithStaticRoute, async (client, _, cancellationToken) => await client.SendGoAwayThenRequestAsync(cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
         AssertEx.True(result.Value);
     }
 
-    public static async Task OversizedHeaderListIsRejected()
+    public static async Task OversizedHeaderListIsRejectedAsync()
     {
         var result = await RunHttp2ManualScenarioAsync(SiteWithLowHeaderLimit, async (client, _, cancellationToken) =>
         {
@@ -434,7 +434,7 @@ internal static class ClientHttp2Tests
         AssertEx.Equal(0L, result.Metrics.Http2.ActiveStreams);
     }
 
-    public static async Task MetricsIncludeHttp2Counters()
+    public static async Task MetricsIncludeHttp2CountersAsync()
     {
         var result = await RunHttp2ScenarioAsync(SiteWithStaticRoute, request =>
         {

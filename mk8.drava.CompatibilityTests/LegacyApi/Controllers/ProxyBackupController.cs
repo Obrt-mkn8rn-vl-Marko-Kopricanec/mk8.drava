@@ -21,7 +21,7 @@ public sealed class ProxyBackupController : ControllerBase
     }
 
     [HttpPost("validate")]
-    public async ValueTask<ActionResult<ProxyRestoreValidationResponseBody>> Validate(CancellationToken cancellationToken)
+    public async ValueTask<ActionResult<ProxyRestoreValidationResponseBody>> ValidateAsync(CancellationToken cancellationToken)
     {
         var result = await _backupAdministration.ValidateAsync(cancellationToken).ConfigureAwait(false);
         var response = ProxyRestoreValidationResponseBodyMapper.FromResult(result);

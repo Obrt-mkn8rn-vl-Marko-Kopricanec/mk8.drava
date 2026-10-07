@@ -101,7 +101,7 @@ internal static class AdminSecurityTests
         AssertEx.True(failures.Any(static failure => failure.Contains("non-local", StringComparison.OrdinalIgnoreCase)));
     }
 
-    public static async Task ProtectedEndpointRejectsMissingAuth()
+    public static async Task ProtectedEndpointRejectsMissingAuthAsync()
     {
         var store = CreateStoreWithAdminAuthentication();
         var audit = new AdminAuditStore(SilentLogPersistenceStore.Instance);
@@ -112,7 +112,7 @@ internal static class AdminSecurityTests
         AssertEx.Equal("missing", audit.Recent(1)[0].AuthResult);
     }
 
-    public static async Task ProtectedEndpointRejectsWrongAuth()
+    public static async Task ProtectedEndpointRejectsWrongAuthAsync()
     {
         var store = CreateStoreWithAdminAuthentication();
         var audit = new AdminAuditStore(SilentLogPersistenceStore.Instance);
@@ -124,7 +124,7 @@ internal static class AdminSecurityTests
         AssertEx.Equal("invalid", audit.Recent(1)[0].AuthResult);
     }
 
-    public static async Task ProtectedEndpointAcceptsValidBearerToken()
+    public static async Task ProtectedEndpointAcceptsValidBearerTokenAsync()
     {
         var store = CreateStoreWithAdminAuthentication();
         var audit = new AdminAuditStore(SilentLogPersistenceStore.Instance);
@@ -143,7 +143,7 @@ internal static class AdminSecurityTests
         AssertEx.Equal("valid", audit.Recent(1)[0].AuthResult);
     }
 
-    public static async Task KnownAdminEndpointPathsRequireAuthentication()
+    public static async Task KnownAdminEndpointPathsRequireAuthenticationAsync()
     {
         foreach (var path in KnownAdminEndpointPaths)
         {
@@ -169,7 +169,7 @@ internal static class AdminSecurityTests
         AssertEx.Equal(string.Join("\n", KnownAdminEndpointPaths.Order(StringComparer.Ordinal)), string.Join("\n", discovered.Order(StringComparer.Ordinal)));
     }
 
-    public static async Task KnownAdminEndpointPathsAcceptBearerAndApiKey()
+    public static async Task KnownAdminEndpointPathsAcceptBearerAndApiKeyAsync()
     {
         foreach (var path in KnownAdminEndpointPaths)
         {
@@ -208,7 +208,7 @@ internal static class AdminSecurityTests
         }
     }
 
-    public static async Task AdminAuthFailureResponseAndAuditDoNotExposePresentedSecrets()
+    public static async Task AdminAuthFailureResponseAndAuditDoNotExposePresentedSecretsAsync()
     {
         const string badBearer = "bad-bearer-secret";
         const string badApiKey = "bad-api-key-secret";
@@ -249,7 +249,7 @@ internal static class AdminSecurityTests
         AssertEx.False(response is ProxyAdminAuditEventResponse[], "Admin audit API events should not expose a mutable array.");
     }
 
-    public static async Task AdminAuditPathOmitsQuerySecrets()
+    public static async Task AdminAuditPathOmitsQuerySecretsAsync()
     {
         var store = CreateStoreWithAdminAuthentication();
         var audit = new AdminAuditStore(SilentLogPersistenceStore.Instance);
@@ -339,7 +339,7 @@ internal static class AdminSecurityTests
         AssertEx.Equal(100, defaults.RecentAuditCapacity);
     }
 
-    public static async Task AdminAuditDoesNotLogTokenValues()
+    public static async Task AdminAuditDoesNotLogTokenValuesAsync()
     {
         var store = CreateStoreWithAdminAuthentication();
         var audit = new AdminAuditStore(SilentLogPersistenceStore.Instance);

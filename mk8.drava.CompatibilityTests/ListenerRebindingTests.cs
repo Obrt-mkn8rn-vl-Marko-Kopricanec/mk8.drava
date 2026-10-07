@@ -14,7 +14,7 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class ListenerRebindingTests
 {
-    public static async Task RouteOnlyReloadDoesNotRebindUnchangedListener()
+    public static async Task RouteOnlyReloadDoesNotRebindUnchangedListenerAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var proxyPort = GetFreeTcpPort();
@@ -42,7 +42,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task AddingListenerStartsOnlyNewListener()
+    public static async Task AddingListenerStartsOnlyNewListenerAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var firstProxyPort = GetFreeTcpPort();
@@ -73,7 +73,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task RemovingListenerStopsAcceptingNewConnections()
+    public static async Task RemovingListenerStopsAcceptingNewConnectionsAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var firstProxyPort = GetFreeTcpPort();
@@ -96,7 +96,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task ChangedListenerIsReplacedSafely()
+    public static async Task ChangedListenerIsReplacedSafelyAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var oldProxyPort = GetFreeTcpPort();
@@ -124,7 +124,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task FailedNewListenerStartPreservesOldActiveListener()
+    public static async Task FailedNewListenerStartPreservesOldActiveListenerAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var proxyPort = GetFreeTcpPort();
@@ -153,7 +153,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task FailedConfigReloadPreservesOldActiveListeners()
+    public static async Task FailedConfigReloadPreservesOldActiveListenersAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var proxyPort = GetFreeTcpPort();
@@ -179,7 +179,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task CertificateOnlyUpdateDoesNotRebindListener()
+    public static async Task CertificateOnlyUpdateDoesNotRebindListenerAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var proxyPort = GetFreeTcpPort();
@@ -210,7 +210,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task AdminBindIsNotAffectedByProxyListenerReload()
+    public static async Task AdminBindIsNotAffectedByProxyListenerReloadAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var proxyPort = GetFreeTcpPort();
@@ -234,7 +234,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task ReloadDiagnosticsReportListenerDiff()
+    public static async Task ReloadDiagnosticsReportListenerDiffAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var oldMainPort = GetFreeTcpPort();
@@ -263,7 +263,7 @@ internal static class ListenerRebindingTests
         }
     }
 
-    public static async Task MetricsCountListenerReloadOutcomes()
+    public static async Task MetricsCountListenerReloadOutcomesAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var proxyPort = GetFreeTcpPort();

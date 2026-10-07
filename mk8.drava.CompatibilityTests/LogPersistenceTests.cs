@@ -57,7 +57,7 @@ internal static class LogPersistenceTests
         AssertEx.Equal(0L, metrics.Snapshot().Diagnostics.AccessLogsEmitted);
     }
 
-    public static async Task AdminAuditPersistenceWritesFailedAuthWithoutSecrets()
+    public static async Task AdminAuditPersistenceWritesFailedAuthWithoutSecretsAsync()
     {
         const string badBearer = "bearer-secret-value";
         const string badApiKey = "api-key-secret-value";

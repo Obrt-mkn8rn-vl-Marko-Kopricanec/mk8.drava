@@ -29,7 +29,7 @@ public sealed class ProxyConfigurationController : ControllerBase
     }
 
     [HttpPost("reload")]
-    public async ValueTask<ActionResult<ProxyConfigurationReloadResponse>> Reload(CancellationToken cancellationToken)
+    public async ValueTask<ActionResult<ProxyConfigurationReloadResponse>> ReloadAsync(CancellationToken cancellationToken)
     {
         var result = await _configurationReloads.ReloadAsync(cancellationToken).ConfigureAwait(false);
         var response = ProxyConfigurationReloadResponseMapper.FromResult(result);
@@ -37,7 +37,7 @@ public sealed class ProxyConfigurationController : ControllerBase
     }
 
     [HttpPost("validate")]
-    public async ValueTask<ActionResult<ProxyConfigurationValidationResponse>> Validate(CancellationToken cancellationToken)
+    public async ValueTask<ActionResult<ProxyConfigurationValidationResponse>> ValidateAsync(CancellationToken cancellationToken)
     {
         var result = await _configurationAdministration.ValidateAsync(cancellationToken).ConfigureAwait(false);
         var response = ProxyConfigurationValidationResponseMapper.FromResult(result);

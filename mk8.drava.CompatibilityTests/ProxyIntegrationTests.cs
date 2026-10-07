@@ -21,7 +21,7 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class ProxyIntegrationTests
 {
-    public static async Task ProxiesSingleGetToUpstream()
+    public static async Task ProxiesSingleGetToUpstreamAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -76,7 +76,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task ProxiesFixedLengthRequestAndResponse()
+    public static async Task ProxiesFixedLengthRequestAndResponseAsync()
     {
         var request = "POST /submit HTTP/1.1\r\nHost: fixed.test\r\nContent-Length: 11\r\n\r\nhello world";
         var upstreamResponse = "HTTP/1.1 201 Created\r\nContent-Length: 7\r\nContent-Type: text/plain\r\n\r\ncreated";
@@ -87,7 +87,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.EndsWith("hello world", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task ProxiesChunkedRequestAndResponse()
+    public static async Task ProxiesChunkedRequestAndResponseAsync()
     {
         var request = "POST /chunks HTTP/1.1\r\nHost: chunk.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\nX-Trailer: ok\r\n\r\n";
         var upstreamResponse = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n";
@@ -98,7 +98,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.Contains("X-Trailer: ok", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task AcceptsChunkExtensionsAndForwardsChunkedBody()
+    public static async Task AcceptsChunkExtensionsAndForwardsChunkedBodyAsync()
     {
         var result = await RunProxyScenarioAsync("POST /chunk-ext HTTP/1.1\r\nHost: chunk.test\r\nTransfer-Encoding: chunked\r\n\r\n5;foo=bar\r\nhello\r\n0\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok").ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
@@ -106,7 +106,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.EndsWith("0\r\n\r\n", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task ForwardsDeclaredChunkedRequestTrailer()
+    public static async Task ForwardsDeclaredChunkedRequestTrailerAsync()
     {
         var result = await RunProxyScenarioAsync("POST /trailers HTTP/1.1\r\nHost: chunk.test\r\nTransfer-Encoding: chunked\r\nTrailer: X-Trailer\r\n\r\n5\r\nhello\r\n0\r\nX-Trailer: ok\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok").ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
@@ -114,54 +114,54 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.Contains("X-Trailer: ok", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task DoesNotRelayHeadResponseBody()
+    public static async Task DoesNotRelayHeadResponseBodyAsync()
     {
         var result = await RunProxyScenarioAsync("HEAD /head HTTP/1.1\r\nHost: head.test\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.False(result.ClientResponse.EndsWith("hello", StringComparison.Ordinal), result.ClientResponse);
     }
 
-    public static async Task ProxiesNoContentWithoutBody()
+    public static async Task ProxiesNoContentWithoutBodyAsync()
     {
         var result = await RunProxyScenarioAsync("GET /empty HTTP/1.1\r\nHost: empty.test\r\n\r\n", "HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\nhello", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("204 No Content", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.False(result.ClientResponse.EndsWith("hello", StringComparison.Ordinal), result.ClientResponse);
     }
 
-    public static async Task ProxiesNotModifiedWithoutBody()
+    public static async Task ProxiesNotModifiedWithoutBodyAsync()
     {
         var result = await RunProxyScenarioAsync("GET /cached HTTP/1.1\r\nHost: cache.test\r\n\r\n", "HTTP/1.1 304 Not Modified\r\nContent-Length: 5\r\n\r\nhello", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("304 Not Modified", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.False(result.ClientResponse.EndsWith("hello", StringComparison.Ordinal), result.ClientResponse);
     }
 
-    public static async Task RejectsInvalidRequestFraming()
+    public static async Task RejectsInvalidRequestFramingAsync()
     {
         var result = await RunProxyScenarioAsync("POST /bad HTTP/1.1\r\nHost: bad.test\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", expectUpstreamConnection: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("400 Bad Request", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal("", result.UpstreamRequest);
     }
 
-    public static async Task RejectsMalformedChunkedRequestBody()
+    public static async Task RejectsMalformedChunkedRequestBodyAsync()
     {
         var result = await RunProxyScenarioAsync("POST /bad-chunk HTTP/1.1\r\nHost: bad.test\r\nTransfer-Encoding: chunked\r\n\r\nZ\r\nbad\r\n0\r\n\r\n", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", readBodyFromUpstreamRequest: false, expectUpstreamConnection: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("400 Bad Request", StringComparison.Ordinal), result.ClientResponse);
     }
 
-    public static async Task FiltersHopByHopRequestHeaders()
+    public static async Task FiltersHopByHopRequestHeadersAsync()
     {
         var result = await RunProxyScenarioAsync("GET /headers HTTP/1.1\r\nHost: header.test\r\nConnection: x-private, close\r\nX-Private: secret\r\nKeep-Alive: timeout=5\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.False(result.UpstreamRequest.Contains("X-Private", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
         AssertEx.False(result.UpstreamRequest.Contains("\r\nKeep-Alive:", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
     }
 
-    public static async Task PreservesHostHeader()
+    public static async Task PreservesHostHeaderAsync()
     {
         var result = await RunProxyScenarioAsync("GET /host HTTP/1.1\r\nHost: original.test\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.True(result.UpstreamRequest.Contains("Host: original.test", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
     }
 
-    public static async Task ResponseIncludesGeneratedRequestId()
+    public static async Task ResponseIncludesGeneratedRequestIdAsync()
     {
         var result = await RunProxyScenarioAsync("GET /id HTTP/1.1\r\nHost: id.test\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("\r\nX-Request-Id: mdr-", StringComparison.OrdinalIgnoreCase), result.ClientResponse);
@@ -169,7 +169,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.Diagnostics[0].RequestId.StartsWith("mdr-", StringComparison.Ordinal));
     }
 
-    public static async Task ExternalRequestIdIsPreservedInDiagnostics()
+    public static async Task ExternalRequestIdIsPreservedInDiagnosticsAsync()
     {
         var result = await RunProxyScenarioAsync("GET /external HTTP/1.1\r\nHost: id.test\r\nX-Request-Id: client-123\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.Equal("client-123", result.Diagnostics[0].ExternalRequestId);
@@ -177,7 +177,7 @@ internal static class ProxyIntegrationTests
         AssertEx.False(string.Equals(result.Diagnostics[0].RequestId, result.Diagnostics[0].ExternalRequestId, StringComparison.Ordinal));
     }
 
-    public static async Task SuccessfulRequestProducesDiagnosticRouteAndUpstream()
+    public static async Task SuccessfulRequestProducesDiagnosticRouteAndUpstreamAsync()
     {
         var result = await RunProxyScenarioAsync("GET /diag HTTP/1.1\r\nHost: diag.test\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         var diagnostic = result.Diagnostics[0];
@@ -187,7 +187,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal("None", diagnostic.FailureKind);
     }
 
-    public static async Task UpstreamConnectFailureProducesDiagnosticClassification()
+    public static async Task UpstreamConnectFailureProducesDiagnosticClassificationAsync()
     {
         var result = await RunProxyScenarioAsync("GET /unavailable HTTP/1.1\r\nHost: upstream.test\r\n\r\n", "", expectUpstreamConnection: false).ConfigureAwait(false);
         AssertEx.Equal("UpstreamConnectFailed", result.Diagnostics[0].FailureKind);
@@ -195,14 +195,14 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.RequestClassifications.FailuresByKind["UpstreamConnectFailed"]);
     }
 
-    public static async Task AccessLoggingCanBeDisabledWhileDiagnosticsRemainEnabled()
+    public static async Task AccessLoggingCanBeDisabledWhileDiagnosticsRemainEnabledAsync()
     {
         var result = await RunProxyScenarioAsync("GET /quiet HTTP/1.1\r\nHost: quiet.test\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false, accessLogEnabled: false).ConfigureAwait(false);
         AssertEx.Equal(1, result.Diagnostics.Count);
         AssertEx.Equal(0L, result.Metrics.Diagnostics.AccessLogsEmitted);
     }
 
-    public static async Task HttpToHttpsRedirectPreservesPathAndQuery()
+    public static async Task HttpToHttpsRedirectPreservesPathAndQueryAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "httpsRedirect": {
@@ -215,7 +215,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal("", result.UpstreamRequest);
     }
 
-    public static async Task CanonicalHostRedirectWorks()
+    public static async Task CanonicalHostRedirectWorksAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "canonicalHost": {
@@ -226,7 +226,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.ClientResponse.Contains("Location: http://www.example.test/docs?page=2", StringComparison.OrdinalIgnoreCase), result.ClientResponse);
     }
 
-    public static async Task CanonicalHostRedirectDoesNotLoop()
+    public static async Task CanonicalHostRedirectDoesNotLoopAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "canonicalHost": {
@@ -238,7 +238,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /docs HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task ForwardedHeadersGeneratedForUntrustedDirectClient()
+    public static async Task ForwardedHeadersGeneratedForUntrustedDirectClientAsync()
     {
         var result = await RunProxyScenarioAsync("GET /forwarded HTTP/1.1\r\nHost: forward.test\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.True(result.UpstreamRequest.Contains("X-Forwarded-For: 127.0.0.1", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
@@ -248,7 +248,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.Contains("Forwarded:", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
     }
 
-    public static async Task TrustedProxyAcceptsPriorForwardedChain()
+    public static async Task TrustedProxyAcceptsPriorForwardedChainAsync()
     {
         var result = await RunCustomProxyScenarioAsync(SiteWithSingleProxyRoute, "GET /trusted HTTP/1.1\r\nHost: trusted.test\r\nX-Forwarded-For: 203.0.113.10\r\nX-Forwarded-Proto: https\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false, configureOperational: dataDirectory => ConfigurationTests.WriteOperationalConfig(dataDirectory, trustedProxies: ["127.0.0.1"])).ConfigureAwait(false);
         AssertEx.True(result.UpstreamRequest.Contains("X-Forwarded-For: 203.0.113.10, 127.0.0.1", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
@@ -256,7 +256,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal("203.0.113.10", result.Diagnostics[0].ClientEndpoint);
     }
 
-    public static async Task MalformedTrustedForwardedHeadersAreSanitizedBeforeUpstream()
+    public static async Task MalformedTrustedForwardedHeadersAreSanitizedBeforeUpstreamAsync()
     {
         var bad = (char)1;
         var result = await RunCustomProxyScenarioAsync(SiteWithSingleProxyRoute, $"GET /forwarded HTTP/1.1\r\nHost: forwarded.test\r\nX-Forwarded-For: bad{bad}value\r\nX-Forwarded-Host: bad{bad}host\r\nX-Forwarded-Proto: ftp{bad}\r\nConnection: close\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false, configureOperational: dataDirectory => ConfigurationTests.WriteOperationalConfig(dataDirectory, trustedProxies: ["127.0.0.1"])).ConfigureAwait(false);
@@ -266,7 +266,7 @@ internal static class ProxyIntegrationTests
         AssertEx.False(result.UpstreamRequest.Contains("bad", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
     }
 
-    public static async Task UntrustedClientForwardedHeadersAreStrippedAndReplaced()
+    public static async Task UntrustedClientForwardedHeadersAreStrippedAndReplacedAsync()
     {
         var result = await RunProxyScenarioAsync("GET /untrusted HTTP/1.1\r\nHost: untrusted.test\r\nX-Forwarded-For: 203.0.113.10\r\nX-Forwarded-Proto: https\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.True(result.UpstreamRequest.Contains("X-Forwarded-For: 127.0.0.1", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
@@ -274,7 +274,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.Contains("X-Forwarded-Proto: http", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
     }
 
-    public static async Task RequestHeaderSetAndRemoveRulesApplyUpstream()
+    public static async Task RequestHeaderSetAndRemoveRulesApplyUpstreamAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "headerPolicy": {
@@ -291,7 +291,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.Contains("X-Set: yes", StringComparison.OrdinalIgnoreCase), result.UpstreamRequest);
     }
 
-    public static async Task ResponseHeaderSetAndRemoveRulesApplyDownstream()
+    public static async Task ResponseHeaderSetAndRemoveRulesApplyDownstreamAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "headerPolicy": {
@@ -308,7 +308,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.ClientResponse.Contains("X-Set: yes", StringComparison.OrdinalIgnoreCase), result.ClientResponse);
     }
 
-    public static async Task PathPrefixStrippingPreservesQueryString()
+    public static async Task PathPrefixStrippingPreservesQueryStringAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "pathRewrite": {
@@ -318,7 +318,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /api/users?id=1 HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task PathPrefixReplacementWorks()
+    public static async Task PathPrefixReplacementWorksAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "pathRewrite": {
@@ -329,7 +329,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /api/users?active=true HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task PathRewriteNoMatchForwardsOriginalTarget()
+    public static async Task PathRewriteNoMatchForwardsOriginalTargetAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "pathRewrite": {
@@ -339,7 +339,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /private?id=1 HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task RedirectRouteReturnsConfiguredRedirect()
+    public static async Task RedirectRouteReturnsConfiguredRedirectAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, _) => SiteWithRoutes(proxyPort, """
                     {
@@ -358,7 +358,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal("", result.UpstreamRequest);
     }
 
-    public static async Task StaticResponseRouteReturnsConfiguredResponse()
+    public static async Task StaticResponseRouteReturnsConfiguredResponseAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, _) => SiteWithRoutes(proxyPort, """
                     {
@@ -377,7 +377,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.ClientResponse.EndsWith("gone", StringComparison.Ordinal), result.ClientResponse);
     }
 
-    public static async Task MaintenanceModeReturns503AndDoesNotContactUpstream()
+    public static async Task MaintenanceModeReturns503AndDoesNotContactUpstreamAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "maintenance": {
@@ -393,7 +393,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal("", result.UpstreamRequest);
     }
 
-    public static async Task PerRouteBodySizeOverrideWorks()
+    public static async Task PerRouteBodySizeOverrideWorksAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "overrides": {
@@ -404,7 +404,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequest.EndsWith("abcdef", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task PerRouteAccessLogDisableIsReflectedInDiagnostics()
+    public static async Task PerRouteAccessLogDisableIsReflectedInDiagnosticsAsync()
     {
         var result = await RunCustomProxyScenarioAsync((proxyPort, upstreamPort) => SiteWithSingleProxyRoute(proxyPort, upstreamPort, """
                   "overrides": {
@@ -416,7 +416,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal("scenario", result.Diagnostics[0].RouteName);
     }
 
-    public static async Task NoMatchingRouteProducesDiagnosticClassification()
+    public static async Task NoMatchingRouteProducesDiagnosticClassificationAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -453,7 +453,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task FailedReloadWhileProxyActivePreservesOldSnapshotAndTraffic()
+    public static async Task FailedReloadWhileProxyActivePreservesOldSnapshotAndTrafficAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -486,7 +486,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task OversizedRequestHeadIsRejected()
+    public static async Task OversizedRequestHeadIsRejectedAsync()
     {
         var largeHeader = new string ('a', 1500);
         var result = await RunProxyScenarioAsync($"GET /large HTTP/1.1\r\nHost: large.test\r\nX-Large: {largeHeader}\r\n\r\n", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", expectUpstreamConnection: false, maxRequestHeadBytes: 1024).ConfigureAwait(false);
@@ -494,42 +494,42 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.Rejections.ParserLimitRejections);
     }
 
-    public static async Task ExcessiveHeaderCountIsRejected()
+    public static async Task ExcessiveHeaderCountIsRejectedAsync()
     {
         var result = await RunProxyScenarioAsync("GET /headers HTTP/1.1\r\nHost: headers.test\r\nX-One: 1\r\nX-Two: 2\r\n\r\n", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", expectUpstreamConnection: false, maxHeaderCount: 1).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("431 Request Header Fields Too Large", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal("ParserLimitExceeded", result.Diagnostics[0].FailureKind);
     }
 
-    public static async Task ExcessiveHeaderLineIsRejected()
+    public static async Task ExcessiveHeaderLineIsRejectedAsync()
     {
         var result = await RunProxyScenarioAsync($"GET /line HTTP/1.1\r\nHost: line.test\r\nX-Long: {new string ('a', 96)}\r\n\r\n", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", expectUpstreamConnection: false, maxHeaderLineBytes: 64).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("431 Request Header Fields Too Large", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal("ParserLimitExceeded", result.Diagnostics[0].FailureKind);
     }
 
-    public static async Task ExcessiveRequestBodySizeIsRejected()
+    public static async Task ExcessiveRequestBodySizeIsRejectedAsync()
     {
         var result = await RunProxyScenarioAsync("POST /body HTTP/1.1\r\nHost: body.test\r\nContent-Length: 6\r\n\r\nabcdef", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", expectUpstreamConnection: false, maxRequestBodyBytes: 5).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("413 Payload Too Large", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal("RequestPayloadTooLarge", result.Diagnostics[0].FailureKind);
     }
 
-    public static async Task RequestBodyExactlyAtConfiguredMaxIsAccepted()
+    public static async Task RequestBodyExactlyAtConfiguredMaxIsAcceptedAsync()
     {
         var result = await RunProxyScenarioAsync("POST /body-max HTTP/1.1\r\nHost: body.test\r\nContent-Length: 5\r\n\r\nabcde", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", maxRequestBodyBytes: 5).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.True(result.UpstreamRequest.EndsWith("abcde", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task ChunkedRequestBodyExactlyAtConfiguredMaxIsAccepted()
+    public static async Task ChunkedRequestBodyExactlyAtConfiguredMaxIsAcceptedAsync()
     {
         var result = await RunProxyScenarioAsync("POST /chunk-max HTTP/1.1\r\nHost: body.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", maxRequestBodyBytes: 5).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.True(result.UpstreamRequest.Contains("5\r\nhello\r\n0\r\n\r\n", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
-    public static async Task RequestBodyConfiguredMaxPlusOneIsRejected()
+    public static async Task RequestBodyConfiguredMaxPlusOneIsRejectedAsync()
     {
         var result = await RunProxyScenarioAsync("POST /body-max HTTP/1.1\r\nHost: body.test\r\nContent-Length: 6\r\n\r\nabcdef", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", expectUpstreamConnection: false, maxRequestBodyBytes: 5).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("413 Payload Too Large", StringComparison.Ordinal), result.ClientResponse);
@@ -537,14 +537,14 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal("RequestPayloadTooLarge", result.Diagnostics[0].FailureKind);
     }
 
-    public static async Task ChunkedRequestBodySizeIsRejected()
+    public static async Task ChunkedRequestBodySizeIsRejectedAsync()
     {
         var result = await RunProxyScenarioAsync("POST /chunk-limit HTTP/1.1\r\nHost: body.test\r\nTransfer-Encoding: chunked\r\n\r\n6\r\nabcdef\r\n0\r\n\r\n", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", readBodyFromUpstreamRequest: false, maxRequestBodyBytes: 5).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("413 Payload Too Large", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal("RequestPayloadTooLarge", result.Diagnostics[0].FailureKind);
     }
 
-    public static async Task PerIpRequestRateLimitIsEnforced()
+    public static async Task PerIpRequestRateLimitIsEnforcedAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -577,7 +577,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task ConcurrentClientAdmissionLimitRejectsLimitPlusOneAndRecovers()
+    public static async Task ConcurrentClientAdmissionLimitRejectsLimitPlusOneAndRecoversAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -619,7 +619,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task ConcurrentPerIpRateLimitAllowsOnlyConfiguredBoundary()
+    public static async Task ConcurrentPerIpRateLimitAllowsOnlyConfiguredBoundaryAsync()
     {
         var proxyPort = GetFreeTcpPort();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -670,42 +670,42 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task TimesOutIncompleteRequestHead()
+    public static async Task TimesOutIncompleteRequestHeadAsync()
     {
         var result = await RunProxyScenarioAsync("GET /slow", "", expectUpstreamConnection: false, timeoutMs: 150).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("408 Request Timeout", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal(1L, result.Metrics.ClientFailures.RequestHeadTimeouts);
     }
 
-    public static async Task TimesOutIncompleteContentLengthRequestBody()
+    public static async Task TimesOutIncompleteContentLengthRequestBodyAsync()
     {
         var result = await RunProxyScenarioAsync("POST /slow-body HTTP/1.1\r\nHost: body.test\r\nContent-Length: 10\r\n\r\nabc", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", readBodyFromUpstreamRequest: false, timeoutMs: 150).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("408 Request Timeout", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal(1L, result.Metrics.ClientFailures.RequestBodyTimeouts);
     }
 
-    public static async Task TimesOutIncompleteChunkedRequestBody()
+    public static async Task TimesOutIncompleteChunkedRequestBodyAsync()
     {
         var result = await RunProxyScenarioAsync("POST /slow-chunk HTTP/1.1\r\nHost: chunk.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nabc", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", readBodyFromUpstreamRequest: false, timeoutMs: 150).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("408 Request Timeout", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal(1L, result.Metrics.ClientFailures.RequestBodyTimeouts);
     }
 
-    public static async Task TimesOutMissingTerminatingChunkAfterCompleteChunk()
+    public static async Task TimesOutMissingTerminatingChunkAfterCompleteChunkAsync()
     {
         var result = await RunProxyScenarioAsync("POST /slow-chunk HTTP/1.1\r\nHost: chunk.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n", "HTTP/1.1 500 Should Not Happen\r\nContent-Length: 0\r\n\r\n", readBodyFromUpstreamRequest: false, timeoutMs: 150).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("408 Request Timeout", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal(1L, result.Metrics.ClientFailures.RequestBodyTimeouts);
     }
 
-    public static async Task UnavailableUpstreamProducesBadGateway()
+    public static async Task UnavailableUpstreamProducesBadGatewayAsync()
     {
         var result = await RunProxyScenarioAsync("GET /unavailable HTTP/1.1\r\nHost: upstream.test\r\n\r\n", "", expectUpstreamConnection: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("502 Bad Gateway", StringComparison.Ordinal), result.ClientResponse);
         AssertEx.Equal(1L, result.Metrics.GeneratedResponses.BadGatewayResponses);
     }
 
-    public static async Task UpstreamResponseHeadTimeoutProducesGatewayTimeout()
+    public static async Task UpstreamResponseHeadTimeoutProducesGatewayTimeoutAsync()
     {
         var result = await RunProxyScenarioAsync("GET /slow-upstream HTTP/1.1\r\nHost: upstream.test\r\n\r\n", "", readBodyFromUpstreamRequest: false, timeoutMs: 150, sendUpstreamResponse: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("504 Gateway Timeout", StringComparison.Ordinal), result.ClientResponse);
@@ -713,7 +713,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.GeneratedResponses.GatewayTimeoutResponses);
     }
 
-    public static async Task UpstreamContentLengthEarlyCloseClosesAfterStartedResponse()
+    public static async Task UpstreamContentLengthEarlyCloseClosesAfterStartedResponseAsync()
     {
         var result = await RunProxyScenarioAsync("GET /short HTTP/1.1\r\nHost: upstream.test\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nhello", readBodyFromUpstreamRequest: false, timeoutMs: 150).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
@@ -722,7 +722,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.UpstreamForwarding.BodyRelayFailures);
     }
 
-    public static async Task UpstreamChunkedEarlyCloseClosesAfterStartedResponse()
+    public static async Task UpstreamChunkedEarlyCloseClosesAfterStartedResponseAsync()
     {
         var result = await RunProxyScenarioAsync("GET /short-chunk HTTP/1.1\r\nHost: upstream.test\r\n\r\n", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhe", readBodyFromUpstreamRequest: false, timeoutMs: 150).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
@@ -731,7 +731,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.UpstreamForwarding.BodyRelayFailures);
     }
 
-    public static async Task HttpsListenerProxiesGetToUpstream()
+    public static async Task HttpsListenerProxiesGetToUpstreamAsync()
     {
         var result = await RunTlsProxyScenarioAsync("home.test").ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
@@ -741,35 +741,35 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.Tls.HandshakeSuccesses);
     }
 
-    public static async Task HttpsListenerSelectsCertificateBySni()
+    public static async Task HttpsListenerSelectsCertificateBySniAsync()
     {
         var result = await RunTlsProxyScenarioAsync("alt.test", configureAltSni: true).ConfigureAwait(false);
         AssertEx.True(result.RemoteCertificateSubject.Contains("CN=alt.test", StringComparison.Ordinal), result.RemoteCertificateSubject);
         AssertEx.Equal(1L, result.Metrics.Tls.HandshakeSuccesses);
     }
 
-    public static async Task HttpsListenerSelectsCertificateByCaseInsensitiveSni()
+    public static async Task HttpsListenerSelectsCertificateByCaseInsensitiveSniAsync()
     {
         var result = await RunTlsProxyScenarioAsync("ALT.TEST", configureAltSni: true).ConfigureAwait(false);
         AssertEx.True(result.RemoteCertificateSubject.Contains("CN=alt.test", StringComparison.Ordinal), result.RemoteCertificateSubject);
         AssertEx.Equal(1L, result.Metrics.Tls.HandshakeSuccesses);
     }
 
-    public static async Task HttpsListenerUsesDefaultCertificateForUnmatchedSni()
+    public static async Task HttpsListenerUsesDefaultCertificateForUnmatchedSniAsync()
     {
         var result = await RunTlsProxyScenarioAsync("unmatched.test", configureAltSni: true).ConfigureAwait(false);
         AssertEx.True(result.RemoteCertificateSubject.Contains("CN=home.test", StringComparison.Ordinal), result.RemoteCertificateSubject);
         AssertEx.Equal(1L, result.Metrics.Tls.HandshakeSuccesses);
     }
 
-    public static async Task HttpsListenerUsesDefaultCertificateWithoutSni()
+    public static async Task HttpsListenerUsesDefaultCertificateWithoutSniAsync()
     {
         var result = await RunTlsProxyScenarioAsync("", configureAltSni: true).ConfigureAwait(false);
         AssertEx.True(result.RemoteCertificateSubject.Contains("CN=home.test", StringComparison.Ordinal), result.RemoteCertificateSubject);
         AssertEx.Equal(1L, result.Metrics.Tls.HandshakeSuccesses);
     }
 
-    public static async Task HttpsListenerFailsHandshakeWhenNoCertificateMatches()
+    public static async Task HttpsListenerFailsHandshakeWhenNoCertificateMatchesAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -807,7 +807,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task HttpsListenerTimesOutIncompleteTlsHandshake()
+    public static async Task HttpsListenerTimesOutIncompleteTlsHandshakeAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -833,7 +833,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task PersistentClientProcessesTwoSequentialGetsAndReusesUpstream()
+    public static async Task PersistentClientProcessesTwoSequentialGetsAndReusesUpstreamAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /one HTTP/1.1\r\nHost: keep.test\r\n\r\n", "GET /two HTTP/1.1\r\nHost: keep.test\r\nConnection: close\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\none", "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\ntwo"]).ConfigureAwait(false);
         AssertEx.True(result.ClientResponses[0].EndsWith("one", StringComparison.Ordinal), result.ClientResponses[0]);
@@ -843,40 +843,40 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.UpstreamPool.ConnectionsReused);
     }
 
-    public static async Task ClientConnectionCloseHeaderClosesAfterResponse()
+    public static async Task ClientConnectionCloseHeaderClosesAfterResponseAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /close HTTP/1.1\r\nHost: close.test\r\nConnection: close\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], expectClientCloseAfterLastResponse: true).ConfigureAwait(false);
         AssertEx.True(result.ClientClosedAfterLastResponse);
     }
 
-    public static async Task Http10ClientClosesByDefault()
+    public static async Task Http10ClientClosesByDefaultAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /old HTTP/1.0\r\nHost: old.test\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], expectClientCloseAfterLastResponse: true).ConfigureAwait(false);
         AssertEx.True(result.ClientClosedAfterLastResponse);
     }
 
-    public static async Task MaxRequestsPerClientConnectionIsEnforced()
+    public static async Task MaxRequestsPerClientConnectionIsEnforcedAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /max HTTP/1.1\r\nHost: max.test\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], maxRequestsPerClientConnection: 1, expectClientCloseAfterLastResponse: true).ConfigureAwait(false);
         AssertEx.True(result.ClientClosedAfterLastResponse);
         AssertEx.Equal(1L, result.Metrics.ClientConnections.ClosedByMaxRequests);
     }
 
-    public static async Task ClientKeepAliveIdleTimeoutClosesConnection()
+    public static async Task ClientKeepAliveIdleTimeoutClosesConnectionAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /idle HTTP/1.1\r\nHost: idle.test\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"], clientKeepAliveIdleTimeoutMs: 150, expectClientCloseAfterLastResponse: true).ConfigureAwait(false);
         AssertEx.True(result.ClientClosedAfterLastResponse);
         AssertEx.Equal(1L, result.Metrics.ClientConnections.ClosedByIdleTimeout);
     }
 
-    public static async Task MalformedSecondRequestClosesConnection()
+    public static async Task MalformedSecondRequestClosesConnectionAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /first HTTP/1.1\r\nHost: malformed.test\r\n\r\n", "BAD\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nfirst"], readSecondAsRawClose: true).ConfigureAwait(false);
         AssertEx.True(result.ClientResponses[0].EndsWith("first", StringComparison.Ordinal), result.ClientResponses[0]);
         AssertEx.True(result.ClientResponses[1].Contains("400 Bad Request", StringComparison.Ordinal), result.ClientResponses[1]);
     }
 
-    public static async Task PipelinedValidThenMalformedRequestDoesNotReachUpstreamTwice()
+    public static async Task PipelinedValidThenMalformedRequestDoesNotReachUpstreamTwiceAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /first HTTP/1.1\r\nHost: malformed.test\r\n\r\n", "BAD\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nfirst"], readSecondAsRawClose: true).ConfigureAwait(false);
         AssertEx.Equal(2, result.ClientResponses.Count);
@@ -886,42 +886,42 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequests[0].StartsWith("GET /first HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequests[0]);
     }
 
-    public static async Task PersistentClientProxiesContentLengthPost()
+    public static async Task PersistentClientProxiesContentLengthPostAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["POST /post HTTP/1.1\r\nHost: post.test\r\nContent-Length: 5\r\n\r\nhello", "GET /done HTTP/1.1\r\nHost: post.test\r\nConnection: close\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\npost", "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ndone"]).ConfigureAwait(false);
         AssertEx.True(result.UpstreamRequests[0].EndsWith("hello", StringComparison.Ordinal), result.UpstreamRequests[0]);
         AssertEx.Equal(1, result.UpstreamAcceptedConnections);
     }
 
-    public static async Task PersistentClientProxiesChunkedPost()
+    public static async Task PersistentClientProxiesChunkedPostAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["POST /chunk HTTP/1.1\r\nHost: chunk.test\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n", "GET /done HTTP/1.1\r\nHost: chunk.test\r\nConnection: close\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nchunk", "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ndone"]).ConfigureAwait(false);
         AssertEx.True(result.UpstreamRequests[0].Contains("Transfer-Encoding: chunked", StringComparison.OrdinalIgnoreCase), result.UpstreamRequests[0]);
         AssertEx.Equal(1, result.UpstreamAcceptedConnections);
     }
 
-    public static async Task UpstreamConnectionIsNotReusedAfterResponseConnectionClose()
+    public static async Task UpstreamConnectionIsNotReusedAfterResponseConnectionCloseAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /first HTTP/1.1\r\nHost: upstream-close.test\r\n\r\n", "GET /second HTTP/1.1\r\nHost: upstream-close.test\r\nConnection: close\r\n\r\n"], ["HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 5\r\n\r\nfirst", "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecond"]).ConfigureAwait(false);
         AssertEx.Equal(2, result.UpstreamAcceptedConnections);
         AssertEx.Equal(2L, result.Metrics.UpstreamPool.ConnectionsOpened);
     }
 
-    public static async Task UpstreamConnectionIsNotReusedAfterPrematureDisconnect()
+    public static async Task UpstreamConnectionIsNotReusedAfterPrematureDisconnectAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /short HTTP/1.1\r\nHost: short.test\r\nConnection: close\r\n\r\n", "GET /next HTTP/1.1\r\nHost: short.test\r\nConnection: close\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nshort", "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nnext"], closeUpstreamAfterEachResponse: true, useSeparateClients: true).ConfigureAwait(false);
         AssertEx.Equal(2, result.UpstreamAcceptedConnections);
         AssertEx.True(result.Metrics.UpstreamPool.ConnectionsDiscarded >= 1);
     }
 
-    public static async Task UpstreamConnectionIsNotReusedAfterFramingError()
+    public static async Task UpstreamConnectionIsNotReusedAfterFramingErrorAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["GET /bad-upstream HTTP/1.1\r\nHost: bad-upstream.test\r\nConnection: close\r\n\r\n", "GET /next HTTP/1.1\r\nHost: bad-upstream.test\r\nConnection: close\r\n\r\n"], ["NOT HTTP\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nnext"], closeUpstreamAfterEachResponse: true, useSeparateClients: true).ConfigureAwait(false);
         AssertEx.Equal(2, result.UpstreamAcceptedConnections);
         AssertEx.True(result.Metrics.UpstreamPool.ConnectionsDiscarded >= 1);
     }
 
-    public static async Task WebSocketUpgradeOverPlaintextReturnsSwitchingProtocols()
+    public static async Task WebSocketUpgradeOverPlaintextReturnsSwitchingProtocolsAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -938,7 +938,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.Tunnels.Total);
     }
 
-    public static async Task WebSocketUpgradeProducesTunnelDiagnostic()
+    public static async Task WebSocketUpgradeProducesTunnelDiagnosticAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -956,7 +956,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal("Closed", diagnostic.TunnelCloseReason);
     }
 
-    public static async Task WebSocketTunnelRelaysClientBytesToUpstream()
+    public static async Task WebSocketTunnelRelaysClientBytesToUpstreamAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -974,7 +974,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(5L, result.Metrics.Tunnels.BytesClientToUpstream);
     }
 
-    public static async Task WebSocketTunnelRelaysUpstreamBytesToClient()
+    public static async Task WebSocketTunnelRelaysUpstreamBytesToClientAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -992,7 +992,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(5L, result.Metrics.Tunnels.BytesUpstreamToClient);
     }
 
-    public static async Task WebSocketTunnelClosesWhenClientCloses()
+    public static async Task WebSocketTunnelClosesWhenClientClosesAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -1009,7 +1009,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.Tunnels.Total);
     }
 
-    public static async Task WebSocketTunnelClosesWhenUpstreamCloses()
+    public static async Task WebSocketTunnelClosesWhenUpstreamClosesAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -1026,7 +1026,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.Tunnels.Total);
     }
 
-    public static async Task WebSocketTunnelIdleTimeoutClosesTunnel()
+    public static async Task WebSocketTunnelIdleTimeoutClosesTunnelAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -1044,7 +1044,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.Tunnels.IdleTimeouts);
     }
 
-    public static async Task WebSocketUpgradeOverHttpsReturnsSwitchingProtocols()
+    public static async Task WebSocketUpgradeOverHttpsReturnsSwitchingProtocolsAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -1060,7 +1060,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.Upgrades.RequestsSucceeded);
     }
 
-    public static async Task UpgradeDoesNotUseNormalUpstreamPool()
+    public static async Task UpgradeDoesNotUseNormalUpstreamPoolAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -1076,14 +1076,14 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(0L, result.Metrics.UpstreamPool.IdleConnections);
     }
 
-    public static async Task MissingWebSocketHeadersAreRejected()
+    public static async Task MissingWebSocketHeadersAreRejectedAsync()
     {
         var result = await RunUpgradeRejectionScenarioAsync("GET /ws HTTP/1.1\r\nHost: ws.test\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\n\r\n").ConfigureAwait(false);
         AssertEx.True(result.ClientObservation.Contains("400 Bad Request", StringComparison.Ordinal), result.ClientObservation);
         AssertEx.Equal(1L, result.Metrics.Upgrades.RequestsRejected);
     }
 
-    public static async Task UpstreamNon101UpgradeResponseIsForwardedAndClosed()
+    public static async Task UpstreamNon101UpgradeResponseIsForwardedAndClosedAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -1098,7 +1098,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.ClientObservation.EndsWith("denied!", StringComparison.Ordinal), result.ClientObservation);
     }
 
-    public static async Task MalformedSwitchingProtocolsResponseProducesBadGateway()
+    public static async Task MalformedSwitchingProtocolsResponseProducesBadGatewayAsync()
     {
         var result = await RunUpgradeScenarioAsync(async (stream, request, cancellationToken) =>
         {
@@ -1113,7 +1113,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(1L, result.Metrics.Upgrades.UpstreamFailures);
     }
 
-    public static async Task RoundRobinDistributesSequentialRequestsAcrossTwoUpstreams()
+    public static async Task RoundRobinDistributesSequentialRequestsAcrossTwoUpstreamsAsync()
     {
         var result = await RunTwoUpstreamHttpScenarioAsync(healthCheckEnabled: false, requestsToSend: 4).ConfigureAwait(false);
         AssertEx.Equal(2, result.FirstRequests);
@@ -1121,7 +1121,7 @@ internal static class ProxyIntegrationTests
         AssertEx.Equal(4L, result.Metrics.UpstreamSelections.Total);
     }
 
-    public static async Task UnhealthyUpstreamIsNotSelected()
+    public static async Task UnhealthyUpstreamIsNotSelectedAsync()
     {
         var result = await RunTwoUpstreamHttpScenarioAsync(healthCheckEnabled: true, requestsToSend: 2, startFirstUpstream: false, waitForFirstUnhealthy: true).ConfigureAwait(false);
         AssertEx.Equal(0, result.FirstRequests);
@@ -1129,7 +1129,7 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.Upstreams.Any(static upstream => upstream.UpstreamName == "first" && upstream.HealthState == UpstreamHealthState.Unhealthy));
     }
 
-    public static async Task AllUnhealthyUpstreamsReturnServiceUnavailable()
+    public static async Task AllUnhealthyUpstreamsReturnServiceUnavailableAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var firstPort = GetFreeTcpPort();
@@ -1158,7 +1158,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task WebSocketUpgradeUsesRoundRobinUpstreamSelection()
+    public static async Task WebSocketUpgradeUsesRoundRobinUpstreamSelectionAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var firstPort = GetFreeTcpPort();
@@ -1189,7 +1189,7 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    public static async Task UpstreamPoolUsesDistinctEndpointKeys()
+    public static async Task UpstreamPoolUsesDistinctEndpointKeysAsync()
     {
         var result = await RunTwoUpstreamHttpScenarioAsync(healthCheckEnabled: false, requestsToSend: 2).ConfigureAwait(false);
         AssertEx.Equal(1, result.FirstRequests);

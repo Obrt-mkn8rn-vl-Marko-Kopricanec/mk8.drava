@@ -20,7 +20,7 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class CacheTests
 {
-    public static async Task CachingDisabledByDefault()
+    public static async Task CachingDisabledByDefaultAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteSite(temp.Path, "default.json", 18080, 15000);
@@ -28,7 +28,7 @@ internal static class CacheTests
         AssertEx.False(ProxyConfigurationLoadResultAssertions.AssertLoadedSnapshot(result).Routes[0].Cache.Enabled);
     }
 
-    public static async Task DisabledCacheKeepsExistingProxyBehavior()
+    public static async Task DisabledCacheKeepsExistingProxyBehaviorAsync()
     {
         var result = await RunTwoRequestProxyScenarioAsync(cacheEnabled: false, responseFactory: _ => "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 7\r\n\r\nproxied", firstRequest: "GET /resource HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", secondRequest: "GET /resource HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", expectedUpstreamRequests: 2).ConfigureAwait(false);
         AssertEx.Equal(2, result.UpstreamRequests.Count);
@@ -46,7 +46,7 @@ internal static class CacheTests
         AssertEx.True(failures.Any(static failure => failure.Contains("VaryByHeaders", StringComparison.Ordinal)));
     }
 
-    public static async Task EnabledGet200ResponseIsStoredAndServed()
+    public static async Task EnabledGet200ResponseIsStoredAndServedAsync()
     {
         var result = await RunTwoRequestProxyScenarioAsync(cacheEnabled: true, responseFactory: _ => "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 6\r\nCache-Control: max-age=60\r\n\r\ncached", firstRequest: "GET /resource HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", secondRequest: "GET /resource HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", expectedUpstreamRequests: 1).ConfigureAwait(false);
         AssertEx.Equal(1, result.UpstreamRequests.Count);
@@ -55,7 +55,7 @@ internal static class CacheTests
         AssertEx.True(result.SecondResponse.Contains("Age:", StringComparison.OrdinalIgnoreCase), result.SecondResponse);
     }
 
-    public static async Task HeadResponseReturnsHeadersWithoutBody()
+    public static async Task HeadResponseReturnsHeadersWithoutBodyAsync()
     {
         var result = await RunTwoRequestProxyScenarioAsync(cacheEnabled: true, responseFactory: _ => "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 5\r\nX-Head: yes\r\n\r\n", firstRequest: "HEAD /head HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", secondRequest: "HEAD /head HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", expectedUpstreamRequests: 1).ConfigureAwait(false);
         AssertEx.Equal(1, result.UpstreamRequests.Count);
@@ -376,7 +376,7 @@ internal static class CacheTests
         }
     }
 
-    public static async Task OversizedResponseIsStreamedButNotCached()
+    public static async Task OversizedResponseIsStreamedButNotCachedAsync()
     {
         var body = "0123456789";
         var result = await RunTwoRequestProxyScenarioAsync(cacheEnabled: true, maxEntryBytes: 4, responseFactory: _ => $"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: {body.Length}\r\n\r\n{body}", firstRequest: "GET /big HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", secondRequest: "GET /big HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", expectedUpstreamRequests: 2).ConfigureAwait(false);
@@ -446,7 +446,7 @@ internal static class CacheTests
         AssertCacheHit(cache, route, listener, Request("GET", "/two", "cache.test"), "/two");
     }
 
-    public static async Task PartialUpstreamResponseIsNotCached()
+    public static async Task PartialUpstreamResponseIsNotCachedAsync()
     {
         var result = await RunTwoRequestProxyScenarioAsync(cacheEnabled: true, responseFactory: count => count == 1 ? "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 10\r\nCache-Control: max-age=60\r\n\r\npart" : "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 4\r\nCache-Control: max-age=60\r\n\r\nfull", firstRequest: "GET /partial HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", secondRequest: "GET /partial HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", expectedUpstreamRequests: 2).ConfigureAwait(false);
         AssertEx.Equal(2, result.UpstreamRequests.Count);
@@ -454,7 +454,7 @@ internal static class CacheTests
         AssertEx.True(result.SecondResponse.EndsWith("full", StringComparison.Ordinal), result.SecondResponse);
     }
 
-    public static async Task CacheClearEndpointClearsEntries()
+    public static async Task CacheClearEndpointClearsEntriesAsync()
     {
         var cache = new ResponseCacheStore(new ManualTimeProvider());
         var store = CreateStoreWithRoute(Route(CachePolicy()));
@@ -470,7 +470,7 @@ internal static class CacheTests
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    public static async Task CacheClearEndpointIsProtected()
+    public static async Task CacheClearEndpointIsProtectedAsync()
     {
         var store = CreateStoreWithAdminAuthentication();
         var audit = new AdminAuditStore(SilentLogPersistenceStore.Instance);
@@ -484,7 +484,7 @@ internal static class CacheTests
         AssertEx.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
     }
 
-    public static async Task SuccessfulReloadClearsCache()
+    public static async Task SuccessfulReloadClearsCacheAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteSite(temp.Path, "reload.json", 18080, 15000);
@@ -501,7 +501,7 @@ internal static class CacheTests
         AssertEx.Equal("reload", cacheStatus.LastClearReason);
     }
 
-    public static async Task FailedReloadDoesNotClearCache()
+    public static async Task FailedReloadDoesNotClearCacheAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteSite(temp.Path, "reload.json", 18080, 15000);

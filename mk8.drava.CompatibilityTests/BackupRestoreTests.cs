@@ -355,7 +355,7 @@ internal static class BackupRestoreTests
         AssertEx.True(outsideResult is ProxySafeRelativePathResult.UnsafeResult);
     }
 
-    public static async Task RestoreValidationCatchesInvalidConfigWithoutCreatingBootstrapFiles()
+    public static async Task RestoreValidationCatchesInvalidConfigWithoutCreatingBootstrapFilesAsync()
     {
         using var temp = TemporaryDirectory.Create();
         Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites"));
@@ -367,7 +367,7 @@ internal static class BackupRestoreTests
         AssertEx.False(File.Exists(Path.Combine(temp.Path, "config", "sites", "example.site.yaml")));
     }
 
-    public static async Task RestoreValidationCatchesMissingReferencedCertificateMaterial()
+    public static async Task RestoreValidationCatchesMissingReferencedCertificateMaterialAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteHttpsSite(temp.Path, "home.json", port: 18443, upstreamPort: 15000, certificateId: "home-cert");
@@ -378,7 +378,7 @@ internal static class BackupRestoreTests
         AssertEx.False(JsonSerializer.Serialize(result).Contains("missing.pfx", StringComparison.OrdinalIgnoreCase));
     }
 
-    public static async Task RestoreValidationPreservesExistingActiveRuntimeState()
+    public static async Task RestoreValidationPreservesExistingActiveRuntimeStateAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteSite(temp.Path, "home.json", port: 18080, upstreamPort: 15000);
@@ -395,7 +395,7 @@ internal static class BackupRestoreTests
         AssertEx.Equal(loadedAt, store.Snapshot.LoadedAtUtc);
     }
 
-    public static async Task RestoreValidationSucceedsWithBootstrapLayout()
+    public static async Task RestoreValidationSucceedsWithBootstrapLayoutAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var loader = CreateLoader(temp.Path);

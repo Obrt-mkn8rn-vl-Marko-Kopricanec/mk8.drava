@@ -26,7 +26,7 @@ namespace Mk8.Drava.CompatibilityTests;
 internal static class MetricsTests
 {
     private const string AdminToken = "phase-17-admin-token";
-    public static async Task MetricsEndpointIsProtectedByAdminAuth()
+    public static async Task MetricsEndpointIsProtectedByAdminAuthAsync()
     {
         var store = CreateStoreWithAdminAuthentication();
         var audit = new AdminAuditStore(SilentLogPersistenceStore.Instance);
@@ -341,7 +341,7 @@ internal static class MetricsTests
         AssertEx.True(state.MetricsExportEnabled);
     }
 
-    public static async Task MetricsIncludeRequestCountersAfterProxiedRequest()
+    public static async Task MetricsIncludeRequestCountersAfterProxiedRequestAsync()
     {
         var text = await RunProxiedRequestAndExportAsync("GET /metrics-check HTTP/1.1\r\nHost: metrics.test\r\nConnection: close\r\n\r\n").ConfigureAwait(false);
         AssertEx.True(text.Contains("mdrava_requests_total 1", StringComparison.Ordinal), text);
@@ -370,7 +370,7 @@ internal static class MetricsTests
         AssertEx.True(text.Contains("mdrava_cache_stores_total 1", StringComparison.Ordinal), text);
     }
 
-    public static async Task MetricsIncludeReloadCounters()
+    public static async Task MetricsIncludeReloadCountersAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteSite(temp.Path, "reload.json", 18080, 15000);
@@ -387,7 +387,7 @@ internal static class MetricsTests
         AssertEx.True(text.Contains("mdrava_config_reloads_total{result=\"failure\"} 1", StringComparison.Ordinal), text);
     }
 
-    public static async Task MetricsDoNotExposeRawRequestDetails()
+    public static async Task MetricsDoNotExposeRawRequestDetailsAsync()
     {
         var text = await RunProxiedRequestAndExportAsync("GET /private/path?token=super-secret-token HTTP/1.1\r\nHost: metrics.test\r\nAuthorization: Bearer request-secret\r\nConnection: close\r\n\r\n").ConfigureAwait(false);
         AssertEx.False(text.Contains("/private/path", StringComparison.Ordinal));
@@ -397,7 +397,7 @@ internal static class MetricsTests
         AssertEx.False(text.Contains("127.0.0.1", StringComparison.Ordinal));
     }
 
-    public static async Task MetricsFailureMatrixDoesNotExposeAuthorizationCookieOrQuerySecrets()
+    public static async Task MetricsFailureMatrixDoesNotExposeAuthorizationCookieOrQuerySecretsAsync()
     {
         var text = await RunFailedRequestAndExportAsync("GET /missing/path?token=query-secret HTTP/1.1\r\nHost: other.test\r\nAuthorization: Bearer auth-secret\r\nCookie: session=cookie-secret\r\nConnection: close\r\n\r\n").ConfigureAwait(false);
         AssertEx.True(text.Contains("mdrava_requests_total 1", StringComparison.Ordinal), text);

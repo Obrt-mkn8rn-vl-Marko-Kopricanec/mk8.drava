@@ -24,7 +24,7 @@ namespace Mk8.Drava.CompatibilityTests;
 internal static class UpstreamHttp2Tests
 {
     private static readonly byte[] ClientPreface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"u8.ToArray();
-    public static async Task ExistingHttp1UpstreamProtocolRemainsDefault()
+    public static async Task ExistingHttp1UpstreamProtocolRemainsDefaultAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteSite(temp.Path, "home.json", 18080, 15000);
@@ -53,7 +53,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.False(string.Equals(UpstreamConnectionPool.GetKey(UpstreamTransportEndpointMapper.FromUpstream(http1)), UpstreamConnectionPool.GetKey(UpstreamTransportEndpointMapper.FromUpstream(http2)), StringComparison.Ordinal));
     }
 
-    public static async Task UpstreamAlpnAdvertisesHttp2()
+    public static async Task UpstreamAlpnAdvertisesHttp2Async()
     {
         var port = GetFreeTcpPort();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -65,7 +65,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.Equal(SslApplicationProtocol.Http2, observation.NegotiatedProtocol);
     }
 
-    public static async Task AlpnFailureDoesNotFallbackToHttp1()
+    public static async Task AlpnFailureDoesNotFallbackToHttp1Async()
     {
         var port = GetFreeTcpPort();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -79,7 +79,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.False(observation.RequestHeaders.ContainsKey(":method"));
     }
 
-    public static async Task Http2UpstreamProxyMapsHeadersQueryAndResponse()
+    public static async Task Http2UpstreamProxyMapsHeadersQueryAndResponseAsync()
     {
         var result = await RunProxyScenarioAsync("/api/users?id=1", 200, [("content-length", "7"), ("x-upstream", "h2")], Encoding.ASCII.GetBytes("h2-body"), requestHeaders: "Connection: keep-alive\r\nKeep-Alive: timeout=5\r\n").ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
@@ -91,7 +91,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.False(result.Upstream.RequestHeaders.ContainsKey("keep-alive"));
     }
 
-    public static async Task CacheWorksWithHttp2Upstream()
+    public static async Task CacheWorksWithHttp2UpstreamAsync()
     {
         var result = await RunProxyScenarioAsync("/cache", 200, [("content-length", "8"), ("cache-control", "max-age=60")], Encoding.ASCII.GetBytes("cache-h2"), routeExtraJson: """
                   "cache": {
@@ -107,7 +107,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.True(result.Metrics.UpstreamHttp2.Requests >= 1, result.Metrics.UpstreamHttp2.Requests.ToString());
     }
 
-    public static async Task Http2UpstreamForwardsRequestBody()
+    public static async Task Http2UpstreamForwardsRequestBodyAsync()
     {
         var result = await RunProxyScenarioAsync("/submit", 201, [("content-length", "2")], Encoding.ASCII.GetBytes("ok"), method: "POST", requestBody: "hello world").ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("201 Created", StringComparison.Ordinal), result.ClientResponse);
@@ -116,7 +116,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.Equal("hello world", Encoding.ASCII.GetString(result.Upstream.RequestBody));
     }
 
-    public static async Task Http2UpstreamEndsZeroLengthRequestBody()
+    public static async Task Http2UpstreamEndsZeroLengthRequestBodyAsync()
     {
         var result = await RunProxyScenarioAsync("/empty", 204, [], [], method: "POST", requestBody: "", forceContentLength: true).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("204 No Content", StringComparison.Ordinal), result.ClientResponse);
@@ -124,7 +124,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.Equal(0, result.Upstream.RequestBody.Length);
     }
 
-    public static async Task Http2HealthCheckUsesH2AndRejectsWrongAlpn()
+    public static async Task Http2HealthCheckUsesH2AndRejectsWrongAlpnAsync()
     {
         var healthyPort = GetFreeTcpPort();
         var wrongAlpnPort = GetFreeTcpPort();
@@ -144,13 +144,13 @@ internal static class UpstreamHttp2Tests
         AssertEx.False(unhealthy.Healthy, unhealthy.Result);
     }
 
-    public static async Task MetricsIncludeUpstreamHttp2Counters()
+    public static async Task MetricsIncludeUpstreamHttp2CountersAsync()
     {
         var result = await RunProxyScenarioAsync("/metrics", 200, [("content-length", "2")], Encoding.ASCII.GetBytes("ok")).ConfigureAwait(false);
         AssertEx.True(result.Metrics.UpstreamHttp2.Requests >= 1, result.Metrics.UpstreamHttp2.Requests.ToString());
     }
 
-    public static async Task Http2UpstreamCloseBeforeResponseHeadersReturnsSafeFailure()
+    public static async Task Http2UpstreamCloseBeforeResponseHeadersReturnsSafeFailureAsync()
     {
         var result = await RunProxyScenarioAsync("/close-before-headers", 200, [("content-length", "2")], Encoding.ASCII.GetBytes("ok"), closeBeforeResponseHeaders: true).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("502 Bad Gateway", StringComparison.Ordinal) || result.ClientResponse.Contains("504 Gateway Timeout", StringComparison.Ordinal), result.ClientResponse);
@@ -159,7 +159,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.True(result.Metrics.UpstreamForwarding.Failures >= 1, result.Metrics.UpstreamForwarding.Failures.ToString());
     }
 
-    public static async Task Http2UpstreamCloseAfterResponseHeadersDoesNotRetryAfterHeadersAreSent()
+    public static async Task Http2UpstreamCloseAfterResponseHeadersDoesNotRetryAfterHeadersAreSentAsync()
     {
         var result = await RunProxyScenarioAsync("/close-after-headers", 200, [("content-length", "8")], Encoding.ASCII.GetBytes("ignored"), routeExtraJson: RetryJson(), closeAfterResponseHeaders: true).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("200 OK", StringComparison.Ordinal), result.ClientResponse);
@@ -167,7 +167,7 @@ internal static class UpstreamHttp2Tests
         AssertEx.Equal(0L, result.Metrics.Resilience.RetryAttempts);
     }
 
-    public static async Task Http2StreamingPostBodyIsNotRetriedAfterUpstreamFailure()
+    public static async Task Http2StreamingPostBodyIsNotRetriedAfterUpstreamFailureAsync()
     {
         var result = await RunProxyScenarioAsync("/post-failure", 200, [("content-length", "2")], Encoding.ASCII.GetBytes("ok"), routeExtraJson: RetryJson(), method: "POST", requestBody: "streamed-h2", closeBeforeResponseHeaders: true).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("502 Bad Gateway", StringComparison.Ordinal) || result.ClientResponse.Contains("504 Gateway Timeout", StringComparison.Ordinal), result.ClientResponse);

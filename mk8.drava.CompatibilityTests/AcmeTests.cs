@@ -13,7 +13,7 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class AcmeTests
 {
-    public static async Task ManualPfxCertificateBehaviorRemainsValid()
+    public static async Task ManualPfxCertificateBehaviorRemainsValidAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var certificatePath = Path.Combine(temp.Path, "certs", "manual.pfx");
@@ -247,7 +247,7 @@ internal static class AcmeTests
         AssertEx.Equal("inactive", inactive.LastResult);
     }
 
-    public static async Task AcmeRenewalStoresMaterialUnderCertsDirectory()
+    public static async Task AcmeRenewalStoresMaterialUnderCertsDirectoryAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var issuer = new FakeIssuer(TestCertificates.CreateSelfSignedPfxBytes("home.example.test"));
@@ -267,7 +267,7 @@ internal static class AcmeTests
         AssertEx.True(statusStore.Get("home-acme")?.Active == true);
     }
 
-    public static async Task LoaderLoadsStoredAcmeCertificateOnStartup()
+    public static async Task LoaderLoadsStoredAcmeCertificateOnStartupAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var acmeOptions = new ProxyAcmeOptions
@@ -304,7 +304,7 @@ internal static class AcmeTests
         AssertEx.Equal("acme", ProxyConfigurationLoadResultAssertions.AssertLoadedSnapshot(result).Certificates["home-acme"].Source);
     }
 
-    public static async Task FailedAcmeRenewalPreservesCurrentActiveCertificate()
+    public static async Task FailedAcmeRenewalPreservesCurrentActiveCertificateAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var store = CreateStore(temp.Path);
@@ -319,7 +319,7 @@ internal static class AcmeTests
         AssertEx.Equal("failed", AssertEx.NotNull(statusStore.Get("home-acme")).LastResult);
     }
 
-    public static async Task AcmeStatusProjectionDoesNotExposePrivateMaterial()
+    public static async Task AcmeStatusProjectionDoesNotExposePrivateMaterialAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var store = CreateStore(temp.Path);
@@ -452,7 +452,7 @@ internal static class AcmeTests
         }
     }
 
-    public static async Task AcmeRenewalAvoidsTightRetryLoopAfterFailure()
+    public static async Task AcmeRenewalAvoidsTightRetryLoopAfterFailureAsync()
     {
         using var temp = TemporaryDirectory.Create();
         var issuer = new FakeIssuer("issuer failed");

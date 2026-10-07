@@ -22,7 +22,7 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class UpstreamTlsTests
 {
-    public static async Task ExistingHttpUpstreamConfigRemainsValid()
+    public static async Task ExistingHttpUpstreamConfigRemainsValidAsync()
     {
         using var temp = TemporaryDirectory.Create();
         ConfigurationTests.WriteSite(temp.Path, "home.json", 18080, 15000);
@@ -33,7 +33,7 @@ internal static class UpstreamTlsTests
         AssertEx.True(upstream.Tls.ValidateCertificate);
     }
 
-    public static async Task HttpsUpstreamConfigParsesAndValidates()
+    public static async Task HttpsUpstreamConfigParsesAndValidatesAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteHttpsUpstreamSite(temp.Path, "secure.json", 18080, 15443, "\"upstreamTls\": { \"sniHost\": \"app.internal\" }");
@@ -44,7 +44,7 @@ internal static class UpstreamTlsTests
         AssertEx.True(upstream.Tls.ValidateCertificate);
     }
 
-    public static async Task UnsupportedUpstreamSchemeIsRejected()
+    public static async Task UnsupportedUpstreamSchemeIsRejectedAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteUpstreamSite(temp.Path, "bad-scheme.json", 18080, 15000, "ftp", "");
@@ -53,7 +53,7 @@ internal static class UpstreamTlsTests
         AssertEx.True(result.Errors.Any(static error => error.Contains("Scheme", StringComparison.Ordinal)));
     }
 
-    public static async Task AmbiguousUpstreamAddressIsRejected()
+    public static async Task AmbiguousUpstreamAddressIsRejectedAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteUpstreamSite(temp.Path, "bad-address.json", 18080, 15000, "https", "");
@@ -85,7 +85,7 @@ internal static class UpstreamTlsTests
         AssertEx.False(string.Equals(UpstreamConnectionPool.GetKey(UpstreamTransportEndpointMapper.FromUpstream(firstSni)), UpstreamConnectionPool.GetKey(UpstreamTransportEndpointMapper.FromUpstream(unsafeValidation)), StringComparison.Ordinal));
     }
 
-    public static async Task HttpsUpstreamUsesSslStreamPath()
+    public static async Task HttpsUpstreamUsesSslStreamPathAsync()
     {
         var port = GetFreeTcpPort();
         using var certificate = CreateServerCertificate("upstream.test");
@@ -99,7 +99,7 @@ internal static class UpstreamTlsTests
         AssertEx.True(observation.HandshakeSucceeded, observation.Error);
     }
 
-    public static async Task HttpsUpstreamProxyForwardsThroughTls()
+    public static async Task HttpsUpstreamProxyForwardsThroughTlsAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -125,7 +125,7 @@ internal static class UpstreamTlsTests
         }
     }
 
-    public static async Task HttpsHealthChecksUseTlsSettings()
+    public static async Task HttpsHealthChecksUseTlsSettingsAsync()
     {
         var upstreamPort = GetFreeTcpPort();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -140,7 +140,7 @@ internal static class UpstreamTlsTests
         AssertEx.True(observation.Request.StartsWith("GET /health HTTP/1.1", StringComparison.Ordinal), observation.Request);
     }
 
-    public static async Task CertificateValidationIsEnabledByDefault()
+    public static async Task CertificateValidationIsEnabledByDefaultAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteHttpsUpstreamSite(temp.Path, "secure.json", 18080, 15443, "");
@@ -149,7 +149,7 @@ internal static class UpstreamTlsTests
         AssertEx.True(upstream.Tls.ValidateCertificate);
     }
 
-    public static async Task ExplicitUnsafeValidationModeIsProjectedAsUnsafe()
+    public static async Task ExplicitUnsafeValidationModeIsProjectedAsUnsafeAsync()
     {
         using var temp = TemporaryDirectory.Create();
         WriteHttpsUpstreamSite(temp.Path, "secure.json", 18080, 15443, "\"upstreamTls\": { \"validateCertificate\": false, \"sniHost\": \"app.internal\" }");
@@ -165,7 +165,7 @@ internal static class UpstreamTlsTests
         AssertEx.False(tlsProjection is RuntimeUpstreamTlsOptions);
     }
 
-    public static async Task TlsValidationFailureDoesNotFallBackToPlaintext()
+    public static async Task TlsValidationFailureDoesNotFallBackToPlaintextAsync()
     {
         var upstreamPort = GetFreeTcpPort();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -180,7 +180,7 @@ internal static class UpstreamTlsTests
         AssertEx.False(observation.Request.StartsWith("GET ", StringComparison.Ordinal), observation.Request);
     }
 
-    public static async Task UpstreamSniOverrideValidationRejectsUrlPortAndWildcard()
+    public static async Task UpstreamSniOverrideValidationRejectsUrlPortAndWildcardAsync()
     {
         using var urlTemp = TemporaryDirectory.Create();
         WriteHttpsUpstreamSite(urlTemp.Path, "url-sni.json", 18080, 15443, "\"upstreamTls\": { \"sniHost\": \"https://app.internal\" }");

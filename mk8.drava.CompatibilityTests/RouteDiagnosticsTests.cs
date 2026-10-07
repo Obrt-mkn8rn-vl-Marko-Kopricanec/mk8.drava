@@ -1079,7 +1079,7 @@ internal static class RouteDiagnosticsTests
         AssertEx.False(apiRequest.Headers is Dictionary<string, string?>, "Route diagnostics API dry-run request headers should not expose a mutable dictionary.");
     }
 
-    public static async Task DiagnosticEndpointsRequireAdminAuth()
+    public static async Task DiagnosticEndpointsRequireAdminAuthAsync()
     {
         var store = CreateStore(BaseOptions([ProxyRoute("active", "active.test", "/")]));
         var audit = new AdminAuditStore(SilentLogPersistenceStore.Instance);

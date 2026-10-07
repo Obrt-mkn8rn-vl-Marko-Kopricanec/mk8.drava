@@ -22,7 +22,7 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class ResilienceTests
 {
-    public static async Task ExistingBehaviorUnchangedWhenResilienceDisabled()
+    public static async Task ExistingBehaviorUnchangedWhenResilienceDisabledAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -48,7 +48,7 @@ internal static class ResilienceTests
         }
     }
 
-    public static async Task GetRetryOccursOnConnectFailureWhenEnabled()
+    public static async Task GetRetryOccursOnConnectFailureWhenEnabledAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var closedPort = GetFreeTcpPort();
@@ -74,7 +74,7 @@ internal static class ResilienceTests
         }
     }
 
-    public static async Task GetRetryOccursOnConfiguredStatusWhenEnabled()
+    public static async Task GetRetryOccursOnConfiguredStatusWhenEnabledAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var firstPort = GetFreeTcpPort();
@@ -104,7 +104,7 @@ internal static class ResilienceTests
         }
     }
 
-    public static async Task PostIsNotRetriedByDefault()
+    public static async Task PostIsNotRetriedByDefaultAsync()
     {
         var result = await RunClosedUpstreamScenarioAsync("POST /retry HTTP/1.1\r\nHost: resilience.test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", RetryJson(maxAttempts: 2, retryOnConnectFailure: true)).ConfigureAwait(false);
         AssertEx.True(result.Response.Contains("502 Bad Gateway", StringComparison.Ordinal), result.Response);
@@ -112,14 +112,14 @@ internal static class ResilienceTests
         AssertEx.True(result.Metrics.Resilience.RetrySkipped.Any(static item => item.Reason == "method"));
     }
 
-    public static async Task UpgradeIsNotRetried()
+    public static async Task UpgradeIsNotRetriedAsync()
     {
         var result = await RunClosedUpstreamScenarioAsync("GET /chat HTTP/1.1\r\nHost: resilience.test\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n", RetryJson(maxAttempts: 2, retryOnConnectFailure: true)).ConfigureAwait(false);
         AssertEx.True(result.Response.Contains("502 Bad Gateway", StringComparison.Ordinal), result.Response);
         AssertEx.Equal(0L, result.Metrics.Resilience.RetryAttempts);
     }
 
-    public static async Task RequestIsNotRetriedAfterResponseStreamingStarts()
+    public static async Task RequestIsNotRetriedAfterResponseStreamingStartsAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
@@ -145,7 +145,7 @@ internal static class ResilienceTests
         }
     }
 
-    public static async Task PartialResponseFailureDoesNotRetrySecondUpstreamAfterDownstreamBytesAreSent()
+    public static async Task PartialResponseFailureDoesNotRetrySecondUpstreamAfterDownstreamBytesAreSentAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var firstPort = GetFreeTcpPort();
@@ -173,7 +173,7 @@ internal static class ResilienceTests
         }
     }
 
-    public static async Task RetryStatusDoesNotBypassUnsafePostMethod()
+    public static async Task RetryStatusDoesNotBypassUnsafePostMethodAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var firstPort = GetFreeTcpPort();
@@ -200,7 +200,7 @@ internal static class ResilienceTests
         }
     }
 
-    public static async Task RetryMaxAttemptsIsEnforced()
+    public static async Task RetryMaxAttemptsIsEnforcedAsync()
     {
         var result = await RunClosedUpstreamScenarioAsync("GET /retry HTTP/1.1\r\nHost: resilience.test\r\nConnection: close\r\n\r\n", RetryJson(maxAttempts: 3, retryOnConnectFailure: true)).ConfigureAwait(false);
         AssertEx.True(result.Response.Contains("502 Bad Gateway", StringComparison.Ordinal), result.Response);
@@ -208,7 +208,7 @@ internal static class ResilienceTests
         AssertEx.Equal(1L, result.Metrics.Resilience.RetryExhausted);
     }
 
-    public static async Task RetryExhaustedReturnsClearFailure()
+    public static async Task RetryExhaustedReturnsClearFailureAsync()
     {
         var result = await RunClosedUpstreamScenarioAsync("GET /retry HTTP/1.1\r\nHost: resilience.test\r\nConnection: close\r\n\r\n", RetryJson(maxAttempts: 2, retryOnConnectFailure: true)).ConfigureAwait(false);
         AssertEx.True(result.Response.Contains("HTTP/1.1 502 Bad Gateway", StringComparison.Ordinal), result.Response);
@@ -413,7 +413,7 @@ internal static class ResilienceTests
         AssertEx.Equal(1L, fixture.Metrics.Snapshot().Resilience.NoAvailableUpstreamFailures);
     }
 
-    public static async Task AllUnavailableUpstreamsReturnSafeFailure()
+    public static async Task AllUnavailableUpstreamsReturnSafeFailureAsync()
     {
         var proxyPort = GetFreeTcpPort();
         var closedPort = GetFreeTcpPort();
