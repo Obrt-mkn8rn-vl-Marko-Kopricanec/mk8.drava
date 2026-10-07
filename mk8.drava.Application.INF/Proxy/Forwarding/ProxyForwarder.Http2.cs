@@ -32,7 +32,7 @@ public sealed partial class ProxyForwarder
         var responseHeaders = BuildResponseHeaders(responseHead, route);
         if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
         {
-            var body = await ReadFramedUpstreamCacheCandidateBodyAsync((readTimeouts, token) => ReadHttp2DataChunkAsync(upstreamHttp2, readTimeouts, token), responseHead, upstreamResponse.EndStream, timeouts, cancellationToken).ConfigureAwait(false);
+            var body = await ReadFramedUpstreamCacheCandidateBodyAsync((readTimeouts, token) => ReadHttp2DataChunkAsync(upstreamHttp2, readTimeouts, token), responseHead, upstreamResponse.EndStream, route.Cache.MaxEntryBytes, timeouts, cancellationToken).ConfigureAwait(false);
             if (body.Trailers is { Count: > 0 })
             {
                 _cacheStore.RecordUncacheable(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), "trailers");

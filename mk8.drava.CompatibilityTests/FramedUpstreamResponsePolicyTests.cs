@@ -5,12 +5,14 @@ internal static class FramedUpstreamResponsePolicyTests
 {
     public static void BuildsHttp1HeadFromNarrowUpstreamFacts()
     {
-        var endedWithHead = Build("GET", new FramedUpstreamResponseTranslationInput(200, [new ProxyHeaderField("content-length", "12")], ResponseEndedWithHead: true));
+        var endedWithHead = Build("GET", new FramedUpstreamResponseTranslationInput(200, [new ProxyHeaderField("content-length", "0")], ResponseEndedWithHead: true));
         AssertEx.Equal(Http1BodyKind.None, endedWithHead.Framing.Kind);
         var headMethod = Build("HEAD", new FramedUpstreamResponseTranslationInput(200, [new ProxyHeaderField("content-length", "12")], ResponseEndedWithHead: false));
         AssertEx.Equal(Http1BodyKind.None, headMethod.Framing.Kind);
-        var noContentStatus = Build("GET", new FramedUpstreamResponseTranslationInput(204, [new ProxyHeaderField("content-length", "12")], ResponseEndedWithHead: false));
+        var noContentStatus = Build("GET", new FramedUpstreamResponseTranslationInput(204, [], ResponseEndedWithHead: false));
         AssertEx.Equal(Http1BodyKind.None, noContentStatus.Framing.Kind);
+        AssertEx.Equal("Response ended before its declared content length", Reject("GET", new FramedUpstreamResponseTranslationInput(200, [new ProxyHeaderField("content-length", "12")], ResponseEndedWithHead: true)));
+        AssertEx.Equal("Content-Length is forbidden for this response status", Reject("GET", new FramedUpstreamResponseTranslationInput(204, [new ProxyHeaderField("content-length", "12")], ResponseEndedWithHead: false)));
         var contentLength = Build("GET", new FramedUpstreamResponseTranslationInput(200, [new ProxyHeaderField("content-length", "12")], ResponseEndedWithHead: false));
         AssertEx.Equal(Http1BodyKind.ContentLength, contentLength.Framing.Kind);
         AssertEx.Equal(12L, contentLength.Framing.ContentLength);

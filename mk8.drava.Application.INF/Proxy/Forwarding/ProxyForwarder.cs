@@ -123,7 +123,7 @@ public sealed partial class ProxyForwarder
 
             return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.ClientMalformedRequest), ProxyFailureKind.ClientMalformedRequest);
         }
-        catch (Http1UpstreamProtocolException exception)
+        catch (Exception exception) when (exception is Http1UpstreamProtocolException or FramedUpstreamProtocolException)
         {
             _metrics.UpstreamMalformedResponse();
             _metrics.UpstreamFailed();
@@ -337,7 +337,7 @@ public sealed partial class ProxyForwarder
         var responseHeaders = BuildResponseHeaders(responseHead, route);
         if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
         {
-            var body = await ReadFramedUpstreamCacheCandidateBodyAsync((readTimeouts, token) => ReadHttp3DataChunkAsync(upstreamHttp3, readTimeouts, token), responseHead, endStream: false, timeouts, cancellationToken).ConfigureAwait(false);
+            var body = await ReadFramedUpstreamCacheCandidateBodyAsync((readTimeouts, token) => ReadHttp3DataChunkAsync(upstreamHttp3, readTimeouts, token), responseHead, endStream: false, route.Cache.MaxEntryBytes, timeouts, cancellationToken).ConfigureAwait(false);
             await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body.Data, keepClientConnectionOpen, requestId, markResponseStarted, cancellationToken).ConfigureAwait(false);
         }
         else
@@ -546,10 +546,13 @@ public sealed partial class ProxyForwarder
         }
     }
 
-    private static async ValueTask<BufferedFramedBody> ReadFramedUpstreamCacheCandidateBodyAsync(ReadFramedUpstreamDataAsync readDataAsync, Http1ResponseHead responseHead, bool endStream, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    private static async ValueTask<BufferedFramedBody> ReadFramedUpstreamCacheCandidateBodyAsync(ReadFramedUpstreamDataAsync readDataAsync, Http1ResponseHead responseHead, bool endStream, long maximumBufferBytes, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
-        if (endStream || responseHead.Framing.Kind == Http1BodyKind.None)
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumBufferBytes);
+        var length = new FramedUpstreamBodyLength(responseHead.Framing);
+        if (endStream)
         {
+            length.Observe(0, true);
             return new BufferedFramedBody([], null);
         }
 
@@ -557,10 +560,10 @@ public sealed partial class ProxyForwarder
         while (true)
         {
             var chunk = await readDataAsync(timeouts, cancellationToken).ConfigureAwait(false);
-            if (chunk.Data.Length > 0)
-            {
-                body.Write(chunk.Data.Span);
-            }
+            length.Observe(chunk.Data.Length, chunk.EndStream);
+            if (chunk.Data.Length > maximumBufferBytes - body.Length)
+                throw new FramedUpstreamProtocolException("Upstream cache candidate exceeded its buffer bound.");
+            if (chunk.Data.Length > 0) body.Write(chunk.Data.Span);
 
             if (chunk.EndStream)
             {
@@ -593,8 +596,10 @@ public sealed partial class ProxyForwarder
 
     private async ValueTask RelayFramedUpstreamResponseBodyAsync(ReadFramedUpstreamDataAsync readDataAsync, Stream clientStream, Http1ResponseHead responseHead, bool endStream, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
-        if (endStream || responseHead.Framing.Kind == Http1BodyKind.None)
+        var length = new FramedUpstreamBodyLength(responseHead.Framing);
+        if (endStream)
         {
+            length.Observe(0, true);
             return;
         }
 
@@ -603,6 +608,7 @@ public sealed partial class ProxyForwarder
             while (true)
             {
                 var chunk = await readDataAsync(timeouts, cancellationToken).ConfigureAwait(false);
+                length.Observe(chunk.Data.Length, chunk.EndStream);
                 if (chunk.Data.Length > 0)
                 {
                     if (responseHead.Framing.Kind == Http1BodyKind.Chunked)

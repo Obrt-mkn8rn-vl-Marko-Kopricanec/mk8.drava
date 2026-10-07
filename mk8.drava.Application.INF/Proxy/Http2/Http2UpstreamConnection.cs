@@ -109,6 +109,8 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
                 var decoded = DecodeResponseHeaders(headerBlock.ToArray());
                 if (decoded.StatusCode is >= 100 and < 200)
                 {
+                    if (decoded.Headers.Any(static field => string.Equals(field.Name, "content-length", StringComparison.OrdinalIgnoreCase)))
+                        throw new Http2UpstreamProtocolException("Content-Length is forbidden on informational responses.");
                     if (headerEndsStream || decoded.StatusCode == 101 || ++informational > 8) throw new Http2UpstreamProtocolException("Malformed HTTP/2 informational response.");
                     headerBlock.SetLength(0);
                     headerBlock.Position = 0;

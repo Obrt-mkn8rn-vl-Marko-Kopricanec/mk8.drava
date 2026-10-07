@@ -20,25 +20,26 @@ public static class FramedUpstreamResponsePolicy
 
     private static UpstreamResponseFramingDecision DetermineFraming(Http1RequestHead requestHead, FramedUpstreamResponseTranslationInput upstreamResponse)
     {
-        if (upstreamResponse.ResponseEndedWithHead || string.Equals(requestHead.Method, "HEAD", StringComparison.OrdinalIgnoreCase) || upstreamResponse.StatusCode is 204 or 304)
-        {
-            return UpstreamResponseFramingDecision.Accept(Http1ResponseFraming.None);
-        }
-
         var contentLengthValues = upstreamResponse.Headers.Where(header => string.Equals(header.Name, "content-length", StringComparison.OrdinalIgnoreCase)).Select(header => header.Value).ToArray();
+        long? contentLength = null;
         if (contentLengthValues.Length > 0)
         {
             var contentLengthAnalysis = Http1RequestParser.AnalyzeContentLength(contentLengthValues);
             if (contentLengthAnalysis is Http1ContentLengthAnalysisResult.Rejected rejectedContentLength)
-            {
                 return UpstreamResponseFramingDecision.Reject(Http1ParseErrorText.FromError(rejectedContentLength.Error));
-            }
-
-            var contentLength = ((Http1ContentLengthAnalysisResult.Accepted)contentLengthAnalysis).ContentLength;
-            return UpstreamResponseFramingDecision.Accept(Http1ResponseFraming.FromContentLength(contentLength));
+            contentLength = ((Http1ContentLengthAnalysisResult.Accepted)contentLengthAnalysis).ContentLength;
+            if (upstreamResponse.StatusCode is >= 100 and < 200 or 204)
+                return UpstreamResponseFramingDecision.Reject("Content-Length is forbidden for this response status");
         }
 
-        return UpstreamResponseFramingDecision.Accept(Http1ResponseFraming.Chunked);
+        if (string.Equals(requestHead.Method, "HEAD", StringComparison.OrdinalIgnoreCase) || upstreamResponse.StatusCode is 204 or 304)
+            return UpstreamResponseFramingDecision.Accept(Http1ResponseFraming.None);
+        if (upstreamResponse.ResponseEndedWithHead)
+            return contentLength is > 0
+                ? UpstreamResponseFramingDecision.Reject("Response ended before its declared content length")
+                : UpstreamResponseFramingDecision.Accept(Http1ResponseFraming.None);
+        return UpstreamResponseFramingDecision.Accept(contentLength is { } length
+            ? Http1ResponseFraming.FromContentLength(length) : Http1ResponseFraming.Chunked);
     }
 
     private abstract record UpstreamResponseFramingDecision
