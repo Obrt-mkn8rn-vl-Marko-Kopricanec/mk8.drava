@@ -10,6 +10,26 @@ namespace Mk8.Drava.IntegrationTests;
 
 public sealed class ServingPlanLifecycleTests
 {
+    [Theory]
+    [InlineData(4.0)]
+    [InlineData(9.5)]
+    public async Task IssuerBoundRenewalRetainsTheExactPlanAndItsAppliedAcknowledgmentAsync(double elapsedDays)
+    {
+        using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
+        using var root = fixture.Authority.PublicCertificate;
+        fixture.Clock.Advance(new DateTimeOffset(root.NotAfter.ToUniversalTime()).Subtract(TimeSpan.FromDays(10)) - fixture.Clock.GetUtcNow());
+        using var plans = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var initial = plans.Read("local");
+        fixture.Clock.Advance(TimeSpan.FromDays(elapsedDays));
+        Assert.True(plans.Acknowledge(Acknowledgment(initial)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => plans.RenewIfRequiredAsync(CancellationToken.None).AsTask()).ConfigureAwait(true);
+        Assert.Equal(initial.ToByteArray(), plans.Read("local").ToByteArray());
+        Assert.True(plans.IsAcknowledged);
+        using var restored = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        Assert.Equal(initial.ToByteArray(), restored.Read("local").ToByteArray());
+        Assert.False(restored.IsAcknowledged);
+    }
+
     [Fact]
     public async Task ConfiguredCertificateLifetimeAndAcknowledgmentExpirySurviveRestartAsync()
     {

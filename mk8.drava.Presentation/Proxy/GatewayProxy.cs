@@ -27,7 +27,7 @@ public sealed class GatewayProxy : IDisposable
         ArgumentNullException.ThrowIfNull(context);
         if (!await _admission.WaitAsync(0, context.RequestAborted).ConfigureAwait(false)) { context.Response.StatusCode = 503; return; }
         try { await ExchangeAsync(context).ConfigureAwait(false); }
-        catch (Exception exception) when (exception is RpcException or IOException or InvalidOperationException or OperationCanceledException)
+        catch (Exception exception) when (exception is RpcException or IOException or InvalidDataException or InvalidOperationException or OperationCanceledException)
         {
             if (context.Response.HasStarted || context.RequestAborted.IsCancellationRequested) context.Abort();
             else context.Response.StatusCode = exception is InvalidDataException ? 502 : 503;
@@ -59,9 +59,9 @@ public sealed class GatewayProxy : IDisposable
         {
             call.Dispose();
             try { await upload.StopAsync(send).ConfigureAwait(false); }
-            catch (Exception exception) when (exception is RpcException or IOException or OperationCanceledException or InvalidOperationException) { }
+            catch (Exception exception) when (exception is RpcException or IOException or InvalidDataException or OperationCanceledException or InvalidOperationException) { }
             try { await Task.WhenAll(send, receive).ConfigureAwait(false); }
-            catch (Exception exception) when (exception is RpcException or IOException or OperationCanceledException or InvalidOperationException) { }
+            catch (Exception exception) when (exception is RpcException or IOException or InvalidDataException or OperationCanceledException or InvalidOperationException) { }
             throw;
         }
     }

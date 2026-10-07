@@ -37,9 +37,12 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
             if (!string.Equals(prior.Certificates[0].HostNames[0], "*." + bootstrap.Controller!.Domain, StringComparison.Ordinal))
                 throw new InvalidDataException("Stored plan belongs to another site domain.");
         }
-        var plan = prior is null || prior.AcknowledgmentLeaseSeconds != settings.AcknowledgmentLeaseSeconds || prior.LeafLifetimeDays != settings.LeafLifetimeDays ||
-            prior.ValidUntilUnixSeconds <= clock.GetUtcNow().AddDays(settings.RenewalLeadDays).ToUnixTimeSeconds()
+        var policyChanged = prior is not null && (prior.AcknowledgmentLeaseSeconds != settings.AcknowledgmentLeaseSeconds || prior.LeafLifetimeDays != settings.LeafLifetimeDays);
+        using var issuer = authority.PublicCertificate;
+        var issuerUntil = new DateTimeOffset(issuer.NotAfter.ToUniversalTime()).AddMinutes(-5).ToUnixTimeSeconds();
+        var plan = prior is null || policyChanged || (prior.ValidUntilUnixSeconds < issuerUntil && prior.ValidUntilUnixSeconds <= clock.GetUtcNow().AddDays(settings.RenewalLeadDays).ToUnixTimeSeconds())
             ? BuildPlan(bootstrap, authority, prior is null ? 1 : checked(prior.Generation + 1)) : prior;
+        if (prior is not null && !policyChanged && plan.ValidUntilUnixSeconds <= prior.ValidUntilUnixSeconds) plan = prior;
         if (!ReferenceEquals(plan, prior)) await GatewayMaterialStore.WriteAsync(bootstrap.StateDirectory, plan.ToByteArray(), cancellationToken).ConfigureAwait(false);
         return new ServingPlanState(bootstrap, authority, clock, plan);
     }
@@ -89,7 +92,12 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
         {
             var prior = Read(_bootstrap.GatewayId);
             if (prior.ValidUntilUnixSeconds > _clock.GetUtcNow().AddDays(_bootstrap.Controller!.ServingPlan.RenewalLeadDays).ToUnixTimeSeconds()) return;
+            using var issuer = _authority.PublicCertificate;
+            if (new DateTimeOffset(issuer.NotAfter.ToUniversalTime()).AddMinutes(-5).ToUnixTimeSeconds() <= prior.ValidUntilUnixSeconds)
+                throw new InvalidOperationException("Site issuer renewal is required to extend the serving certificate.");
             var plan = BuildPlan(_bootstrap, _authority, checked(prior.Generation + 1));
+            if (plan.ValidUntilUnixSeconds <= prior.ValidUntilUnixSeconds)
+                throw new InvalidOperationException("Site issuer renewal is required to extend the serving certificate.");
             using var validated = new ValidatedServingPlan(plan, GatewayScope(_bootstrap), _clock, requireCurrent: true);
             await GatewayMaterialStore.WriteAsync(_bootstrap.StateDirectory, plan.ToByteArray(), cancellationToken).ConfigureAwait(false);
             lock (_gate) { _plan = plan; _acknowledged = false; }

@@ -38,6 +38,7 @@ public sealed class UpstreamConnectionFactory
             {
                 NoDelay = true
             };
+            var transferred = false;
             try
             {
                 await ProxyTimeoutPolicy.RunAsync(async timeoutToken =>
@@ -45,17 +46,17 @@ public sealed class UpstreamConnectionFactory
                     await socket.ConnectAsync(new IPEndPoint(address, endpoint.Port), timeoutToken).ConfigureAwait(false);
                 }, connectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
                 var stream = await CreateStreamAsync(socket, endpoint, connectTimeout, cancellationToken).ConfigureAwait(false);
-                return new UpstreamTransportConnection(endpoint, socket, stream);
-            }
-            catch (OperationCanceledException)
-            {
-                socket.Dispose();
-                throw;
+                var connection = new UpstreamTransportConnection(endpoint, socket, stream);
+                transferred = true;
+                return connection;
             }
             catch (Exception exception)when (exception is SocketException or IOException or AuthenticationException)
             {
                 lastException = exception;
-                socket.Dispose();
+            }
+            finally
+            {
+                if (!transferred) socket.Dispose();
             }
         }
 
@@ -70,7 +71,15 @@ public sealed class UpstreamConnectionFactory
     private static async ValueTask<Stream> CreateStreamAsync(Socket socket, UpstreamTransportEndpoint endpoint, TimeSpan connectTimeout, CancellationToken cancellationToken)
     {
         var networkStream = new NetworkStream(socket, ownsSocket: false);
-        return await CreateStreamAsync(networkStream, endpoint, connectTimeout, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await CreateStreamAsync(networkStream, endpoint, connectTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await networkStream.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     private static async ValueTask<Stream> CreateStreamAsync(Stream networkStream, UpstreamTransportEndpoint endpoint, TimeSpan connectTimeout, CancellationToken cancellationToken)
@@ -80,13 +89,13 @@ public sealed class UpstreamConnectionFactory
             return networkStream;
         }
 
-        var tlsStream = new SslStream(networkStream, leaveInnerStreamOpen: false, endpoint.ValidateCertificate ? null : static (_, _, _, _) => true);
+        var tlsStream = new SslStream(networkStream, leaveInnerStreamOpen: false, (_, _, _, errors) => errors == SslPolicyErrors.None || !endpoint.ValidateCertificate);
         var targetHost = endpoint.EffectiveSniHost;
         try
         {
             await ProxyTimeoutPolicy.RunAsync(async timeoutToken =>
             {
-                await tlsStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = targetHost, EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13, CertificateRevocationCheckMode = X509RevocationMode.NoCheck, ApplicationProtocols = BuildApplicationProtocols(endpoint) }, timeoutToken).ConfigureAwait(false);
+                await tlsStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = targetHost, EnabledSslProtocols = SslProtocols.None, CertificateRevocationCheckMode = X509RevocationMode.NoCheck, ApplicationProtocols = BuildApplicationProtocols(endpoint) }, timeoutToken).ConfigureAwait(false);
             }, connectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
             if (RuntimeUpstreamProtocol.IsHttp2(endpoint.Protocol) && tlsStream.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
             {
@@ -95,15 +104,12 @@ public sealed class UpstreamConnectionFactory
 
             return tlsStream;
         }
-        catch (UpstreamTlsException)
+        catch (Exception exception)
         {
             await tlsStream.DisposeAsync().ConfigureAwait(false);
+            if ((exception is AuthenticationException or IOException) && exception is not UpstreamTlsException)
+                throw new UpstreamTlsException($"TLS authentication failed for upstream '{endpoint.Name}'.", exception);
             throw;
-        }
-        catch (Exception exception)when (exception is AuthenticationException or IOException)
-        {
-            await tlsStream.DisposeAsync().ConfigureAwait(false);
-            throw new UpstreamTlsException($"TLS authentication failed for upstream '{endpoint.Name}'.", exception);
         }
     }
 
