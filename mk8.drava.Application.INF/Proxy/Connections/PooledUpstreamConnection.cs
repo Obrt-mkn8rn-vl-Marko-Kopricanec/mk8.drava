@@ -33,7 +33,7 @@ internal sealed class PooledUpstreamConnection : IDisposable
     {
         get
         {
-            if (Socket is not { } socket) return false; // Relay capabilities authorize one exchange.
+            if (Socket is not { } socket || !TlsReadBoundary.IsAtRecordBoundary(Stream)) return false; // Relay capabilities authorize one exchange.
             try
             {
                 return !socket.Poll(0, SelectMode.SelectRead) && !socket.Poll(0, SelectMode.SelectError);

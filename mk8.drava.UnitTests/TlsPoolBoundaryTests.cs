@@ -15,12 +15,20 @@ public sealed class TlsPoolBoundaryTests
 {
     [Theory]
 #pragma warning disable CA5398 // These development conformance cases must exercise each named TLS protocol; production uses SslProtocols.None.
-    [InlineData(SslProtocols.Tls12, false)]
-    [InlineData(SslProtocols.Tls13, false)]
-    [InlineData(SslProtocols.Tls12, true)]
-    [InlineData(SslProtocols.Tls13, true)]
+    [InlineData(SslProtocols.Tls12, false, false, 0)]
+    [InlineData(SslProtocols.Tls13, false, false, 0)]
+    [InlineData(SslProtocols.Tls12, true, false, 0)]
+    [InlineData(SslProtocols.Tls13, true, false, 0)]
+    [InlineData(SslProtocols.Tls12, true, true, 6)]
+    [InlineData(SslProtocols.Tls13, true, true, 6)]
+    [InlineData(SslProtocols.Tls12, true, true, 1)]
+    [InlineData(SslProtocols.Tls13, true, true, 1)]
+    [InlineData(SslProtocols.Tls12, true, true, 3)]
+    [InlineData(SslProtocols.Tls13, true, true, 3)]
+    [InlineData(SslProtocols.Tls12, true, true, 5)]
+    [InlineData(SslProtocols.Tls13, true, true, 5)]
 #pragma warning restore CA5398
-    public async Task DecryptedIdleInputIsDiscardedAndCleanTlsConnectionsRemainReusableAsync(SslProtocols protocol, bool unread)
+    public async Task DecryptedIdleInputIsDiscardedAndCleanTlsConnectionsRemainReusableAsync(SslProtocols protocol, bool unread, bool fragmented, int prefixBytes)
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -28,10 +36,10 @@ public sealed class TlsPoolBoundaryTests
         var request = new CertificateRequest("CN=upstream.test", key, HashAlgorithmName.SHA256);
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await VerifyBorrowAsync(listener, certificate, protocol, unread, deadline).ConfigureAwait(true);
+        await VerifyBorrowAsync(listener, certificate, protocol, unread, fragmented, prefixBytes, deadline).ConfigureAwait(true);
     }
 
-    private static async Task VerifyBorrowAsync(TcpListener listener, X509Certificate2 certificate, SslProtocols protocol, bool unread, CancellationTokenSource deadline)
+    private static async Task VerifyBorrowAsync(TcpListener listener, X509Certificate2 certificate, SslProtocols protocol, bool unread, bool fragmented, int prefixBytes, CancellationTokenSource deadline)
     {
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var metrics = new ProxyMetrics();
@@ -39,7 +47,7 @@ public sealed class TlsPoolBoundaryTests
         var upstream = new RuntimeUpstream("route", "peer", "https", "http1", "127.0.0.1", port, 1, new RuntimeUpstreamTlsOptions(false, "upstream.test"));
         var timeouts = Timeouts();
         var limits = new RuntimeConnectionLimits(10, 1, 1);
-        var server = ServeAsync(listener, certificate, protocol, unread, deadline.Token);
+        var server = ServeAsync(listener, certificate, protocol, unread, fragmented, prefixBytes, deadline.Token);
         try
         {
             var first = await pool.BorrowAsync(upstream, timeouts, limits, deadline.Token).ConfigureAwait(true);
@@ -69,16 +77,19 @@ public sealed class TlsPoolBoundaryTests
         }
     }
 
-    private static async Task ServeAsync(TcpListener listener, X509Certificate2 certificate, SslProtocols protocol, bool unread, CancellationToken cancellationToken)
+    private static async Task ServeAsync(TcpListener listener, X509Certificate2 certificate, SslProtocols protocol, bool unread, bool fragmented, int prefixBytes, CancellationToken cancellationToken)
     {
         using var first = await listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
-        var tls = new SslStream(first.GetStream(), leaveInnerStreamOpen: true);
+        using var fragments = new FragmentedTlsRecordStream(first.GetStream(), prefixBytes);
+        var tls = new SslStream(fragments, leaveInnerStreamOpen: true);
         await using var tlsLifetime = tls.ConfigureAwait(false);
         var options = new SslServerAuthenticationOptions { ServerCertificate = certificate, EnabledSslProtocols = protocol, AllowTlsResume = false };
         await tls.AuthenticateAsServerAsync(options, cancellationToken).ConfigureAwait(false);
-        var payload = new byte[unread ? 4096 : 1];
+        if (fragmented) fragments.Arm();
+        var payload = new byte[unread && !fragmented ? 4096 : 1];
         Array.Fill(payload, (byte)1);
         await tls.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+        if (fragmented) await tls.WriteAsync(new byte[] { 9 }, cancellationToken).ConfigureAwait(false);
         await tls.FlushAsync(cancellationToken).ConfigureAwait(false);
         if (!unread)
         {

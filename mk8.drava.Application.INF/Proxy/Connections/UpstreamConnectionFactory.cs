@@ -89,7 +89,7 @@ public sealed class UpstreamConnectionFactory
             return networkStream;
         }
 
-        var tlsStream = new SslStream(networkStream, leaveInnerStreamOpen: false, (_, _, _, errors) => errors == SslPolicyErrors.None || !endpoint.ValidateCertificate);
+        var tlsStream = TlsReadBoundary.Create(networkStream, (_, _, _, errors) => errors == SslPolicyErrors.None || !endpoint.ValidateCertificate);
         var targetHost = endpoint.EffectiveSniHost;
         try
         {
