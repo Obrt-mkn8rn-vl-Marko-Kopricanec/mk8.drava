@@ -29,6 +29,7 @@ public sealed class UpstreamHealthCheckClient : IUpstreamHealthCheckClient
 
     public async ValueTask<HealthCheckSample> CheckAsync(UpstreamHealthCheckTarget target, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(target);
         var endpoint = target.TransportEndpoint;
         if (RuntimeUpstreamProtocol.IsHttp3(endpoint.Protocol))
         {

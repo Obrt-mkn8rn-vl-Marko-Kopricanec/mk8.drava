@@ -230,12 +230,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         await socket.ConnectAsync(new IPEndPoint(IPAddress.Loopback, port), cancellationToken).ConfigureAwait(false);
     }
 
-    public static int UnusedPort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
-    }
+    public static int UnusedPort() => DevelopmentPortAllocator.GetPort();
 
     internal static string FindRoot()
     {

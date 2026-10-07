@@ -21,6 +21,7 @@ public sealed class AccessLogEmitter
 
     public void Complete(ProxyRequestContext context, bool accessLogEnabled, int diagnosticsCapacity)
     {
+        ArgumentNullException.ThrowIfNull(context);
         var diagnostic = new ProxyRecentRequestDiagnosticEvent(context.StartedAtUtc, TruncateRequired(context.RequestId), Truncate(context.ExternalRequestId), context.ConfigVersion, TruncateRequired(context.ListenerName), TruncateRequired(context.Transport), Truncate(context.ClientEndpoint), Truncate(context.Method), Truncate(context.Host), Truncate(context.Target), Truncate(context.RouteName), Truncate(context.UpstreamName), Truncate(context.UpstreamEndpoint), context.ResponseStatusCode, (long)context.Elapsed.TotalMilliseconds, ProxyFailureKindText.FromFailureKind(context.FailureKind), context.ResponseStarted, context.KeepClientConnectionOpen, context.IsUpgrade, context.TunnelEstablished, Truncate(context.TunnelCloseReason), context.TunnelBytesClientToUpstream, context.TunnelBytesUpstreamToClient);
         _diagnostics.Add(diagnostic, diagnosticsCapacity);
         if (context.FailureKind != ProxyFailureKind.None)

@@ -20,6 +20,10 @@ public sealed class TunnelRelay
 
     public async ValueTask<TunnelRelayResult> RelayAsync(Stream clientStream, Stream upstreamStream, RuntimeListener listener, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(upstreamStream);
+        ArgumentNullException.ThrowIfNull(timeouts);
+        ArgumentNullException.ThrowIfNull(clientStream);
+        ArgumentNullException.ThrowIfNull(listener);
         using var tunnelCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = tunnelCancellation.Token;
         var lastActivity = _timeProvider.GetTimestamp();

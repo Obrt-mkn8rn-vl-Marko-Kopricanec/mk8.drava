@@ -112,6 +112,7 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
 
     public static string GetKey(UpstreamTransportEndpoint endpoint)
     {
+        ArgumentNullException.ThrowIfNull(endpoint);
         return $"{endpoint.PoolKey}|alpn=h3|qpack=static-zero";
     }
 

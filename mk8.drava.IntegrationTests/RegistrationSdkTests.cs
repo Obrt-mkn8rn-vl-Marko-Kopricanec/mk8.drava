@@ -50,7 +50,7 @@ public sealed class RegistrationSdkTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("sdk-body", await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(true));
         await application.StopAsync(timeout.Token).ConfigureAwait(true);
-        Assert.Equal(RegistrationPhase.Draining, state.Status!.Phase);
+        Assert.True(state.Status is { Phase: RegistrationPhase.Draining }, state.Failure);
         using var drained = await client.Client.GetAsync(new Uri("/", UriKind.Relative), timeout.Token).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, drained.StatusCode);
     }

@@ -46,6 +46,12 @@ public sealed partial class ProxyForwarder
 
     public async ValueTask<ForwardingResult> ForwardAsync(Stream clientStream, Http1HeadReadResult requestHeadRead, Http1RequestHead requestHead, RuntimeRoute route, RuntimeUpstream upstream, RuntimeListener listener, RuntimeTimeouts timeouts, RuntimeConnectionLimits connectionLimits, RuntimeLimits limits, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, bool preferClientKeepAlive, string requestId, CancellationToken cancellationToken, bool suppressGeneratedFailureResponse = false)
     {
+        ArgumentNullException.ThrowIfNull(upstream);
+        ArgumentNullException.ThrowIfNull(requestHeadRead);
+        ArgumentNullException.ThrowIfNull(timeouts);
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(listener);
+        ArgumentNullException.ThrowIfNull(requestHead);
         var responseStarted = false;
         UpstreamConnectionLease? upstreamLease = null;
         try

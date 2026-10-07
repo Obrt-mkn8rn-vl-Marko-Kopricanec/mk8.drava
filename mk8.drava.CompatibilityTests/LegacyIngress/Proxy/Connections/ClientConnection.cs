@@ -61,6 +61,7 @@ public sealed class ClientConnection
     private readonly ILogger<ClientConnection> _logger;
     public ClientConnection(Socket socket, ProxyConfigurationSnapshot configurationSnapshot, RuntimeListener listener, IRouteMatcher routeMatcher, IUpstreamSelector upstreamSelector, UpstreamHealthStore healthStore, ProxyForwarder forwarder, UpgradeForwarder upgradeForwarder, UpgradeRequestPolicy upgradeRequestPolicy, ForwardedHeadersPolicy forwardedHeadersPolicy, ProxyRouteActionPolicy routeActionPolicy, PathRewritePolicy pathRewritePolicy, ResponseCacheStore cacheStore, Http3AltSvcPolicy altSvcPolicy, CircuitBreakerStore circuitBreakerStore, AcmeHttp01ChallengeResponder acmeChallengeResponder, TlsConnectionAuthenticator tlsAuthenticator, ProxyMetrics metrics, RequestIdGenerator requestIdGenerator, AccessLogEmitter accessLogEmitter, ClientRateLimiter rateLimiter, TimeProvider timeProvider, ILogger<ClientConnection> logger)
     {
+        ArgumentNullException.ThrowIfNull(configurationSnapshot);
         _socket = socket;
         _configurationSnapshot = configurationSnapshot;
         _routeCandidates = ProxyRouteMatchRuntimeMapper.ToCandidates(configurationSnapshot.Routes);

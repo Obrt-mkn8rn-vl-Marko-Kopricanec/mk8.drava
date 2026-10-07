@@ -21,6 +21,8 @@ public sealed class UpstreamConnectionPool : IUpstreamConnectionPruner, IDisposa
 
     public async ValueTask<UpstreamConnectionLease> BorrowAsync(RuntimeUpstream upstream, RuntimeTimeouts timeouts, RuntimeConnectionLimits limits, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(timeouts);
+        ArgumentNullException.ThrowIfNull(limits);
         var endpoint = UpstreamTransportEndpointMapper.FromUpstream(upstream);
         var key = GetKey(endpoint);
         var nowUtc = _timeProvider.GetUtcNow();
@@ -163,6 +165,7 @@ public sealed class UpstreamConnectionPool : IUpstreamConnectionPruner, IDisposa
 
     public static string GetKey(UpstreamTransportEndpoint endpoint)
     {
+        ArgumentNullException.ThrowIfNull(endpoint);
         return endpoint.PoolKey;
     }
 

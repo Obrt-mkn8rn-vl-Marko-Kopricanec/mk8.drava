@@ -169,6 +169,7 @@ public static partial class ProxyServiceCollectionExtensions
 
     public static IServiceCollection AddProxyDataPlane(this IServiceCollection services, IConfiguration configuration)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
         services.AddProxyConfigurationServices(configuration);
         services.AddProxyMetricsAndLoggingServices();
         services.AddProxyAdministrationServices();

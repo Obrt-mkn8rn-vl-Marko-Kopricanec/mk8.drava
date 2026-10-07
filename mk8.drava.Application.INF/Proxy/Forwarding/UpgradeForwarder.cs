@@ -37,6 +37,13 @@ public sealed class UpgradeForwarder
 
     public async ValueTask<ForwardingResult> ForwardAsync(Stream clientStream, Http1RequestHead requestHead, UpgradeRequestInfo upgrade, RuntimeRoute route, RuntimeUpstream upstream, RuntimeListener listener, RuntimeTimeouts timeouts, RuntimeConnectionLimits connectionLimits, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, string requestId, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(connectionLimits);
+        ArgumentNullException.ThrowIfNull(upstream);
+        ArgumentNullException.ThrowIfNull(requestHead);
+        ArgumentNullException.ThrowIfNull(timeouts);
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(listener);
+        ArgumentNullException.ThrowIfNull(upgrade);
         var responseStarted = false;
         UpstreamTransportConnection? upstreamConnection = null;
         try

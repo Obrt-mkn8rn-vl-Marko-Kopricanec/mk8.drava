@@ -15,6 +15,7 @@ public sealed class ProxyConfigurationAcmeCertificateActivator : IAcmeCertificat
 
     public void Activate(RuntimeCertificate certificate)
     {
+        ArgumentNullException.ThrowIfNull(certificate);
         var snapshot = _snapshotReader.Snapshot;
         Dictionary<string, RuntimeCertificate> certificates = new(snapshot.Certificates, StringComparer.OrdinalIgnoreCase)
         {

@@ -12,6 +12,7 @@ public static class AdminBindWebHostConfigurator
     public const string AspNetCoreUrlsConfigurationKey = "urls";
     public static AdminBindResolution Apply(WebApplicationBuilder builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         var dataOptions = new MdravaDataDirectoryOptions();
         builder.Configuration.GetSection(MdravaDataDirectoryOptions.SectionName).Bind(dataOptions);
         var startupSecurity = AdminStartupConfigurationReader.Read(dataOptions);
@@ -26,6 +27,7 @@ public static class AdminBindWebHostConfigurator
 
     public static AdminBindResolution Resolve(IConfiguration configuration, AdminStartupSecurityOptions startupSecurity)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
         return AdminBindPolicy.Resolve(AdminBindPolicyInputMapper.FromStartupConfiguration(startupSecurity, ReadConfiguredUrls(configuration, MdravaAdminUrlsConfigurationKey), MdravaAdminUrlsConfigurationKey, ReadConfiguredUrls(configuration, AspNetCoreUrlsConfigurationKey), AspNetCoreUrlsConfigurationKey), new ProxyAdminUrlPolicy());
     }
 

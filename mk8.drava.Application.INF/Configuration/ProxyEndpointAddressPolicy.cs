@@ -11,6 +11,7 @@ public sealed class ProxyEndpointAddressPolicy : IProxyEndpointAddressPolicy
 
     public bool IsAmbiguousUpstreamAddress(string value)
     {
+        ArgumentNullException.ThrowIfNull(value);
         var address = value.Trim();
         if (address.Length == 0 || address.Contains("://", StringComparison.Ordinal) || address.Contains('/', StringComparison.Ordinal) || address.Contains('\\', StringComparison.Ordinal) || address.Any(static character => char.IsWhiteSpace(character) || char.IsControl(character)))
         {
@@ -27,6 +28,7 @@ public sealed class ProxyEndpointAddressPolicy : IProxyEndpointAddressPolicy
 
     public bool IsValidSniHost(string value)
     {
+        ArgumentNullException.ThrowIfNull(value);
         var host = value.Trim();
         if (host.Length is 0 or > 253 || host.StartsWith("*.", StringComparison.Ordinal) || host.Contains('/', StringComparison.Ordinal) || host.Contains('\\', StringComparison.Ordinal) || host.Any(static character => char.IsWhiteSpace(character) || char.IsControl(character)))
         {

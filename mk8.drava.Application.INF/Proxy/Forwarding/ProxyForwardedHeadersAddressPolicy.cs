@@ -13,6 +13,7 @@ public sealed class ProxyForwardedHeadersAddressPolicy : IProxyTrustedProxyPolic
 
     public bool IsTrustedPeer(string peerAddress, IReadOnlyList<string> trustedProxyEntries)
     {
+        ArgumentNullException.ThrowIfNull(trustedProxyEntries);
         if (!TryParseAddress(peerAddress, out var parsedPeer))
         {
             return false;
@@ -31,6 +32,7 @@ public sealed class ProxyForwardedHeadersAddressPolicy : IProxyTrustedProxyPolic
 
     public ForwardedForNormalizationResult NormalizeForwardedFor(IReadOnlyList<string> forwardedFor)
     {
+        ArgumentNullException.ThrowIfNull(forwardedFor);
         foreach (var entry in forwardedFor)
         {
             var value = entry.Trim().Trim('"');

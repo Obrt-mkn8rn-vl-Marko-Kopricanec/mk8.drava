@@ -29,6 +29,7 @@ public sealed class SystemHttp3QuicListenerFactory : IHttp3QuicListenerFactory
 
     public async ValueTask<QuicListener> ListenAsync(RuntimeListener listener, ProxyConfigurationSnapshot snapshot, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(listener);
         if (!IsSupported)
         {
             throw new InvalidOperationException("quic_runtime_not_supported");

@@ -105,6 +105,8 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
 
     public async ValueTask<ProxyListenerReloadResult> ApplyReloadAsync(ProxyConfigurationSnapshot snapshot, Func<ProxyConfigurationSnapshot, ProxyConfigurationSnapshot> activateSnapshot, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(activateSnapshot);
+        ArgumentNullException.ThrowIfNull(snapshot);
         await _reloadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {

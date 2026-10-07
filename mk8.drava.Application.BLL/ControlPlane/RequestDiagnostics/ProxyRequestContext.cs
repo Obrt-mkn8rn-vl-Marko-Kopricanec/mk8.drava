@@ -9,6 +9,7 @@ public sealed class ProxyRequestContext
     private readonly long _startedTimestamp;
     public ProxyRequestContext(string requestId, string listenerName, string transport, string? clientEndpoint, int configVersion, TimeProvider timeProvider, string protocol = "http1")
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _timeProvider = timeProvider;
         _startedTimestamp = timeProvider.GetTimestamp();
         RequestId = requestId;

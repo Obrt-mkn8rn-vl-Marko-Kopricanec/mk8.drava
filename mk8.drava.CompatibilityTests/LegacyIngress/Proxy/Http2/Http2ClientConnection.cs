@@ -61,6 +61,7 @@ public sealed class Http2ClientConnection
     private readonly ConcurrentDictionary<int, StreamState> _streams = new();
     public Http2ClientConnection(Stream stream, IPEndPoint? remoteEndPoint, ProxyConfigurationSnapshot configurationSnapshot, RuntimeListener listener, IRouteMatcher routeMatcher, IUpstreamSelector upstreamSelector, UpstreamHealthStore healthStore, ProxyForwarder forwarder, ForwardedHeadersPolicy forwardedHeadersPolicy, ProxyRouteActionPolicy routeActionPolicy, PathRewritePolicy pathRewritePolicy, ResponseCacheStore cacheStore, Http3AltSvcPolicy altSvcPolicy, CircuitBreakerStore circuitBreakerStore, AcmeHttp01ChallengeResponder acmeChallengeResponder, ProxyMetrics metrics, RequestIdGenerator requestIdGenerator, AccessLogEmitter accessLogEmitter, ClientRateLimiter rateLimiter, TimeProvider timeProvider, ILogger logger)
     {
+        ArgumentNullException.ThrowIfNull(configurationSnapshot);
         _stream = stream;
         _remoteEndPoint = remoteEndPoint;
         _configurationSnapshot = configurationSnapshot;

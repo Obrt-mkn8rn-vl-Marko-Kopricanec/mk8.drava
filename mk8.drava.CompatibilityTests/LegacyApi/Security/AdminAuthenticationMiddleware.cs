@@ -14,6 +14,7 @@ public sealed class AdminAuthenticationMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
         if (!context.Request.Path.StartsWithSegments("/admin", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context).ConfigureAwait(false);

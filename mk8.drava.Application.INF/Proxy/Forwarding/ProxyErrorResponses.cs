@@ -44,6 +44,7 @@ public static class ProxyErrorResponses
 
     public static async ValueTask WriteAsync(Stream stream, ReadOnlyMemory<byte> response, TimeSpan timeout, ProxyMetrics metrics, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(metrics);
         await ProxyTimedStreamWriter.WriteAsync(stream, response, timeout, cancellationToken).ConfigureAwait(false);
         metrics.AddBytesWritten(response.Length);
     }

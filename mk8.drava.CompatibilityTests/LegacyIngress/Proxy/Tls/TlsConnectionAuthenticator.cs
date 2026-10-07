@@ -24,6 +24,8 @@ public sealed class TlsConnectionAuthenticator
 
     public async ValueTask<TlsAuthenticationResult?> AuthenticateAsync(Stream transportStream, ProxyConfigurationSnapshot snapshot, RuntimeListener listener, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(listener);
         _metrics.TlsHandshakeAttempted();
         var handshakeAdmission = _admission.AcquireTlsHandshake(snapshot.Limits.MaxConcurrentTlsHandshakes);
         if (handshakeAdmission is not ProxyAdmissionDecision.AcceptedResult acceptedHandshake)
