@@ -27,6 +27,7 @@ public sealed class WireNumericCultureTests
         using var culture = new WireCultureScope();
         using var stream = StatusFrame(value);
         var connection = new Http2UpstreamConnection(stream, new ProxyMetrics());
+        await using var connectionLifetime = connection.ConfigureAwait(true);
         var timeouts = RuntimeTimeoutsFactory.ForHealthCheck(TimeSpan.FromSeconds(1));
         if (!accepted)
         {

@@ -105,6 +105,7 @@ public sealed class UpstreamHealthCheckClient : IUpstreamHealthCheckClient
         var endpoint = target.TransportEndpoint;
         var timeouts = RuntimeTimeoutsFactory.ForHealthCheck(target.Timeout);
         var http2 = new Http2UpstreamConnection(stream, _metrics, maxFrameSize: 16 * 1024);
+        await using var http2Lifetime = http2.ConfigureAwait(false);
         await http2.InitializeAsync(timeouts, cancellationToken).ConfigureAwait(false);
         await http2.SendHeadersAsync([new ProxyHeaderField(":method", "GET"), new ProxyHeaderField(":scheme", endpoint.Scheme), new ProxyHeaderField(":authority", endpoint.Address), new ProxyHeaderField(":path", target.Path)], endStream: true, timeouts, cancellationToken).ConfigureAwait(false);
         var response = await http2.ReadResponseHeadAsync(MaxHealthResponseHeadBytes, timeouts, cancellationToken).ConfigureAwait(false);
