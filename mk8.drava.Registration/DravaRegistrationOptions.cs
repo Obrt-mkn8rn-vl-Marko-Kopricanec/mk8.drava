@@ -24,6 +24,23 @@ public sealed record DravaRegistrationOptions
     public bool MulticastDiscovery { get; init; } = true;
     public IReadOnlyList<DiscoveryCandidate> GatewaySeeds { get; init; } = [];
 
+    public static async Task<DravaRegistrationOptions> LoadEnrollmentAsync(string path, string serviceId, string readinessPath, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(serviceId);
+        var profile = await BootstrapFile.LoadAsync<NodeEnrollmentProfile>(path, cancellationToken).ConfigureAwait(false);
+        profile.Validate();
+        RegistrationSiteTrust.RequireLabel(serviceId);
+        if (!string.Equals(serviceId, profile.ServicePrefix, StringComparison.Ordinal) && !serviceId.StartsWith(profile.ServicePrefix + "-", StringComparison.Ordinal))
+            throw new InvalidDataException("The requested service does not belong to this enrollment profile.");
+        var seeds = new DiscoveryCandidate[profile.GatewayAddresses.Count];
+        for (var index = 0; index < seeds.Length; index++) seeds[index] = new DiscoveryCandidate(profile.GatewayAddresses[index], profile.RegistrationPort);
+        return new DravaRegistrationOptions
+        {
+            Site = profile.Site, NodeId = profile.NodeId, OwnerId = profile.OwnerId, ServiceId = serviceId, ReadinessPath = readinessPath,
+            GatewaySeeds = Array.AsReadOnly(seeds), MulticastDiscovery = profile.MulticastDiscovery,
+        }.CopyValidated();
+    }
+
     internal DravaRegistrationOptions CopyValidated()
     {
         if (Site is null || GatewaySeeds is null) throw new InvalidDataException("Enrollment and seed collection are required.");

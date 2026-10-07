@@ -93,8 +93,8 @@ public sealed class SiteRegistrationChannel : IDisposable
         if (status.Phase == RegistrationPhase.Ready && status.AssignedUrls.Count == 0) throw new InvalidDataException("Ready membership requires an assigned URL.");
         foreach (var assigned in status.AssignedUrls)
             if (assigned is null || assigned.Length > 2048 || !Uri.TryCreate(assigned, UriKind.Absolute, out var uri) || uri.Scheme is not "http" and not "https" ||
-                !string.Equals(uri.DnsSafeHost, command.Identity.ServiceId + "." + _trust.Domain, StringComparison.OrdinalIgnoreCase) || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
-                throw new InvalidDataException("Assigned URL differs from the enrolled service.");
+                uri.HostNameType != UriHostNameType.Dns || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+                throw new InvalidDataException("The authenticated controller supplied an invalid assigned URL.");
         return status;
     }
 

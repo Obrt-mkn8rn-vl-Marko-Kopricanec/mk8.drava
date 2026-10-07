@@ -20,9 +20,9 @@ Thumbs.db
 Desktop.ini
 
 # Build and verification outputs.
-**/bin/
-**/obj/
-**/artifacts/
+**/bin
+**/obj
+**/artifacts
 **/TestResults/
 *.user
 *.suo

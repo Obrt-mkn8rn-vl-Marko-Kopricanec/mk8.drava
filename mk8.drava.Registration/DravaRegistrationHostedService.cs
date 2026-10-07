@@ -95,17 +95,22 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
         drain.CancelAfter(TimeSpan.FromMilliseconds(options.ShutdownDeadlineMilliseconds));
         try
         {
+            await base.StopAsync(drain.Token).ConfigureAwait(false);
             await _operations.WaitAsync(drain.Token).ConfigureAwait(false);
             try
             {
                 if (_agent is not null)
                     await DrainAgentAsync(_agent, drain.Token).ConfigureAwait(false);
-                if (_registerAttempted && _channel is not null)
-                    state.Accept(await _channel.SubmitAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Drain }, drain.Token).ConfigureAwait(false));
+                if (_registerAttempted)
+                {
+                    _channel ??= await RegistrationGatewayFinder.FindAsync(options, drain.Token).ConfigureAwait(false);
+                    if (_channel is null) state.Failed();
+                    else state.Accept(await _channel.SubmitAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Drain }, drain.Token).ConfigureAwait(false));
+                }
             }
             finally { _operations.Release(); }
         }
-        catch (Exception exception) when (exception is RpcException or HttpRequestException or InvalidDataException or IOException or System.Text.Json.JsonException or OperationCanceledException) { }
+        catch (Exception exception) when (exception is RpcException or HttpRequestException or InvalidDataException or IOException or System.Text.Json.JsonException or OperationCanceledException) { state.Failed(); }
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
 

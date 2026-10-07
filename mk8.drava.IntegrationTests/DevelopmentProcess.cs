@@ -30,6 +30,12 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
 
     public string CapturedLog { get { lock (_log) return _log.ToString(); } }
 
+    public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
+    {
+        await _process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        return _process.ExitCode;
+    }
+
     private async Task CaptureAsync(StreamReader reader)
     {
         var buffer = new char[1024];

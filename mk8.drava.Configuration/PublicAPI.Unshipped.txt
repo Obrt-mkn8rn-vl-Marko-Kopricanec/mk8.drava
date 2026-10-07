@@ -311,3 +311,29 @@ static Mk8.Drava.Configuration.ServingPlanSettings.operator !=(Mk8.Drava.Configu
 static Mk8.Drava.Configuration.ServingPlanSettings.operator ==(Mk8.Drava.Configuration.ServingPlanSettings? left, Mk8.Drava.Configuration.ServingPlanSettings? right) -> bool
 Mk8.Drava.Configuration.NodeAgentDescriptor.MappingLeaseSeconds.get -> int
 Mk8.Drava.Configuration.NodeAgentDescriptor.MappingLeaseSeconds.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile
+Mk8.Drava.Configuration.NodeEnrollmentProfile.NodeEnrollmentProfile() -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.<Clone>$() -> Mk8.Drava.Configuration.NodeEnrollmentProfile!
+Mk8.Drava.Configuration.NodeEnrollmentProfile.Equals(Mk8.Drava.Configuration.NodeEnrollmentProfile? other) -> bool
+Mk8.Drava.Configuration.NodeEnrollmentProfile.Validate() -> void
+override Mk8.Drava.Configuration.NodeEnrollmentProfile.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.NodeEnrollmentProfile.GetHashCode() -> int
+override Mk8.Drava.Configuration.NodeEnrollmentProfile.ToString() -> string!
+static Mk8.Drava.Configuration.NodeEnrollmentProfile.operator !=(Mk8.Drava.Configuration.NodeEnrollmentProfile? left, Mk8.Drava.Configuration.NodeEnrollmentProfile? right) -> bool
+static Mk8.Drava.Configuration.NodeEnrollmentProfile.operator ==(Mk8.Drava.Configuration.NodeEnrollmentProfile? left, Mk8.Drava.Configuration.NodeEnrollmentProfile? right) -> bool
+Mk8.Drava.Configuration.NodeEnrollmentProfile.SchemaVersion.get -> int
+Mk8.Drava.Configuration.NodeEnrollmentProfile.SchemaVersion.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.Site.get -> Mk8.Drava.Configuration.RegistrationSiteTrust!
+Mk8.Drava.Configuration.NodeEnrollmentProfile.Site.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.NodeId.get -> string!
+Mk8.Drava.Configuration.NodeEnrollmentProfile.NodeId.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.OwnerId.get -> string!
+Mk8.Drava.Configuration.NodeEnrollmentProfile.OwnerId.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.ServicePrefix.get -> string!
+Mk8.Drava.Configuration.NodeEnrollmentProfile.ServicePrefix.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.GatewayAddresses.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Mk8.Drava.Configuration.NodeEnrollmentProfile.GatewayAddresses.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.RegistrationPort.get -> int
+Mk8.Drava.Configuration.NodeEnrollmentProfile.RegistrationPort.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.MulticastDiscovery.get -> bool
+Mk8.Drava.Configuration.NodeEnrollmentProfile.MulticastDiscovery.init -> void

@@ -21,6 +21,12 @@ internal static class Program
 {
     public static async Task Main(string[] args)
     {
+        if (args.Length == 2 && string.Equals(args[0], "--initialize-site", StringComparison.Ordinal) && Path.IsPathFullyQualified(args[1]))
+        {
+            var fingerprint = await Installation.SiteInitializer.InitializeAsync(args[1], CancellationToken.None).ConfigureAwait(false);
+            Console.WriteLine(fingerprint);
+            return;
+        }
         if (args.Length == 2 && string.Equals(args[0], "--node-agent-bootstrap", StringComparison.Ordinal) && Path.IsPathFullyQualified(args[1]))
         {
             await NodeAgentHost.RunAsync(args[1]).ConfigureAwait(false);

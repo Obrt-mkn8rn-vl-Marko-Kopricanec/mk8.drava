@@ -43,4 +43,6 @@ internal sealed class DevelopmentHttpUpstream : IAsyncDisposable
         await _application.StopAsync().ConfigureAwait(false);
         await _application.DisposeAsync().ConfigureAwait(false);
     }
+
+    public Task StopAsync() => _application.StopAsync();
 }
