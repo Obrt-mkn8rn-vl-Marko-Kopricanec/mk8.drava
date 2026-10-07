@@ -161,6 +161,8 @@ message PresentationPlan {
   int64 valid_until_unix_seconds = 9;
   uint32 acknowledgment_lease_seconds = 10;
   uint32 leaf_lifetime_days = 11;
+  string serving_trust_mode = 12;
+  string serving_root_fingerprint = 13;
 }
 message PlanAcknowledgment {
   uint32 version = 1;

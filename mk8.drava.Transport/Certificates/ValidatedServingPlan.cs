@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Configuration;
@@ -10,8 +11,12 @@ namespace Mk8.Drava.Transport.Certificates;
 public sealed class ValidatedServingPlan : IDisposable
 {
     private readonly X509Certificate2 _root;
-    public X509Certificate2 ServingCertificate { get; }
-    public X509Certificate2 EnrollmentCertificate { get; }
+    private readonly ServerCertificateBundle _serving;
+    private readonly ServerCertificateBundle _enrollment;
+    public X509Certificate2 ServingCertificate => _serving.Certificate;
+    public X509Certificate2 EnrollmentCertificate => _enrollment.Certificate;
+    public SslStreamCertificateContext ServingContext => _serving.Context;
+    public SslStreamCertificateContext EnrollmentContext => _enrollment.Context;
     private readonly PresentationPlan _plan;
     private readonly TimeProvider _clock;
     private readonly bool _requireCurrent;
@@ -23,6 +28,12 @@ public sealed class ValidatedServingPlan : IDisposable
         ArgumentNullException.ThrowIfNull(bootstrap);
         ArgumentNullException.ThrowIfNull(clock);
         _clock = clock; _requireCurrent = requireCurrent;
+        bootstrap.ServingTrust.Validate();
+        var recordedMode = plan.ServingTrustMode.Length == 0 ? "site-ca" : plan.ServingTrustMode;
+        if (!string.Equals(recordedMode, bootstrap.ServingTrust.Mode, StringComparison.Ordinal) ||
+            !string.Equals(plan.ServingRootFingerprint, bootstrap.ServingTrust.RootFingerprint, StringComparison.Ordinal) ||
+            plan.Certificates.Count == 1 && !string.Equals(recordedMode, "site-ca", StringComparison.Ordinal))
+            throw new InvalidDataException("Gateway plan changes its approved serving trust or lacks separate private listener material.");
         if (plan.Version != 1 || plan.Generation is < 1 or > long.MaxValue || !PresentationPlanDigest.Verify(plan) || (requireCurrent && plan.ValidUntilUnixSeconds <= clock.GetUtcNow().ToUnixTimeSeconds()) || plan.CalculateSize() > 128 * 1024 ||
             !string.Equals(plan.SiteId, bootstrap.SiteId, StringComparison.Ordinal) || !string.Equals(plan.GatewayId, bootstrap.GatewayId, StringComparison.Ordinal) ||
             plan.Certificates.Count is < 1 or > 2 || plan.EnrollmentCaDer.Length is < 128 or > 16384)
@@ -39,9 +50,9 @@ public sealed class ValidatedServingPlan : IDisposable
         {
             if (!string.Equals(_root.GetCertHashString(HashAlgorithmName.SHA256), bootstrap.EnrollmentRootFingerprint, StringComparison.Ordinal))
                 throw new InvalidDataException("Gateway plan enrollment root differs from its bootstrap trust.");
-            ServingCertificate = LoadServerCertificate(plan.Certificates[0]);
+            _serving = ServerCertificateBundle.Load(plan.Certificates[0], bootstrap.ServingTrust, _root, clock, requireCurrent);
             ValidateNamesAndLifetime(plan, ServingCertificate);
-            EnrollmentCertificate = ReadEnrollmentCertificate(plan, bootstrap);
+            _enrollment = ReadEnrollmentCertificate(plan, bootstrap);
             _plan = plan.Clone();
         }
         catch { DisposeLeaves(); _root.Dispose(); throw; }
@@ -61,33 +72,22 @@ public sealed class ValidatedServingPlan : IDisposable
 
     private void DisposeLeaves()
     {
-        if (!ReferenceEquals(EnrollmentCertificate, ServingCertificate)) EnrollmentCertificate?.Dispose();
-        ServingCertificate?.Dispose();
+        if (!ReferenceEquals(_enrollment, _serving)) _enrollment?.Dispose();
+        _serving?.Dispose();
     }
 
-    private X509Certificate2 LoadServerCertificate(ServingCertificate material)
-    {
-        var certificate = X509CertificateLoader.LoadPkcs12(material.Pfx.Span, material.PfxPassword, X509KeyStorageFlags.EphemeralKeySet);
-        try
-        {
-            if (!certificate.HasPrivateKey || !ValidateLeaf(certificate, client: false))
-                throw new InvalidDataException("Gateway server certificate identity or lifetime is invalid.");
-            return certificate;
-        }
-        catch { certificate.Dispose(); throw; }
-    }
-
-    private X509Certificate2 ReadEnrollmentCertificate(PresentationPlan plan, GatewayBootstrap bootstrap)
+    private ServerCertificateBundle ReadEnrollmentCertificate(PresentationPlan plan, GatewayBootstrap bootstrap)
     {
         // Legacy material can be recovered while Application migrates it to distinct keys at a new generation.
-        if (plan.Certificates.Count == 1) return ServingCertificate;
+        if (plan.Certificates.Count == 1) return _serving;
         var material = plan.Certificates[1];
         var domain = plan.Certificates[0].HostNames[0][2..];
         if (!string.Equals(material.CertificateId, "enrollment", StringComparison.Ordinal) || material.HostNames.Count != 2 ||
             !string.Equals(material.HostNames[0], "register." + domain, StringComparison.Ordinal) ||
             !string.Equals(material.HostNames[1], "admin." + domain, StringComparison.Ordinal))
             throw new InvalidDataException("Gateway private listener certificate has an invalid scope.");
-        var certificate = LoadServerCertificate(material);
+        var bundle = ServerCertificateBundle.Load(material, new ServingTrustSettings(), _root, _clock, _requireCurrent);
+        var certificate = bundle.Certificate;
         try
         {
             if (!certificate.MatchesHostname(material.HostNames[0], allowWildcards: false, allowCommonName: false) ||
@@ -98,9 +98,9 @@ public sealed class ValidatedServingPlan : IDisposable
                 certificate.PublicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(ServingCertificate.PublicKey.ExportSubjectPublicKeyInfo()))
                 throw new InvalidDataException("Gateway private listener names, expiry or key separation are invalid.");
             EnrollmentCertificateScope.Require(certificate, material.HostNames, bootstrap.BindAddress);
-            return certificate;
+            return bundle;
         }
-        catch { certificate.Dispose(); throw; }
+        catch { bundle.Dispose(); throw; }
     }
 
     private bool ValidateLeaf(X509Certificate2 certificate, bool client)

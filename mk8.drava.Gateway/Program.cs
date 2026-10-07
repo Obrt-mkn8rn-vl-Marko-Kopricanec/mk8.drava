@@ -153,6 +153,7 @@ internal static class Program
             https.SslProtocols = SslProtocols.None;
             https.HandshakeTimeout = TimeSpan.FromSeconds(settings.TlsHandshakeSeconds);
             https.ServerCertificateSelector = (connection, _) => GatewayMaterialState.SelectCertificate(connection, enrollment: clientCertificate);
+            https.OnAuthenticate = (connection, options) => GatewayMaterialState.ConfigureCertificateContext(connection, options, enrollment: clientCertificate);
             if (clientCertificate)
             {
                 https.ClientCertificateMode = ClientCertificateMode.RequireCertificate;

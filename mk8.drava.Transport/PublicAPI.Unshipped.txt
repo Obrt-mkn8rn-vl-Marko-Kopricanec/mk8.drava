@@ -1046,3 +1046,11 @@ Mk8.Drava.Transport.Protocol.V1.PresentationPlan.LeafLifetimeDays.get -> uint
 Mk8.Drava.Transport.Protocol.V1.PresentationPlan.LeafLifetimeDays.set -> void
 const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.AcknowledgmentLeaseSecondsFieldNumber = 10 -> int
 const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.LeafLifetimeDaysFieldNumber = 11 -> int
+Mk8.Drava.Transport.Certificates.ValidatedServingPlan.ServingContext.get -> System.Net.Security.SslStreamCertificateContext!
+Mk8.Drava.Transport.Certificates.ValidatedServingPlan.EnrollmentContext.get -> System.Net.Security.SslStreamCertificateContext!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingTrustMode.get -> string!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingTrustMode.set -> void
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingTrustModeFieldNumber = 12 -> int
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprint.get -> string!
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprint.set -> void
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprintFieldNumber = 13 -> int

@@ -13,10 +13,14 @@ public sealed record ControllerBootstrap
     public RelayLimits Relay { get; init; } = new();
     public RegistrationSettings Registration { get; init; } = new();
     public ServingPlanSettings ServingPlan { get; init; } = new();
+    public ServingTrustSettings ServingTrust { get; init; } = new();
+    public string ServingCertificatePath { get; init; } = "";
 
     public void Validate()
     {
-        Relay.Validate(); Registration.Validate(); ServingPlan.Validate();
+        Relay.Validate(); Registration.Validate(); ServingPlan.Validate(); ServingTrust.Validate();
+        if (string.Equals(ServingTrust.Mode, "site-ca", StringComparison.Ordinal) ? ServingCertificatePath.Length != 0 : !Path.IsPathFullyQualified(ServingCertificatePath))
+            throw new InvalidDataException("Public serving trust requires an absolute protected certificate path; site CA mode issues its own material.");
         if (Domain.Length is < 3 or > 189 || !Domain.Contains('.', StringComparison.Ordinal)) throw new InvalidDataException("Site requires a fully qualified domain with room for its service label.");
         foreach (var label in Domain.Split('.'))
         {

@@ -42,6 +42,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
     public string ApplicationPlanPath => Path.Combine(_directory, "app", "gateway-serving.plan");
     public string GatewayPlanPath => Path.Combine(_directory, "gateway", "serving.plan");
+    internal string GatewayLog => _gateway.CapturedLog;
 
     public async Task StopApplicationAsync()
     {

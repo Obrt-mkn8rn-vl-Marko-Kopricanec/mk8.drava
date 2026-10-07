@@ -1,4 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
+using System.Security.Authentication;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http.Features;
 using Mk8.Drava.Presentation.Certificates;
@@ -88,6 +90,16 @@ internal sealed class GatewayMaterialState : IDisposable
         return enrollment ? lease?.EnrollmentCertificate : lease?.Certificate;
     }
 
+    public static void ConfigureCertificateContext(ConnectionContext connection, SslServerAuthenticationOptions options, bool enrollment)
+    {
+        var lease = connection.Features.Get<MaterialLease>();
+        var context = enrollment ? lease?.EnrollmentContext : lease?.ServingContext;
+        if (context is null) throw new AuthenticationException("TLS connection has no current approved certificate material.");
+        options.ServerCertificateSelectionCallback = null;
+        options.ServerCertificate = null;
+        options.ServerCertificateContext = context;
+    }
+
     private void Release(Entry entry)
     {
         lock (_gate) { entry.References--; Prune(entry); }
@@ -120,6 +132,8 @@ internal sealed class GatewayMaterialState : IDisposable
         private Entry? _entry = entry;
         public X509Certificate2? Certificate => _entry?.Material.ServingCertificate;
         public X509Certificate2? EnrollmentCertificate => _entry?.Material.EnrollmentCertificate;
+        public SslStreamCertificateContext? ServingContext => _entry?.Material.ServingContext;
+        public SslStreamCertificateContext? EnrollmentContext => _entry?.Material.EnrollmentContext;
         public void Dispose() { var owned = Interlocked.Exchange(ref _entry, null); if (owned is not null) owner.Release(owned); }
     }
 }

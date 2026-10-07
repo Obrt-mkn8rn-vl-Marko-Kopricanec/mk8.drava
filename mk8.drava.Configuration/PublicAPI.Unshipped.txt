@@ -363,3 +363,23 @@ static Mk8.Drava.Configuration.DnsPublicationSettings.operator !=(Mk8.Drava.Conf
 static Mk8.Drava.Configuration.DnsPublicationSettings.operator ==(Mk8.Drava.Configuration.DnsPublicationSettings? left, Mk8.Drava.Configuration.DnsPublicationSettings? right) -> bool
 override Mk8.Drava.Configuration.DnsPublicationSettings.GetHashCode() -> int
 override Mk8.Drava.Configuration.DnsPublicationSettings.Equals(object? obj) -> bool
+Mk8.Drava.Configuration.ServingTrustSettings
+Mk8.Drava.Configuration.ServingTrustSettings.ServingTrustSettings() -> void
+Mk8.Drava.Configuration.ServingTrustSettings.<Clone>$() -> Mk8.Drava.Configuration.ServingTrustSettings!
+Mk8.Drava.Configuration.ServingTrustSettings.Equals(Mk8.Drava.Configuration.ServingTrustSettings? other) -> bool
+Mk8.Drava.Configuration.ServingTrustSettings.Validate() -> void
+Mk8.Drava.Configuration.ServingTrustSettings.Mode.get -> string!
+Mk8.Drava.Configuration.ServingTrustSettings.Mode.init -> void
+Mk8.Drava.Configuration.ServingTrustSettings.RootFingerprint.get -> string!
+Mk8.Drava.Configuration.ServingTrustSettings.RootFingerprint.init -> void
+override Mk8.Drava.Configuration.ServingTrustSettings.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.ServingTrustSettings.GetHashCode() -> int
+override Mk8.Drava.Configuration.ServingTrustSettings.ToString() -> string!
+static Mk8.Drava.Configuration.ServingTrustSettings.operator !=(Mk8.Drava.Configuration.ServingTrustSettings? left, Mk8.Drava.Configuration.ServingTrustSettings? right) -> bool
+static Mk8.Drava.Configuration.ServingTrustSettings.operator ==(Mk8.Drava.Configuration.ServingTrustSettings? left, Mk8.Drava.Configuration.ServingTrustSettings? right) -> bool
+Mk8.Drava.Configuration.GatewayBootstrap.ServingTrust.get -> Mk8.Drava.Configuration.ServingTrustSettings!
+Mk8.Drava.Configuration.GatewayBootstrap.ServingTrust.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.ServingTrust.get -> Mk8.Drava.Configuration.ServingTrustSettings!
+Mk8.Drava.Configuration.ControllerBootstrap.ServingTrust.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.ServingCertificatePath.get -> string!
+Mk8.Drava.Configuration.ControllerBootstrap.ServingCertificatePath.init -> void
