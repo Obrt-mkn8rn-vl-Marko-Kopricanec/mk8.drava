@@ -10,6 +10,11 @@ public static class ProxyCachedResponseHeaderPolicy
         ArgumentNullException.ThrowIfNull(response);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
         var ageSeconds = ProxyCacheAgePolicy.CalculateAgeSeconds(response.StoredAtUtc, nowUtc);
-        return response.Headers.Where(static header => !HopByHopHeaderPolicy.IsHopByHopHeader(header.Name)).Append(new ProxyHeaderField("age", ageSeconds.ToString(CultureInfo.InvariantCulture))).Append(new ProxyHeaderField("x-request-id", requestId)).Append(new ProxyHeaderField("content-length", response.Body.Length.ToString(CultureInfo.InvariantCulture))).ToArray();
+        var fields = response.Headers.Where(static header => !HopByHopHeaderPolicy.IsHopByHopHeader(header.Name)
+            && !string.Equals(header.Name, "content-length", StringComparison.OrdinalIgnoreCase))
+            .Append(new ProxyHeaderField("age", ageSeconds.ToString(CultureInfo.InvariantCulture)))
+            .Append(new ProxyHeaderField("x-request-id", requestId));
+        if (response.ContentLength is { } length) fields = fields.Append(new ProxyHeaderField("content-length", length.ToString(CultureInfo.InvariantCulture)));
+        return fields.ToArray();
     }
 }

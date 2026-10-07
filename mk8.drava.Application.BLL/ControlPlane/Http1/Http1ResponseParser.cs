@@ -10,6 +10,13 @@ public static partial class Http1ResponseParser
     {
         if (IsNoBodyResponse(requestMethod, statusCode))
         {
+            if (contentLengthValues.Count > 0)
+            {
+                if (statusCode is >= 100 and < 200 or 204)
+                    return Http1ResponseFramingAnalysisResult.Reject(Http1ParseError.InvalidContentLength);
+                if (Http1RequestParser.AnalyzeContentLength(contentLengthValues) is Http1ContentLengthAnalysisResult.Rejected rejected)
+                    return Http1ResponseFramingAnalysisResult.Reject(rejected.Error);
+            }
             return Http1ResponseFramingAnalysisResult.Accept(Http1ResponseFraming.None);
         }
 
@@ -149,7 +156,7 @@ public static partial class Http1ResponseParser
         }
 
         var framing = ((Http1ResponseFramingAnalysisResult.Accepted)framingAnalysis).Framing;
-        responseHead = new Http1ResponseHead("HTTP/1.1", statusCode, reasonPhrase, framing, headers);
+        responseHead = new Http1ResponseHead("HTTP/1.1", statusCode, reasonPhrase, framing, headers, string.Equals(requestMethod, "HEAD", StringComparison.Ordinal));
         return true;
     }
 

@@ -526,7 +526,8 @@ public sealed class ClientConnection
 
         builder.Append("Age: ").Append(ageSeconds).Append("\r\n");
         builder.Append("X-Request-Id: ").Append(context.RequestId).Append("\r\n");
-        builder.Append("Content-Length: ").Append(response.Body.Length).Append("\r\n");
+        if (response.ContentLength is { } length)
+            builder.Append("Content-Length: ").Append(length.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append("\r\n");
         builder.Append(keepClientConnectionOpen ? "Connection: keep-alive\r\n\r\n" : "Connection: close\r\n\r\n");
         var headBytes = Encoding.ASCII.GetBytes(builder.ToString());
         await ProxyTimedStreamWriter.WriteAsync(clientStream, headBytes, timeouts.DownstreamWriteTimeout, cancellationToken).ConfigureAwait(false);

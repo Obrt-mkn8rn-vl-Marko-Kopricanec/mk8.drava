@@ -94,7 +94,9 @@ public sealed partial class ResponseCacheStore : IProxyCacheControl
         }
 
         var now = _timeProvider.GetUtcNow();
-        var entry = new CacheEntry(key, scope.RouteName, responseHead.StatusCode, responseHead.ReasonPhrase, storedHeaders, body.ToArray(), now, now.Add(ttl), now, sizeBytes);
+        var contentLength = ProxyResponseContentLengthPolicy.GetContentLength(responseHead, body.LongLength,
+            string.Equals(requestHead.Method, "HEAD", StringComparison.OrdinalIgnoreCase));
+        var entry = new CacheEntry(key, scope.RouteName, responseHead.StatusCode, responseHead.ReasonPhrase, storedHeaders, body.ToArray(), now, now.Add(ttl), now, sizeBytes, contentLength);
         lock (_gate)
         {
             if (_entries.TryGetValue(key, out var existing))
@@ -198,7 +200,7 @@ public sealed partial class ResponseCacheStore : IProxyCacheControl
 
     private sealed class CacheEntry
     {
-        public CacheEntry(string key, string routeName, int statusCode, string reasonPhrase, IReadOnlyList<ProxyHeaderField> headers, byte[] body, DateTimeOffset storedAtUtc, DateTimeOffset expiresAtUtc, DateTimeOffset lastAccessedAtUtc, long sizeBytes)
+        public CacheEntry(string key, string routeName, int statusCode, string reasonPhrase, IReadOnlyList<ProxyHeaderField> headers, byte[] body, DateTimeOffset storedAtUtc, DateTimeOffset expiresAtUtc, DateTimeOffset lastAccessedAtUtc, long sizeBytes, long? contentLength)
         {
             Key = key;
             RouteName = routeName;
@@ -210,8 +212,10 @@ public sealed partial class ResponseCacheStore : IProxyCacheControl
             ExpiresAtUtc = expiresAtUtc;
             LastAccessedAtUtc = lastAccessedAtUtc;
             SizeBytes = sizeBytes;
+            ContentLength = contentLength;
         }
 
+        public long? ContentLength { get; }
         public string Key { get; }
         public string RouteName { get; }
         public int StatusCode { get; }
@@ -230,7 +234,7 @@ public sealed partial class ResponseCacheStore : IProxyCacheControl
 
         public CachedProxyResponse ToResponse()
         {
-            return new CachedProxyResponse(StatusCode, ReasonPhrase, Headers, Body.ToArray(), StoredAtUtc, ExpiresAtUtc);
+            return new CachedProxyResponse(StatusCode, ReasonPhrase, Headers, Body.ToArray(), StoredAtUtc, ExpiresAtUtc, ContentLength);
         }
     }
 

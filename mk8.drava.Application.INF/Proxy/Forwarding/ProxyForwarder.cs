@@ -770,12 +770,12 @@ public sealed partial class ProxyForwarder
 
     private async ValueTask WriteResponseHeadAsync(Stream clientStream, Http1ResponseHead responseHead, IReadOnlyList<ProxyHeaderField> responseHeaders, RuntimeTimeouts timeouts, bool keepClientConnectionOpen, string requestId, RuntimeListener listener, CancellationToken cancellationToken)
     {
-        await Http1ResponseHeadWriter.WriteAsync(clientStream, responseHead, responseHeaders, Http3AltSvcPolicy.ApplyHeader([], _altSvcPolicy.CreateHeader(ProxyHttp3AltSvcRuntimeMapper.ToListenerInput(listener))), requestId, responseHead.Framing.Kind == Http1BodyKind.ContentLength ? responseHead.Framing.ContentLength : null, responseHead.Framing.Kind == Http1BodyKind.Chunked, keepClientConnectionOpen, timeouts.DownstreamWriteTimeout, _metrics, cancellationToken).ConfigureAwait(false);
+        await Http1ResponseHeadWriter.WriteAsync(clientStream, responseHead, responseHeaders, Http3AltSvcPolicy.ApplyHeader([], _altSvcPolicy.CreateHeader(ProxyHttp3AltSvcRuntimeMapper.ToListenerInput(listener))), requestId, ProxyResponseContentLengthPolicy.GetContentLength(responseHead), responseHead.Framing.Kind == Http1BodyKind.Chunked, keepClientConnectionOpen, timeouts.DownstreamWriteTimeout, _metrics, cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask WriteBufferedResponseAsync(Stream clientStream, Http1ResponseHead responseHead, IReadOnlyList<ProxyHeaderField> responseHeaders, byte[] body, bool keepClientConnectionOpen, string requestId, RuntimeListener listener, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
-        await Http1ResponseHeadWriter.WriteAsync(clientStream, responseHead, responseHeaders, Http3AltSvcPolicy.ApplyHeader([], _altSvcPolicy.CreateHeader(ProxyHttp3AltSvcRuntimeMapper.ToListenerInput(listener))), requestId, body.Length, useChunkedTransferEncoding: false, keepClientConnectionOpen, timeouts.DownstreamWriteTimeout, _metrics, cancellationToken).ConfigureAwait(false);
+        await Http1ResponseHeadWriter.WriteAsync(clientStream, responseHead, responseHeaders, Http3AltSvcPolicy.ApplyHeader([], _altSvcPolicy.CreateHeader(ProxyHttp3AltSvcRuntimeMapper.ToListenerInput(listener))), requestId, ProxyResponseContentLengthPolicy.GetContentLength(responseHead, body.LongLength), useChunkedTransferEncoding: false, keepClientConnectionOpen, timeouts.DownstreamWriteTimeout, _metrics, cancellationToken).ConfigureAwait(false);
         if (body.Length > 0)
         {
             await ProxyTimedStreamWriter.WriteAsync(clientStream, body, timeouts.DownstreamWriteTimeout, cancellationToken).ConfigureAwait(false);

@@ -39,10 +39,12 @@ internal static class Http1ResponseParserTests
 
     public static void TreatsNoContentAsNoBody()
     {
-        var parsed = Http1ResponseParser.TryParse(Bytes("HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\n"), "GET", out var response, out var error);
+        var parsed = Http1ResponseParser.TryParse(Bytes("HTTP/1.1 204 No Content\r\n\r\n"), "GET", out var response, out var error);
         AssertEx.True(parsed);
         AssertEx.Equal(Http1ParseError.None, error);
         AssertEx.Equal(Http1BodyKind.None, AssertEx.NotNull(response).Framing.Kind);
+        AssertEx.False(Http1ResponseParser.TryParse(Bytes("HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\n"), "GET", out _, out var prohibitedLength));
+        AssertEx.Equal(Http1ParseError.InvalidContentLength, prohibitedLength);
     }
 
     public static void TreatsNotModifiedAsNoBody()

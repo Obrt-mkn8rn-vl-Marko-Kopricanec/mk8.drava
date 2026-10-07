@@ -15,7 +15,7 @@ public static class FramedUpstreamResponsePolicy
             return FramedUpstreamResponseTranslationResult.Rejected(((UpstreamResponseFramingDecision.Rejected)framingDecision).Reason);
         }
 
-        return FramedUpstreamResponseTranslationResult.Accepted(new Http1ResponseHead("HTTP/1.1", upstreamResponse.StatusCode, ProxyRouteActionPolicy.ReasonPhrase(upstreamResponse.StatusCode), acceptedFraming.Framing, upstreamResponse.Headers));
+        return FramedUpstreamResponseTranslationResult.Accepted(new Http1ResponseHead("HTTP/1.1", upstreamResponse.StatusCode, ProxyRouteActionPolicy.ReasonPhrase(upstreamResponse.StatusCode), acceptedFraming.Framing, upstreamResponse.Headers, string.Equals(requestHead.Method, "HEAD", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static UpstreamResponseFramingDecision DetermineFraming(Http1RequestHead requestHead, FramedUpstreamResponseTranslationInput upstreamResponse)

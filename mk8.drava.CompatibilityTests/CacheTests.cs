@@ -60,6 +60,8 @@ internal static class CacheTests
         var result = await RunTwoRequestProxyScenarioAsync(cacheEnabled: true, responseFactory: _ => "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 5\r\nX-Head: yes\r\n\r\n", firstRequest: "HEAD /head HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", secondRequest: "HEAD /head HTTP/1.1\r\nHost: cache.test\r\nConnection: close\r\n\r\n", expectedUpstreamRequests: 1).ConfigureAwait(false);
         AssertEx.Equal(1, result.UpstreamRequests.Count);
         AssertEx.True(result.SecondResponse.Contains("X-Head: yes", StringComparison.OrdinalIgnoreCase), result.SecondResponse);
+        AssertEx.True(result.FirstResponse.Contains("Content-Length: 5\r\n", StringComparison.OrdinalIgnoreCase), result.FirstResponse);
+        AssertEx.True(result.SecondResponse.Contains("Content-Length: 5\r\n", StringComparison.OrdinalIgnoreCase), result.SecondResponse);
         AssertEx.True(result.SecondResponse.EndsWith("\r\n\r\n", StringComparison.Ordinal), result.SecondResponse);
     }
 

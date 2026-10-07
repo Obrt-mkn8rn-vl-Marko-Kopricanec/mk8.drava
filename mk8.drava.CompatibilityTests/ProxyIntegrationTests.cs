@@ -123,9 +123,13 @@ internal static class ProxyIntegrationTests
 
     public static async Task ProxiesNoContentWithoutBodyAsync()
     {
-        var result = await RunProxyScenarioAsync("GET /empty HTTP/1.1\r\nHost: empty.test\r\n\r\n", "HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\nhello", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
+        var result = await RunProxyScenarioAsync("GET /empty HTTP/1.1\r\nHost: empty.test\r\n\r\n", "HTTP/1.1 204 No Content\r\n\r\n", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
         AssertEx.True(result.ClientResponse.Contains("204 No Content", StringComparison.Ordinal), result.ClientResponse);
-        AssertEx.False(result.ClientResponse.EndsWith("hello", StringComparison.Ordinal), result.ClientResponse);
+        AssertEx.True(result.ClientResponse.EndsWith("\r\n\r\n", StringComparison.Ordinal), result.ClientResponse);
+        AssertEx.False(result.ClientResponse.Contains("Content-Length:", StringComparison.OrdinalIgnoreCase), result.ClientResponse);
+        var malformed = await RunProxyScenarioAsync("GET /empty HTTP/1.1\r\nHost: empty.test\r\n\r\n", "HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\nhello", readBodyFromUpstreamRequest: false).ConfigureAwait(false);
+        AssertEx.True(malformed.ClientResponse.Contains("502 Bad Gateway", StringComparison.Ordinal), malformed.ClientResponse);
+        AssertEx.False(malformed.ClientResponse.EndsWith("hello", StringComparison.Ordinal), malformed.ClientResponse);
     }
 
     public static async Task ProxiesNotModifiedWithoutBodyAsync()
