@@ -743,9 +743,10 @@ public sealed partial class ProxyForwarder
                 }
 
                 var responseHeaders = BuildResponseHeaders(responseHead, route);
+                var bodyReader = new Http1BodyReader(responseInput, initialBodyBytes, _metrics, timeouts.UpstreamResponseBodyIdleTimeout, ProxyTimeoutKind.UpstreamResponseBodyIdle);
                 if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
                 {
-                    var body = await ReadCacheCandidateBodyAsync(responseInput, initialBodyBytes, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
+                    var body = await ReadCacheCandidateBodyAsync(bodyReader, responseHead, listener, cancellationToken).ConfigureAwait(false);
                     await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body, keepClientConnectionOpen, requestId, () =>
                     {
                         responseStarted = true;
@@ -758,10 +759,10 @@ public sealed partial class ProxyForwarder
                     await WriteResponseHeadAsync(clientStream, responseHead, responseHeaders, timeouts, keepClientConnectionOpen, requestId, listener, cancellationToken).ConfigureAwait(false);
                     responseStarted = true;
                     markResponseStarted();
-                    await RelayResponseBodyAsync(responseInput, clientStream, initialBodyBytes, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
+                    await RelayResponseBodyAsync(bodyReader, clientStream, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
                 }
 
-                var canReuseUpstream = !upstreamWantsClose && responseHead.Framing.Kind != Http1BodyKind.CloseDelimited;
+                var canReuseUpstream = !upstreamWantsClose && responseHead.Framing.Kind != Http1BodyKind.CloseDelimited && !bodyReader.HasBufferedBytes;
                 return new ResponseForwardingResult(responseStarted, keepClientConnectionOpen, canReuseUpstream, responseHead.StatusCode);
             }
 
@@ -816,7 +817,7 @@ public sealed partial class ProxyForwarder
         }
     }
 
-    private async ValueTask<byte[]> ReadCacheCandidateBodyAsync(Stream upstreamStream, ReadOnlyMemory<byte> initialBodyBytes, Http1ResponseHead responseHead, RuntimeListener listener, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    private static async ValueTask<byte[]> ReadCacheCandidateBodyAsync(Http1BodyReader reader, Http1ResponseHead responseHead, RuntimeListener listener, CancellationToken cancellationToken)
     {
         if (responseHead.Framing.Kind == Http1BodyKind.None)
         {
@@ -824,7 +825,6 @@ public sealed partial class ProxyForwarder
         }
 
         var contentLength = responseHead.Framing.ContentLength.GetValueOrDefault();
-        var reader = new Http1BodyReader(upstreamStream, initialBodyBytes, _metrics, timeouts.UpstreamResponseBodyIdleTimeout, ProxyTimeoutKind.UpstreamResponseBodyIdle);
         using var body = new MemoryStream((int)Math.Min(contentLength, int.MaxValue));
         var remaining = contentLength;
         var buffer = ArrayPool<byte>.Shared.Rent(listener.ForwardingBufferBytes);
@@ -851,9 +851,8 @@ public sealed partial class ProxyForwarder
         }
     }
 
-    private async ValueTask RelayResponseBodyAsync(Stream upstreamStream, Stream clientStream, ReadOnlyMemory<byte> initialBodyBytes, Http1ResponseHead responseHead, RuntimeListener listener, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    private async ValueTask RelayResponseBodyAsync(Http1BodyReader reader, Stream clientStream, Http1ResponseHead responseHead, RuntimeListener listener, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
-        var reader = new Http1BodyReader(upstreamStream, initialBodyBytes, _metrics, timeouts.UpstreamResponseBodyIdleTimeout, ProxyTimeoutKind.UpstreamResponseBodyIdle);
         try
         {
             if (responseHead.Framing.Kind == Http1BodyKind.ContentLength)

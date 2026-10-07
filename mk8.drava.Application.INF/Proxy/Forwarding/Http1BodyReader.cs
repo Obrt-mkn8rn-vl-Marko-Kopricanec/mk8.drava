@@ -18,6 +18,8 @@ internal sealed class Http1BodyReader
         _timeoutKind = timeoutKind;
     }
 
+    public bool HasBufferedBytes => !_initialBytes.IsEmpty;
+
     public async ValueTask<int> ReadAsync(Memory<byte> destination, CancellationToken cancellationToken)
     {
         if (_initialBytes.Length > 0)

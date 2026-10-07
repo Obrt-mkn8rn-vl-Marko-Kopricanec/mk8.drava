@@ -27,9 +27,25 @@ internal sealed class PooledUpstreamConnection : IDisposable
         MaxIdleConnections = maxIdleConnections;
     }
 
+    public bool IsIdleAndUsable
+    {
+        get
+        {
+            if (Socket is not { } socket) return false; // Relay capabilities authorize one exchange.
+            try
+            {
+                return !socket.Poll(0, SelectMode.SelectRead) && !socket.Poll(0, SelectMode.SelectError);
+            }
+            catch (Exception exception) when (exception is SocketException or ObjectDisposedException)
+            {
+                return false;
+            }
+        }
+    }
+
     public void MarkReusable()
     {
-        CanReturnToPool = Socket is not null; // A relay capability authorizes one exchange; it is never reused for a later request.
+        CanReturnToPool = IsIdleAndUsable;
     }
 
     public void MarkUnusable()

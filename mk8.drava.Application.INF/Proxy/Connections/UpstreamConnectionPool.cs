@@ -36,7 +36,7 @@ public sealed class UpstreamConnectionPool : IUpstreamConnectionPruner, IDisposa
                 {
                     var candidate = queue.Dequeue();
                     _metrics.UpstreamPoolIdleConnectionDiscarded();
-                    if (IsExpired(candidate, timeouts.UpstreamIdleConnectionLifetime, nowUtc))
+                    if (IsExpired(candidate, timeouts.UpstreamIdleConnectionLifetime, nowUtc) || !candidate.IsIdleAndUsable)
                     {
                         candidate.Dispose();
                         _metrics.UpstreamConnectionDiscarded();
