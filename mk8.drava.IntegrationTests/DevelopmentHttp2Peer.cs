@@ -50,6 +50,13 @@ internal sealed class DevelopmentHttp2Peer : IDisposable
             await tls.FlushAsync(token).ConfigureAwait(false);
         }, cancellationToken);
 
+    public Task RespondHeaderBlockAsync(ReadOnlyMemory<byte> block, CancellationToken cancellationToken) =>
+        RespondTlsAsync(async (tls, token) =>
+        {
+            await Http2TestFrames.WriteAsync(tls, Http2TestFrameType.Headers, 5, 1, block, token).ConfigureAwait(false);
+            await tls.FlushAsync(token).ConfigureAwait(false);
+        }, cancellationToken);
+
     private async Task RespondTlsAsync(Func<SslStream, CancellationToken, Task> writeResponse, CancellationToken cancellationToken)
     {
         using var socket = await _listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);

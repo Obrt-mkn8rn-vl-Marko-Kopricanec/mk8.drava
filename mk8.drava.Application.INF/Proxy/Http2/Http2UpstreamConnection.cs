@@ -95,18 +95,18 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
                 }
 
                 Volatile.Write(ref _headFramesObserved, 1);
-                headerBlock.Write(payload.Span);
-                if (headerBlock.Length > maxHeaderListBytes)
+                if (headerBlock.Length + payload.Length > _maximumResponseFieldBytes)
                 {
                     throw new Http2UpstreamProtocolException("Upstream HTTP/2 response header block exceeded the configured limit.");
                 }
 
+                headerBlock.Write(payload.Span);
                 if ((frame.Value.Flags & Http2Flags.EndHeaders) == 0)
                 {
                     continue;
                 }
 
-                var decoded = DecodeResponseHeaders(headerBlock.ToArray());
+                var decoded = DecodeResponseHeaders(headerBlock.ToArray(), _maximumResponseFieldBytes);
                 if (decoded.StatusCode is >= 100 and < 200)
                 {
                     if (decoded.Headers.Any(static field => string.Equals(field.Name, "content-length", StringComparison.OrdinalIgnoreCase)))
@@ -286,9 +286,9 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
         _metrics.AddBytesWritten(bytes.Length);
     }
 
-    private static Http2UpstreamResponseHead DecodeResponseHeaders(byte[] block)
+    private static Http2UpstreamResponseHead DecodeResponseHeaders(byte[] block, int maximumFieldBytes)
     {
-        if (!HpackCodec.TryDecodeRequestHeaders(block, out var headers, out var reason))
+        if (!HpackCodec.TryDecodeResponseHeaders(block, maximumFieldBytes, Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderCount, out var headers, out var reason))
         {
             throw new Http2UpstreamProtocolException($"Upstream sent invalid HPACK response headers: {reason}.");
         }
@@ -313,6 +313,7 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
                 throw new Http2UpstreamProtocolException("Upstream sent an invalid HTTP/2 response pseudo-header.");
             }
 
+            Http2ResponseFieldPolicy.Validate(header);
             if (Http2HeaderPolicy.IsForbiddenResponseHeader(header.Name))
             {
                 throw new Http2UpstreamProtocolException("Upstream sent a forbidden HTTP/2 hop-by-hop response header.");

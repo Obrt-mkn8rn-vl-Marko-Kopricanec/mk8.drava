@@ -31,14 +31,15 @@ internal sealed partial class Http2UpstreamConnection
             if (frame.Type != Http2FrameType.Continuation || frame.StreamId != _streamId)
                 throw new Http2UpstreamProtocolException("Interleaved HTTP/2 trailing field block.");
         }
-        if (!HpackCodec.TryDecodeRequestHeaders(block.ToArray(), out var fields, out _))
+        if (!HpackCodec.TryDecodeResponseHeaders(block.ToArray(), _maximumResponseFieldBytes, FrameLimits.MaximumHeaderCount, out var fields, out _))
             throw new Http2UpstreamProtocolException("Invalid HPACK trailing fields.");
         if (fields.Count > FrameLimits.MaximumHeaderCount) throw new Http2UpstreamProtocolException("Too many HTTP/2 trailing fields.");
         var bytes = 0;
         List<Header> typed = [];
         foreach (var field in fields)
         {
-            if (field.Name.Any(char.IsAsciiLetterUpper) || HopByHopHeaderPolicy.IsHopByHopHeader(field.Name))
+            Http2ResponseFieldPolicy.Validate(field);
+            if (HopByHopHeaderPolicy.IsHopByHopHeader(field.Name))
                 throw new Http2UpstreamProtocolException("Invalid HTTP/2 trailing field name.");
             bytes = checked(bytes + System.Text.Encoding.UTF8.GetByteCount(field.Name) + System.Text.Encoding.UTF8.GetByteCount(field.Value));
             if (bytes > _maximumResponseFieldBytes) throw new Http2UpstreamProtocolException("Decoded trailing fields exceeded their bound.");
