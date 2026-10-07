@@ -3,6 +3,7 @@ using System.Text;
 using Google.Protobuf;
 using Grpc.Core;
 using Mk8.Drava.Application.BLL.ControlPlane.Http1;
+using Mk8.Drava.Application.BLL.Http;
 using Mk8.Drava.Transport.Protocol;
 using Mk8.Drava.Transport.Protocol.V1;
 
@@ -36,6 +37,17 @@ public sealed class ExchangeResponseWriter : IDisposable
     }
 
     public bool ResponseStarted => _finalHead;
+
+    public void SetTrailers(IReadOnlyList<ProxyHeaderField> fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        if (!_finalHead || _finished || _state is not DecodeState.Done and not DecodeState.CloseBody || _trailers.Count > 0)
+            throw new InvalidDataException("Response trailing fields require a complete body and a single trailer section.");
+        List<Header> typed = [];
+        foreach (var field in fields) typed.Add(new Header { Name = field.Name, Value = field.Value });
+        FrameLimits.ValidateHeaders(typed, trailers: true);
+        _trailers.AddRange(typed);
+    }
 
     public async ValueTask WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
     {

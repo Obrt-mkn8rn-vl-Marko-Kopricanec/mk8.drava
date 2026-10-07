@@ -7,4 +7,4 @@ using System.Buffers.Binary;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
 
 namespace Mk8.Drava.Application.INF.Proxy.Http2;
-internal sealed record Http2UpstreamDataChunk(byte[] Data, bool EndStream);
+internal sealed record Http2UpstreamDataChunk(byte[] Data, bool EndStream, IReadOnlyList<ProxyHeaderField>? Trailers = null);

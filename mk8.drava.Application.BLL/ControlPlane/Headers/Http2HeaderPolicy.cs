@@ -21,4 +21,11 @@ public static class Http2HeaderPolicy
         ArgumentNullException.ThrowIfNull(headerName);
         return headerName.StartsWith(':') || string.Equals(headerName, "Host", StringComparison.OrdinalIgnoreCase) || string.Equals(headerName, "Connection", StringComparison.OrdinalIgnoreCase) || string.Equals(headerName, "Content-Length", StringComparison.OrdinalIgnoreCase) || string.Equals(headerName, "Transfer-Encoding", StringComparison.OrdinalIgnoreCase) || string.Equals(headerName, "Upgrade", StringComparison.OrdinalIgnoreCase) || string.Equals(headerName, "Keep-Alive", StringComparison.OrdinalIgnoreCase) || string.Equals(headerName, "Proxy-Connection", StringComparison.OrdinalIgnoreCase) || string.Equals(headerName, "X-Request-Id", StringComparison.OrdinalIgnoreCase);
     }
+
+    public static bool IsForbiddenResponseHeader(string headerName)
+    {
+        ArgumentNullException.ThrowIfNull(headerName);
+        return !string.Equals(headerName, "trailer", StringComparison.OrdinalIgnoreCase)
+            && HopByHopHeaderPolicy.IsHopByHopHeader(headerName);
+    }
 }

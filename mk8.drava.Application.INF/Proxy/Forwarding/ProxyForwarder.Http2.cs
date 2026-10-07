@@ -33,7 +33,15 @@ public sealed partial class ProxyForwarder
         if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
         {
             var body = await ReadFramedUpstreamCacheCandidateBodyAsync((readTimeouts, token) => ReadHttp2DataChunkAsync(upstreamHttp2, readTimeouts, token), responseHead, upstreamResponse.EndStream, timeouts, cancellationToken).ConfigureAwait(false);
-            await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body, keepClientConnectionOpen, requestId, markResponseStarted, cancellationToken).ConfigureAwait(false);
+            if (body.Trailers is { Count: > 0 })
+            {
+                _cacheStore.RecordUncacheable(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), "trailers");
+                await WriteBufferedFramedTrailersAsync(clientStream, responseHead, responseHeaders, body, listener, timeouts,
+                    requestId, keepClientConnectionOpen, markResponseStarted, cancellationToken).ConfigureAwait(false);
+            }
+            else
+                await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget,
+                    responseHead, responseHeaders, body.Data, keepClientConnectionOpen, requestId, markResponseStarted, cancellationToken).ConfigureAwait(false);
         }
         else
         {

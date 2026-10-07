@@ -42,7 +42,7 @@ public sealed class HopByHopHeaderPolicy
         return false;
     }
 
-    public IReadOnlyList<ProxyHeaderField> FilterForForwarding(IReadOnlyList<ProxyHeaderField> headers, bool preserveTransferEncoding, bool preserveTrailer)
+    public IReadOnlyList<ProxyHeaderField> FilterForForwarding(IReadOnlyList<ProxyHeaderField> headers, bool preserveTransferEncoding, bool preserveTrailer, bool preserveTeTrailers = false)
     {
         ArgumentNullException.ThrowIfNull(headers);
         HashSet<string> nominated = new(StringComparer.OrdinalIgnoreCase);
@@ -69,6 +69,12 @@ public sealed class HopByHopHeaderPolicy
 
             if (StandardHopByHopHeaders.Contains(header.Name))
             {
+                if (preserveTeTrailers && string.Equals(header.Name, "te", StringComparison.OrdinalIgnoreCase)
+                    && !Http2HeaderPolicy.IsForbiddenRequestHeader(header.Name, header.Value))
+                {
+                    filtered.Add(header);
+                    continue;
+                }
                 if (preserveTransferEncoding && string.Equals(header.Name, "Transfer-Encoding", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;

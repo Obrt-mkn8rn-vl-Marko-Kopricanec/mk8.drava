@@ -1,4 +1,5 @@
 using Grpc.Core;
+using Mk8.Drava.Application.BLL.Http;
 using Mk8.Drava.Transport.Protocol.V1;
 
 namespace Mk8.Drava.Application.INF.Proxy.Exchange;
@@ -25,6 +26,11 @@ public sealed class ExchangeClientStream : Stream
 
     public bool ResponseStarted => _response.ResponseStarted;
     public bool UploadCompleted => _request.Completed;
+    public void SetResponseTrailers(IReadOnlyList<ProxyHeaderField> fields)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _response.SetTrailers(fields);
+    }
     public override bool CanRead => !_disposed;
     public override bool CanWrite => !_disposed;
     public override bool CanSeek => false;

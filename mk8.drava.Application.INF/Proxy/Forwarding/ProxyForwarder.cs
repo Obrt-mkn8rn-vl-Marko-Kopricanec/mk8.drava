@@ -296,7 +296,8 @@ public sealed partial class ProxyForwarder
         if (clientStream is ExchangeClientStream exchange) await exchange.AllowUploadAsync(cancellationToken).ConfigureAwait(false);
         Task UploadAsync(CancellationToken token) => endRequestStream ? Task.CompletedTask
             : RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts,
-                route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp2.SendDataAsync, token).AsTask();
+                route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp2.SendDataAsync,
+                (fields, readTimeouts, cancellation) => upstreamHttp2.SendHeadersAsync(fields, true, readTimeouts, cancellation), token).AsTask();
         Task<ResponseForwardingResult> ResponseAsync(CancellationToken token, Action<int>? finalHead) =>
             ForwardHttp2ResponseAsync(upstreamHttp2, clientStream, requestHead, route, listener, timeouts, upstreamTarget,
                 preferClientKeepAlive, requestId, suppressRetryableStatusResponse, markResponseStarted, finalHead, token).AsTask();
@@ -317,7 +318,7 @@ public sealed partial class ProxyForwarder
         if (clientStream is ExchangeClientStream exchange) await exchange.AllowUploadAsync(cancellationToken).ConfigureAwait(false);
         if (!endRequestStream)
         {
-            await RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync, cancellationToken).ConfigureAwait(false);
+            await RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync, null, cancellationToken).ConfigureAwait(false);
         }
 
         var upstreamResponse = await upstreamHttp3.ReadResponseHeadAsync(listener.MaxResponseHeadBytes, timeouts, cancellationToken).ConfigureAwait(false);
@@ -337,7 +338,7 @@ public sealed partial class ProxyForwarder
         if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
         {
             var body = await ReadFramedUpstreamCacheCandidateBodyAsync((readTimeouts, token) => ReadHttp3DataChunkAsync(upstreamHttp3, readTimeouts, token), responseHead, endStream: false, timeouts, cancellationToken).ConfigureAwait(false);
-            await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body, keepClientConnectionOpen, requestId, markResponseStarted, cancellationToken).ConfigureAwait(false);
+            await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body.Data, keepClientConnectionOpen, requestId, markResponseStarted, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -397,7 +398,7 @@ public sealed partial class ProxyForwarder
 
     private IReadOnlyList<ProxyHeaderField> BuildHttp2RequestHeaders(Http1RequestHead requestHead, RuntimeRoute route, RuntimeUpstream upstream, string upstreamTarget, ForwardedHeadersContext forwardedHeaders)
     {
-        var filtered = _headerPolicy.FilterForForwarding(requestHead.Headers, preserveTransferEncoding: false, preserveTrailer: false);
+        var filtered = _headerPolicy.FilterForForwarding(requestHead.Headers, preserveTransferEncoding: false, preserveTrailer: false, preserveTeTrailers: true);
         var requestHeaders = ProxyHeaderMutationPolicy.ApplyRequestHeaders(filtered, ProxyHeaderMutationRuntimeMapper.ToPolicyInput(route.HeaderPolicy), forwardedHeaders);
         var authority = requestHeaders.FirstOrDefault(static header => string.Equals(header.Name, "Host", StringComparison.OrdinalIgnoreCase))?.Value;
         if (string.IsNullOrWhiteSpace(authority))
@@ -424,7 +425,7 @@ public sealed partial class ProxyForwarder
         return headers;
     }
 
-    private async ValueTask RelayFramedUpstreamRequestBodyAsync(Stream clientStream, ReadOnlyMemory<byte> initialBodyBytes, Http1RequestHead requestHead, RuntimeListener listener, RuntimeTimeouts timeouts, long maxRequestBodyBytes, Http1BodyReader? preReadReader, byte[]? preReadChunkLine, SendFramedUpstreamDataAsync sendDataAsync, CancellationToken cancellationToken)
+    private async ValueTask RelayFramedUpstreamRequestBodyAsync(Stream clientStream, ReadOnlyMemory<byte> initialBodyBytes, Http1RequestHead requestHead, RuntimeListener listener, RuntimeTimeouts timeouts, long maxRequestBodyBytes, Http1BodyReader? preReadReader, byte[]? preReadChunkLine, SendFramedUpstreamDataAsync sendDataAsync, SendFramedUpstreamTrailersAsync? sendTrailersAsync, CancellationToken cancellationToken)
     {
         var reader = preReadReader ?? new Http1BodyReader(clientStream, initialBodyBytes, _metrics, timeouts.ClientRequestBodyIdleTimeout, ProxyTimeoutKind.ClientRequestBodyIdle);
         try
@@ -435,7 +436,7 @@ public sealed partial class ProxyForwarder
             }
             else if (requestHead.Framing.Kind == Http1BodyKind.Chunked)
             {
-                await RelayChunkedBodyToFramedUpstreamAsync(reader, sendDataAsync, listener, timeouts, preReadChunkLine, maxRequestBodyBytes, cancellationToken).ConfigureAwait(false);
+                await RelayChunkedBodyToFramedUpstreamAsync(reader, sendDataAsync, listener, timeouts, preReadChunkLine, maxRequestBodyBytes, sendTrailersAsync, cancellationToken).ConfigureAwait(false);
             }
         }
         catch
@@ -470,7 +471,7 @@ public sealed partial class ProxyForwarder
         }
     }
 
-    private static async ValueTask RelayChunkedBodyToFramedUpstreamAsync(Http1BodyReader reader, SendFramedUpstreamDataAsync sendDataAsync, RuntimeListener listener, RuntimeTimeouts timeouts, byte[]? initialChunkLine, long maxPayloadBytes, CancellationToken cancellationToken)
+    private static async ValueTask RelayChunkedBodyToFramedUpstreamAsync(Http1BodyReader reader, SendFramedUpstreamDataAsync sendDataAsync, RuntimeListener listener, RuntimeTimeouts timeouts, byte[]? initialChunkLine, long maxPayloadBytes, SendFramedUpstreamTrailersAsync? sendTrailersAsync, CancellationToken cancellationToken)
     {
         var chunkLine = initialChunkLine;
         var relayedPayloadBytes = 0L;
@@ -487,8 +488,8 @@ public sealed partial class ProxyForwarder
 
                 if (chunkSize == 0)
                 {
-                    await DiscardTrailerSectionAsync(reader, listener.MaxChunkLineBytes, cancellationToken).ConfigureAwait(false);
-                    await sendDataAsync(ReadOnlyMemory<byte>.Empty, endStream: true, timeouts, cancellationToken).ConfigureAwait(false);
+                    await FinishFramedRequestAsync(reader, sendDataAsync, sendTrailersAsync, listener.MaxChunkLineBytes,
+                        timeouts, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -545,11 +546,11 @@ public sealed partial class ProxyForwarder
         }
     }
 
-    private static async ValueTask<byte[]> ReadFramedUpstreamCacheCandidateBodyAsync(ReadFramedUpstreamDataAsync readDataAsync, Http1ResponseHead responseHead, bool endStream, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    private static async ValueTask<BufferedFramedBody> ReadFramedUpstreamCacheCandidateBodyAsync(ReadFramedUpstreamDataAsync readDataAsync, Http1ResponseHead responseHead, bool endStream, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
         if (endStream || responseHead.Framing.Kind == Http1BodyKind.None)
         {
-            return[];
+            return new BufferedFramedBody([], null);
         }
 
         using var body = new MemoryStream();
@@ -563,7 +564,7 @@ public sealed partial class ProxyForwarder
 
             if (chunk.EndStream)
             {
-                return body.ToArray();
+                return new BufferedFramedBody(body.ToArray(), chunk.Trailers);
             }
         }
     }
@@ -571,7 +572,7 @@ public sealed partial class ProxyForwarder
     private static async ValueTask<FramedUpstreamDataChunk> ReadHttp2DataChunkAsync(Http2UpstreamConnection upstreamHttp2, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
         var chunk = await upstreamHttp2.ReadDataAsync(timeouts, cancellationToken).ConfigureAwait(false);
-        return new FramedUpstreamDataChunk(chunk.Data, chunk.EndStream);
+        return new FramedUpstreamDataChunk(chunk.Data, chunk.EndStream, chunk.Trailers);
     }
 
     private static async ValueTask<FramedUpstreamDataChunk> ReadHttp3DataChunkAsync(Http3UpstreamConnection upstreamHttp3, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
@@ -619,10 +620,13 @@ public sealed partial class ProxyForwarder
                 {
                     if (responseHead.Framing.Kind == Http1BodyKind.Chunked)
                     {
-                        await ProxyTimedStreamWriter.WriteAsync(clientStream, "0\r\n\r\n"u8.ToArray(), timeouts.DownstreamWriteTimeout, cancellationToken).ConfigureAwait(false);
-                        _metrics.AddBytesWritten(5);
+                        await WriteFramedResponseEndingAsync(clientStream, chunk.Trailers, timeouts, cancellationToken).ConfigureAwait(false);
                     }
 
+                    if (clientStream is ExchangeClientStream exchange && chunk.Trailers is { Count: > 0 })
+                        exchange.SetResponseTrailers(chunk.Trailers);
+                    else if (responseHead.Framing.Kind != Http1BodyKind.Chunked && chunk.Trailers is { Count: > 0 })
+                        throw new Http2UpstreamProtocolException("Fixed-length HTTP/1 presentation cannot carry trailing fields.");
                     return;
                 }
             }
@@ -1029,5 +1033,7 @@ public sealed partial class ProxyForwarder
 
     private delegate ValueTask SendFramedUpstreamDataAsync(ReadOnlyMemory<byte> data, bool endStream, RuntimeTimeouts timeouts, CancellationToken cancellationToken);
     private delegate ValueTask<FramedUpstreamDataChunk> ReadFramedUpstreamDataAsync(RuntimeTimeouts timeouts, CancellationToken cancellationToken);
-    private readonly record struct FramedUpstreamDataChunk(ReadOnlyMemory<byte> Data, bool EndStream);
+    private delegate ValueTask SendFramedUpstreamTrailersAsync(IReadOnlyList<ProxyHeaderField> fields, RuntimeTimeouts timeouts, CancellationToken cancellationToken);
+    private readonly record struct FramedUpstreamDataChunk(ReadOnlyMemory<byte> Data, bool EndStream, IReadOnlyList<ProxyHeaderField>? Trailers = null);
+    private sealed record BufferedFramedBody(byte[] Data, IReadOnlyList<ProxyHeaderField>? Trailers);
 }

@@ -35,7 +35,7 @@ internal sealed class DevelopmentSiteClient : IDisposable
         Client = new HttpClient(_handler, disposeHandler: false) { BaseAddress = new Uri($"https://{host}:{port}"), Timeout = TimeSpan.FromSeconds(10), DefaultRequestVersion = HttpVersion.Version20, DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact };
     }
 
-    private bool ValidateServer(object sender, X509Certificate? certificate, X509Chain? existingChain, SslPolicyErrors errors)
+    internal bool ValidateServer(object sender, X509Certificate? certificate, X509Chain? existingChain, SslPolicyErrors errors)
     {
         if (certificate is null || (errors & (SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateNotAvailable)) != SslPolicyErrors.None) return false;
         using var leaf = X509CertificateLoader.LoadCertificate(certificate.GetRawCertData());

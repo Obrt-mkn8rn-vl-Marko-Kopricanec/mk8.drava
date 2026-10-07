@@ -61,6 +61,8 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
 
     public async ValueTask<Http2UpstreamResponseHead> ReadResponseHeadAsync(int maxHeaderListBytes, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxHeaderListBytes, 1);
+        _maximumResponseFieldBytes = Math.Min(maxHeaderListBytes, Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderBytes);
         using var headerBlock = new MemoryStream();
         var headerEndsStream = false;
         var informational = 0;
@@ -166,15 +168,10 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
                 return new Http2UpstreamDataChunk(payload.ToArray(), (frame.Value.Flags & Http2Flags.EndStream) != 0);
             }
 
-            if (frame.Value.Type is Http2FrameType.Headers or Http2FrameType.Continuation)
-            {
-                if ((frame.Value.Flags & Http2Flags.EndStream) != 0)
-                {
-                    return new Http2UpstreamDataChunk([], true);
-                }
-
-                continue;
-            }
+            if (frame.Value.Type == Http2FrameType.Headers)
+                return await ReadTrailersAsync(frame.Value, timeouts, cancellationToken).ConfigureAwait(false);
+            if (frame.Value.Type == Http2FrameType.Continuation)
+                throw new Http2UpstreamProtocolException("Unsolicited HTTP/2 trailing CONTINUATION.");
 
             if (frame.Value.Type == Http2FrameType.RstStream)
             {
@@ -314,7 +311,7 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
                 throw new Http2UpstreamProtocolException("Upstream sent an invalid HTTP/2 response pseudo-header.");
             }
 
-            if (HopByHopHeaderPolicy.IsHopByHopHeader(header.Name))
+            if (Http2HeaderPolicy.IsForbiddenResponseHeader(header.Name))
             {
                 throw new Http2UpstreamProtocolException("Upstream sent a forbidden HTTP/2 hop-by-hop response header.");
             }

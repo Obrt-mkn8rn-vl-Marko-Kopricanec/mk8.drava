@@ -70,7 +70,7 @@ internal static class HpackCodec
         foreach (var header in headers)
         {
             var name = header.Name.ToLowerInvariant();
-            if (HopByHopHeaderPolicy.IsHopByHopHeader(name))
+            if (Http2HeaderPolicy.IsForbiddenRequestHeader(name, header.Value))
             {
                 continue;
             }
@@ -113,7 +113,7 @@ internal static class HpackCodec
 
         foreach (var header in headers)
         {
-            if (HopByHopHeaderPolicy.IsHopByHopHeader(header.Name))
+            if (Http2HeaderPolicy.IsForbiddenResponseHeader(header.Name))
             {
                 continue;
             }
