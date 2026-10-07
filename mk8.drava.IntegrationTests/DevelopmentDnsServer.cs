@@ -7,19 +7,23 @@ namespace Mk8.Drava.IntegrationTests;
 // A real DNS responder owned by the development test. It never changes the machine resolver or hosts file.
 internal sealed class DevelopmentDnsServer : IAsyncDisposable
 {
-    private readonly UdpClient _listener = new(new IPEndPoint(IPAddress.Loopback, 0));
+    private readonly UdpClient _listener;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _run;
     private readonly Func<IPAddress?> _answer;
     private readonly Func<IReadOnlyList<string>>? _txtAnswer;
+    public bool DropReplies { get; init; }
+    public bool TruncateReplies { get; init; }
+    public TaskCompletionSource QueryReceived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public int Port => ((IPEndPoint)(_listener.Client.LocalEndPoint ?? throw new InvalidOperationException("DNS fixture is unbound."))).Port;
 
     public DevelopmentDnsServer(IPAddress answer) : this(() => answer) { }
-    public DevelopmentDnsServer(Func<IPAddress?> answer) { ArgumentNullException.ThrowIfNull(answer); _answer = answer; _run = RunAsync(); }
+    public DevelopmentDnsServer(Func<IPAddress?> answer) { ArgumentNullException.ThrowIfNull(answer); _answer = answer; _listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)); _run = RunAsync(); }
 
-    public DevelopmentDnsServer(Func<IReadOnlyList<string>> txtAnswer)
+    public DevelopmentDnsServer(Func<IReadOnlyList<string>> txtAnswer, int port = 0)
     {
-        ArgumentNullException.ThrowIfNull(txtAnswer); _answer = static () => null; _txtAnswer = txtAnswer; _run = RunAsync();
+        ArgumentNullException.ThrowIfNull(txtAnswer); _answer = static () => null; _txtAnswer = txtAnswer;
+        _listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, port)); _run = RunAsync();
     }
 
     private async Task RunAsync()
@@ -29,7 +33,10 @@ internal sealed class DevelopmentDnsServer : IAsyncDisposable
             while (!_stop.IsCancellationRequested)
             {
                 var received = await _listener.ReceiveAsync(_stop.Token).ConfigureAwait(false);
+                QueryReceived.TrySetResult();
+                if (DropReplies) continue;
                 var response = Respond(received.Buffer);
+                if (TruncateReplies) response[2] |= 2;
                 await _listener.SendAsync(response, received.RemoteEndPoint, _stop.Token).ConfigureAwait(false);
             }
         }
@@ -66,7 +73,7 @@ internal sealed class DevelopmentDnsServer : IAsyncDisposable
         return response;
     }
 
-    private static byte[] RespondTxt(byte[] query, int questionEnd, IReadOnlyList<string> values)
+    internal static byte[] RespondTxt(byte[] query, int questionEnd, IReadOnlyList<string> values)
     {
         if (values.Count > 128) throw new InvalidDataException("Fixture TXT set exceeds its bound.");
         var size = questionEnd;

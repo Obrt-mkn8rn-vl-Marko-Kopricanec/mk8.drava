@@ -41,4 +41,18 @@ public sealed class AcmeDns01PropagationNetworkTests
         var verifier = new AcmeDns01PropagationVerifier("127.0.0.1", server.Port);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await verifier.VerifyAsync("_acme-challenge.site.example", new string('A', 43), cancellation.Token).ConfigureAwait(false)).ConfigureAwait(true);
     }
+
+    [Fact]
+    public async Task CancellationJoinsAnActualOutstandingUdpReceiveAsync()
+    {
+        var server = new DevelopmentDnsServer(() => (IReadOnlyList<string>)[]) { DropReplies = true };
+        await using var lifetime = server.ConfigureAwait(false);
+        using var cancellation = new CancellationTokenSource();
+        var verifier = new AcmeDns01PropagationVerifier("127.0.0.1", server.Port);
+        var query = Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await verifier.VerifyAsync("_acme-challenge.site.example", new string('A', 43), cancellation.Token).ConfigureAwait(false));
+        try { await server.QueryReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(true); }
+        finally { await cancellation.CancelAsync().ConfigureAwait(true); await query.ConfigureAwait(true); }
+        Assert.True(query.IsCompletedSuccessfully);
+    }
 }
