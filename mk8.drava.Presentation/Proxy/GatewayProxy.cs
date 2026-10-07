@@ -39,14 +39,16 @@ public sealed class GatewayProxy : IDisposable
     private async Task ExchangeAsync(HttpContext context)
     {
         var head = GatewayRequestMapper.ToHead(context, _bootstrap, generation: 1);
-        if (head.WantsUpgrade) { context.Response.StatusCode = 501; return; }
+        if (head.WantsUpgrade && (!string.Equals(head.ClientProtocol, "HTTP/1.1", StringComparison.Ordinal) || head.HasBody)) { context.Response.StatusCode = 400; return; }
+        var upgrade = head.WantsUpgrade ? new GatewayUpgradeState(requested: true) : GatewayUpgradeState.None;
+        await using var upgradeLifetime = upgrade.ConfigureAwait(false);
         var client = new ProxyExchange.ProxyExchangeClient(_channel.Invoker);
         using var call = client.Exchange(_channel.Credentials, cancellationToken: context.RequestAborted);
         using var writer = new ExchangeClientWriter(call.RequestStream, _bootstrap.StreamWindowFrames, context.RequestAborted);
         await writer.WriteAsync(new ExchangeFrame { Request = head }, context.RequestAborted).ConfigureAwait(false);
-        using var upload = new GatewayUpload(context, writer, _bootstrap.MaxRequestBodyBytes, _bootstrap.FrameBytes);
+        using var upload = new GatewayUpload(context, writer, _bootstrap.MaxRequestBodyBytes, _bootstrap.FrameBytes) { Upgrade = upgrade };
         var send = upload.SendAsync(head.HasBody);
-        var receive = new GatewayResponse(context, call.ResponseStream, writer, upload, () => upload.StopAsync(send)).ReceiveAsync();
+        var receive = new GatewayResponse(context, call.ResponseStream, writer, upload, () => upload.StopAsync(send)) { Upgrade = upgrade }.ReceiveAsync();
         try
         {
             var first = await Task.WhenAny(send, receive).ConfigureAwait(false);

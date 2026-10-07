@@ -21,7 +21,14 @@ public sealed class ExchangeClientStream : Stream
         _writer = writer;
         Method = head.Method;
         _request = new ExchangeRequestBody(reader, head, consumed);
-        _response = new ExchangeResponseWriter(writer, head.Method, StopUploadAsync);
+        _response = new ExchangeResponseWriter(writer, head.Method, StopUploadAsync, head.WantsUpgrade, AcceptUpgradeAsync);
+    }
+
+    private ValueTask AcceptUpgradeAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _request.AcceptUpgrade();
+        return ValueTask.CompletedTask;
     }
 
     public bool ResponseStarted => _response.ResponseStarted;

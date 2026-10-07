@@ -17,7 +17,7 @@ internal sealed class DevelopmentHttpUpstream : IAsyncDisposable
 
     private DevelopmentHttpUpstream(WebApplication application, int port) { _application = application; Port = port; }
 
-    public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler, X509Certificate2? certificate = null, Action<string?>? onSni = null, DravaRegistrationOptions? registration = null, bool http2 = false)
+    public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler, X509Certificate2? certificate = null, Action<string?>? onSni = null, DravaRegistrationOptions? registration = null, bool http2 = false, bool websockets = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.WebHost.ConfigureKestrel(options => options.Listen(System.Net.IPAddress.Loopback, 0, listener =>
@@ -29,6 +29,7 @@ internal sealed class DevelopmentHttpUpstream : IAsyncDisposable
         var application = builder.Build();
         try
         {
+            if (websockets) application.UseWebSockets();
             application.Run(handler);
             await application.StartAsync().ConfigureAwait(false);
             var addresses = application.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()

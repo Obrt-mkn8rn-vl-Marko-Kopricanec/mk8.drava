@@ -298,7 +298,10 @@ public sealed partial class UpgradeForwarder
     private static string ComputeWebSocketAccept(string webSocketKey)
     {
         var input = Encoding.ASCII.GetBytes(webSocketKey.Trim() + WebSocketAcceptGuid);
+        // RFC 6455 section 4.2.2 mandates SHA-1 for this handshake checksum; it does not sign or protect data.
+#pragma warning disable CA5350
         var hash = SHA1.HashData(input);
+#pragma warning restore CA5350
         return Convert.ToBase64String(hash);
     }
 

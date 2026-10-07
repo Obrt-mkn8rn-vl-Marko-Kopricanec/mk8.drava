@@ -38,7 +38,8 @@ internal sealed class ProxyExchangeService(ProxyRequestPipeline pipeline, ProxyF
         FrameLimits.ValidateRequest(head);
         if (!string.Equals(head.GatewayId, bootstrap.GatewayId, StringComparison.Ordinal) || head.GatewayGeneration != 1)
             throw new RpcException(new Status(StatusCode.PermissionDenied, "Presentation identity or generation is not authorized."));
-        if (head.WantsUpgrade) throw new RpcException(new Status(StatusCode.Unimplemented, "Upgrade presentation is not enabled."));
+        if (head.WantsUpgrade && (!string.Equals(head.ClientProtocol, "HTTP/1.1", StringComparison.Ordinal) || head.HasBody))
+            throw new InvalidDataException("Upgrades require a bodyless HTTP/1.1 request.");
         await RunExchangeAsync(head, requestStream, responseStream, cancellationToken).ConfigureAwait(false);
     }
 
@@ -52,7 +53,7 @@ internal sealed class ProxyExchangeService(ProxyRequestPipeline pipeline, ProxyF
         using var stream = new ExchangeClientStream(inbound, writer, head, inbound.RequestConsumedAsync);
         async Task ExecutePipelineAsync()
         {
-            if (!head.HasBody) await stream.VerifyEmptyUploadAsync(token).ConfigureAwait(false);
+            if (!head.HasBody && !head.WantsUpgrade) await stream.VerifyEmptyUploadAsync(token).ConfigureAwait(false);
             var executor = new MdravaProxyExchangeExecutor(stream, forwarder, upgrades);
             await pipeline.ExecuteAsync(ExchangeRequestMapper.ToRequest(head), executor, token).ConfigureAwait(false);
             inbound.AllowClientCompletion();

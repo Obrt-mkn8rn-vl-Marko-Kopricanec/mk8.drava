@@ -15,6 +15,8 @@ public sealed class ExchangeResponseWriter : IDisposable
     private readonly IServerStreamWriter<ExchangeFrame> _writer;
     private readonly string _method;
     private readonly Func<CancellationToken, ValueTask> _stopUpload;
+    private readonly Func<CancellationToken, ValueTask>? _acceptUpgrade;
+    private readonly bool _upgradeRequested;
     private readonly byte[] _metadata = new byte[FrameLimits.MaximumHeaderBytes];
     private readonly BodyDigest _digest = new();
     private readonly List<Header> _trailers = [];
@@ -26,7 +28,8 @@ public sealed class ExchangeResponseWriter : IDisposable
     private bool _finalHead;
     private bool _finished;
 
-    public ExchangeResponseWriter(IServerStreamWriter<ExchangeFrame> writer, string method, Func<CancellationToken, ValueTask> stopUpload)
+    public ExchangeResponseWriter(IServerStreamWriter<ExchangeFrame> writer, string method, Func<CancellationToken, ValueTask> stopUpload,
+        bool upgradeRequested = false, Func<CancellationToken, ValueTask>? acceptUpgrade = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(method);
@@ -34,6 +37,8 @@ public sealed class ExchangeResponseWriter : IDisposable
         _writer = writer;
         _method = method;
         _stopUpload = stopUpload;
+        _upgradeRequested = upgradeRequested;
+        _acceptUpgrade = acceptUpgrade;
     }
 
     public bool ResponseStarted => _finalHead;
@@ -130,7 +135,7 @@ public sealed class ExchangeResponseWriter : IDisposable
         if (!Http1ResponseParser.TryParse(_metadata.AsSpan(0, _metadataLength), _method, out var parsed, out _))
             throw new InvalidDataException("MDRAVA emitted an invalid response head.");
         _metadataLength = 0;
-        var head = new ResponseHead { StatusCode = (uint)parsed.StatusCode, Informational = Http1ResponseParser.IsInformational(parsed), Upgrade = parsed.StatusCode == 101 };
+        var head = new ResponseHead { StatusCode = (uint)parsed.StatusCode, Informational = Http1ResponseParser.IsInformational(parsed) && parsed.StatusCode != 101, Upgrade = parsed.StatusCode == 101 };
         var removed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "connection", "keep-alive", "proxy-connection", "transfer-encoding" };
         foreach (var field in parsed.Headers)
             if (string.Equals(field.Name, "connection", StringComparison.OrdinalIgnoreCase))
@@ -146,8 +151,13 @@ public sealed class ExchangeResponseWriter : IDisposable
             return;
         }
         if (_finalHead) throw new InvalidDataException("Multiple final response heads.");
+        if (head.Upgrade)
+        {
+            if (!_upgradeRequested || _acceptUpgrade is null) throw new InvalidDataException("An upgrade was not negotiated.");
+            await _acceptUpgrade(cancellationToken).ConfigureAwait(false);
+        }
         _finalHead = true;
-        if (!head.Upgrade && (head.StatusCode >= 300 || string.Equals(_method, "HEAD", StringComparison.OrdinalIgnoreCase)))
+        if (!head.Upgrade && (_upgradeRequested || head.StatusCode >= 300 || string.Equals(_method, "HEAD", StringComparison.OrdinalIgnoreCase)))
             await _stopUpload(cancellationToken).ConfigureAwait(false);
         _state = head.Upgrade ? DecodeState.Upgrade : parsed.Framing.Kind switch
         {

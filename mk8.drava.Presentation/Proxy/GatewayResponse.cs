@@ -9,6 +9,7 @@ namespace Mk8.Drava.Presentation.Proxy;
 
 public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<ExchangeFrame> reader, ExchangeClientWriter writer, GatewayUpload upload, Func<Task> stopUpload)
 {
+    internal GatewayUpgradeState? Upgrade { get; init; }
     private bool _finalHead;
     private bool _complete;
     private bool _uploadAllowed;
@@ -53,7 +54,7 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
                 await DataAsync(frame.Data ?? throw new InvalidDataException("Response data is missing."), digest).ConfigureAwait(false);
                 break;
             case ExchangeFrame.FrameOneofCase.Trailers:
-                if (!_finalHead || _trailers is not null) throw new InvalidDataException("Unexpected response trailers.");
+                if (!_finalHead || _trailers is not null || Upgrade?.AcceptedStream is not null) throw new InvalidDataException("Unexpected response trailers.");
                 var trailers = frame.Trailers ?? throw new InvalidDataException("Response trailers are missing.");
                 FrameLimits.ValidateHeaders(trailers.Headers, trailers: true);
                 _trailers = trailers;
@@ -80,10 +81,19 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
             if (head.StatusCode != 100 || ++_informationalCount > 8) throw new InvalidDataException("Public informational response capability is unavailable.");
             return;
         }
-        if (head.Upgrade) throw new InvalidDataException("Upgrade presentation is unavailable.");
         _finalHead = true;
-        ApplyHead(head);
-        await context.Response.StartAsync(context.RequestAborted).ConfigureAwait(false);
+        if (head.Upgrade)
+        {
+            var upgrade = Upgrade ?? throw new InvalidDataException("Upgrade presentation was not negotiated.");
+            upgrade.Validate(context, head);
+            ApplyHead(head);
+            await upgrade.AcceptAsync(context).ConfigureAwait(false);
+        }
+        else
+        {
+            ApplyHead(head);
+            await context.Response.StartAsync(context.RequestAborted).ConfigureAwait(false);
+        }
     }
 
     private async Task DataAsync(DataFrame data, BodyDigest digest)
@@ -91,8 +101,9 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
         if (!_finalHead || _trailers is not null) throw new InvalidDataException("Data outside response body.");
         FrameLimits.ValidateData(data);
         digest.Append(data.Payload.Span);
-        await context.Response.Body.WriteAsync(data.Payload.Memory, context.RequestAborted).ConfigureAwait(false);
-        await context.Response.Body.FlushAsync(context.RequestAborted).ConfigureAwait(false);
+        var destination = Upgrade?.AcceptedStream ?? context.Response.Body;
+        await destination.WriteAsync(data.Payload.Memory, context.RequestAborted).ConfigureAwait(false);
+        await destination.FlushAsync(context.RequestAborted).ConfigureAwait(false);
         await writer.WriteAsync(new ExchangeFrame { Consumed = new Consumed { Direction = Consumed.Types.Direction.Response, Frames = 1 } }, context.RequestAborted).ConfigureAwait(false);
     }
 
