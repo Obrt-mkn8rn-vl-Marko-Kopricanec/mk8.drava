@@ -1165,7 +1165,7 @@ internal static class RouteDiagnosticsTests
         return new ProxyConfigurationSnapshot(1, DateTimeOffset.UnixEpoch, "test", ["site.json"], new ProxyConfigurationDiscovery(new ProxyFilesystemLayout("test", "test/config", "test/config/sites", "test/logs", "test/certs", "test/state", "test/config/proxy.json"), [], [], []), new RuntimeAdminSecurityOptions([], true, true, AdminToken, "MDRAVA_ADMIN_TOKEN", "configured", 100), new RuntimeAcmeOptions(false, true, "", [], false, "acme", 30, 720, 60, []), new RuntimeTimeouts(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10)), new RuntimeConnectionLimits(100, 16, 1024), new RuntimeObservabilityOptions(true, 100, new RuntimeLogPersistenceOptions(true, true, 1_048_576, 8)), new RuntimeLimits(4096, 128, 240, 30, 32768, 128, 8192, 104857600, 8192, TimeSpan.FromSeconds(15)), new RuntimeForwardedHeadersOptions(true, []), new Dictionary<string, RuntimeCertificate>(StringComparer.OrdinalIgnoreCase), listeners ?? [], routes);
     }
 
-    private static IReadOnlyDictionary<string, string?> NoHeaders()
+    private static Dictionary<string, string?> NoHeaders()
     {
         return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
     }

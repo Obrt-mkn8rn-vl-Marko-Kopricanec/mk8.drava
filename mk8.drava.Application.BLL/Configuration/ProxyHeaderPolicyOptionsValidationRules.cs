@@ -14,7 +14,7 @@ internal static class ProxyHeaderPolicyOptionsValidationRules
         return ProxyHeaderPolicyFacts.IsValidHttpFieldName(headerName);
     }
 
-    private static void ValidateHeaderSetRules(List<string> failures, string prefix, IReadOnlyList<ProxyHeaderSetOptions> rules)
+    private static void ValidateHeaderSetRules(List<string> failures, string prefix, System.Collections.ObjectModel.Collection<ProxyHeaderSetOptions> rules)
     {
         for (var index = 0; index < rules.Count; index++)
         {
@@ -28,7 +28,7 @@ internal static class ProxyHeaderPolicyOptionsValidationRules
         }
     }
 
-    private static void ValidateHeaderRemoveRules(List<string> failures, string prefix, IReadOnlyList<string> headerNames)
+    private static void ValidateHeaderRemoveRules(List<string> failures, string prefix, System.Collections.ObjectModel.Collection<string> headerNames)
     {
         for (var index = 0; index < headerNames.Count; index++)
         {

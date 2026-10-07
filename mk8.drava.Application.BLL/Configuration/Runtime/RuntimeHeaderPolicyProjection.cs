@@ -16,7 +16,7 @@ public sealed record RuntimeHeaderPolicyProjection
     public IReadOnlyList<RuntimeHeaderFieldProjection> SetResponseHeaders { get; }
     public IReadOnlyList<string> RemoveResponseHeaders { get; }
 
-    private static IReadOnlyList<RuntimeHeaderFieldProjection> CopySetHeaders(IEnumerable<RuntimeHeaderFieldProjection> headers)
+    private static ReadOnlyCollection<RuntimeHeaderFieldProjection> CopySetHeaders(IEnumerable<RuntimeHeaderFieldProjection> headers)
     {
         ArgumentNullException.ThrowIfNull(headers);
         var copy = new List<RuntimeHeaderFieldProjection>();
@@ -29,7 +29,7 @@ public sealed record RuntimeHeaderPolicyProjection
         return new ReadOnlyCollection<RuntimeHeaderFieldProjection>(copy);
     }
 
-    private static IReadOnlyList<string> CopyRemoveHeaders(IEnumerable<string> headerNames)
+    private static ReadOnlyCollection<string> CopyRemoveHeaders(IEnumerable<string> headerNames)
     {
         ArgumentNullException.ThrowIfNull(headerNames);
         var copy = new List<string>();

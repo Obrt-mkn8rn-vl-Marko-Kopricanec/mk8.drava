@@ -49,7 +49,7 @@ public static class ConfigLintSubmittedRequestReader
 
         public static ConfigLintSubmittedFormatDecision Rejected { get; } = new RejectedDecision();
 
-        public static ConfigLintSubmittedFormatDecision Accepted(ProxyConfigurationNormalizeFormat format)
+        public static AcceptedDecision Accepted(ProxyConfigurationNormalizeFormat format)
         {
             return new AcceptedDecision(format);
         }

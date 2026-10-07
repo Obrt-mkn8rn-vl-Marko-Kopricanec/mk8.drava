@@ -48,12 +48,12 @@ public static class FramedUpstreamResponsePolicy
         {
         }
 
-        public static UpstreamResponseFramingDecision Accept(Http1ResponseFraming framing)
+        public static Accepted Accept(Http1ResponseFraming framing)
         {
             return new Accepted(framing);
         }
 
-        public static UpstreamResponseFramingDecision Reject(string reason)
+        public static Rejected Reject(string reason)
         {
             return new Rejected(reason);
         }

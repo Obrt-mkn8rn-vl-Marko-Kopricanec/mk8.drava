@@ -248,12 +248,12 @@ public static class Http3Codec
         {
         }
 
-        public static QpackLiteralHeaderReadResult Decode(ProxyHeaderField header)
+        public static Decoded Decode(ProxyHeaderField header)
         {
             return new Decoded(header);
         }
 
-        public static QpackLiteralHeaderReadResult Reject(string reason)
+        public static Rejected Reject(string reason)
         {
             return new Rejected(reason);
         }

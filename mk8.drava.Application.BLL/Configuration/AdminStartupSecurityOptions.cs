@@ -13,7 +13,7 @@ public sealed record AdminStartupSecurityOptions
     public bool HasConfiguredToken { get; init; }
     public bool AuthenticationEnabled => RequireAuthentication && HasConfiguredToken;
 
-    private static IReadOnlyList<string> CopyUrls(IReadOnlyList<string> urls)
+    private static System.Collections.ObjectModel.ReadOnlyCollection<string> CopyUrls(IReadOnlyList<string> urls)
     {
         var copy = RuntimeList.Copy(urls);
         foreach (var url in copy)

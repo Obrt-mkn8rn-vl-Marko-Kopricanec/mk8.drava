@@ -21,7 +21,7 @@ public sealed record ProxyHeaderMutationPolicyInput
     public IReadOnlyList<ProxyHeaderField> SetResponseHeaders { get; }
     public IReadOnlyList<string> RemoveResponseHeaders { get; }
 
-    private static IReadOnlyList<string> CopyHeaderNames(IReadOnlyList<string> names)
+    private static ReadOnlyCollection<string> CopyHeaderNames(IReadOnlyList<string> names)
     {
         var copy = new List<string>();
         foreach (var name in names)

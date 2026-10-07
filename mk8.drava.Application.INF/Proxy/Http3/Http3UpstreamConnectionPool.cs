@@ -148,7 +148,7 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
 
         public static ExistingConnectionReservation Unavailable { get; } = new UnavailableReservation();
 
-        public static ExistingConnectionReservation Reserve(Http3UpstreamPooledConnection connection)
+        public static Reserved Reserve(Http3UpstreamPooledConnection connection)
         {
             return new Reserved(connection);
         }

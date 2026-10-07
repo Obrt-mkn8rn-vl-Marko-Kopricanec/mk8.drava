@@ -20,7 +20,7 @@ public sealed record TlsCertificateSelectionInput
     public IReadOnlyList<RuntimeSniCertificateBinding> SniCertificates { get; }
     public string? HostName { get; }
 
-    private static IReadOnlyDictionary<string, RuntimeCertificate> CopyCertificates(IEnumerable<KeyValuePair<string, RuntimeCertificate>> certificates)
+    private static ReadOnlyDictionary<string, RuntimeCertificate> CopyCertificates(IEnumerable<KeyValuePair<string, RuntimeCertificate>> certificates)
     {
         var copy = new Dictionary<string, RuntimeCertificate>(StringComparer.OrdinalIgnoreCase);
         foreach (var certificate in certificates)

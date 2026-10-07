@@ -389,7 +389,7 @@ internal static class AdminSecurityTests
         }
     }
 
-    private static IReadOnlyList<string> DiscoverAdminEndpointPaths()
+    private static string[] DiscoverAdminEndpointPaths()
     {
         return typeof(ProxyStatusController).Assembly.GetTypes().Where(static type => typeof(ControllerBase).IsAssignableFrom(type)).SelectMany(static type =>
         {

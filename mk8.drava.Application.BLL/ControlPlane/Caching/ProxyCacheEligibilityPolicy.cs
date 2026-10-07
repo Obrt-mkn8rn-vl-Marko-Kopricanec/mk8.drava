@@ -226,12 +226,12 @@ public static partial class ProxyCacheEligibilityPolicy
         {
         }
 
-        public static CacheTtlResolution Resolve(TimeSpan ttl)
+        public static Resolved Resolve(TimeSpan ttl)
         {
             return new Resolved(ttl);
         }
 
-        public static CacheTtlResolution Reject(string reason)
+        public static Rejected Reject(string reason)
         {
             return new Rejected(reason);
         }
@@ -273,12 +273,12 @@ public static partial class ProxyCacheEligibilityPolicy
         {
         }
 
-        public static CacheResponseMetadataEligibility Accept(TimeSpan ttl)
+        public static Accepted Accept(TimeSpan ttl)
         {
             return new Accepted(ttl);
         }
 
-        public static CacheResponseMetadataEligibility Reject(string reason)
+        public static Rejected Reject(string reason)
         {
             return new Rejected(reason);
         }

@@ -18,7 +18,7 @@ public sealed record RuntimeHeaderPolicy
     public IReadOnlyList<string> RemoveResponseHeaders { get; }
     public static RuntimeHeaderPolicy Empty { get; } = new([], [], [], []);
 
-    private static IReadOnlyList<ProxyHeaderField> CopySetHeaders(IEnumerable<ProxyHeaderField> headers)
+    private static ReadOnlyCollection<ProxyHeaderField> CopySetHeaders(IEnumerable<ProxyHeaderField> headers)
     {
         ArgumentNullException.ThrowIfNull(headers);
         var copy = new List<ProxyHeaderField>();
@@ -32,7 +32,7 @@ public sealed record RuntimeHeaderPolicy
         return new ReadOnlyCollection<ProxyHeaderField>(copy);
     }
 
-    private static IReadOnlyList<string> CopyRemoveHeaders(IEnumerable<string> headerNames)
+    private static ReadOnlyCollection<string> CopyRemoveHeaders(IEnumerable<string> headerNames)
     {
         ArgumentNullException.ThrowIfNull(headerNames);
         var copy = new List<string>();

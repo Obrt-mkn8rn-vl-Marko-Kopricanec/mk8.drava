@@ -60,7 +60,7 @@ public sealed class ForwardedHeadersPolicy
         return ForwardedHeaderNames.Any(name => string.Equals(name, headerName, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static IReadOnlyList<string> SplitHeaderValues(IReadOnlyList<ProxyHeaderField> headers, string name)
+    private static List<string> SplitHeaderValues(IReadOnlyList<ProxyHeaderField> headers, string name)
     {
         List<string> values = [];
         foreach (var header in headers)

@@ -996,7 +996,7 @@ internal static class CacheTests
             _clear = clear;
         }
 
-        public IReadOnlyList<string> Reasons => _reasons;
+        public List<string> Reasons => _reasons;
 
         public void Clear(string reason)
         {

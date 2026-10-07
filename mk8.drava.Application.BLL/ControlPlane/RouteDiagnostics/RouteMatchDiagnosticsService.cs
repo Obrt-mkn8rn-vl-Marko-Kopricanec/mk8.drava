@@ -151,7 +151,7 @@ public sealed partial class RouteMatchDiagnosticsService : IProxyRouteDiagnostic
         return result;
     }
 
-    private static RouteMatchDryRunResult Failure(DateTimeOffset evaluatedAtUtc, string reason, string message)
+    private static RouteMatchDryRunResult.FailedResult Failure(DateTimeOffset evaluatedAtUtc, string reason, string message)
     {
         return RouteMatchDryRunResult.Failed(evaluatedAtUtc, reason, message);
     }

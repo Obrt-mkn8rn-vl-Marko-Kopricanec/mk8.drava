@@ -98,7 +98,7 @@ internal static class PerformanceSmokeRunner
         return 0;
     }
 
-    private static void WritePerformanceSummary(PerformanceSmokeOptions options, IReadOnlyList<string> selectedDomains, IReadOnlyList<PerformanceSmokeResult> results, int failures, IReadOnlyList<string> failureDomains)
+    private static void WritePerformanceSummary(PerformanceSmokeOptions options, string[] selectedDomains, IReadOnlyList<PerformanceSmokeResult> results, int failures, IReadOnlyList<string> failureDomains)
     {
         if (string.IsNullOrWhiteSpace(options.SummaryFile))
         {
@@ -116,7 +116,7 @@ internal static class PerformanceSmokeRunner
             kind = "performance",
             status = failures == 0 ? "passed" : "failed",
             selectedDomains,
-            passedDomains = selectedDomains.Count - failures,
+            passedDomains = selectedDomains.Length - failures,
             failedDomains = failures,
             failures = failureDomains,
             results = results.Select(static result => new { domain = result.Domain, operations = result.Operations, elapsedMilliseconds = result.Elapsed.TotalMilliseconds, thresholdMilliseconds = result.Threshold.TotalMilliseconds, passed = result.Passed, detail = result.Detail }).ToArray()

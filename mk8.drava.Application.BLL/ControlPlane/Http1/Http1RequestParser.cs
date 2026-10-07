@@ -12,13 +12,13 @@ public static partial class Http1RequestParser
         {
         }
 
-        public static Http1RequestFramingAnalysisResult Accept(Http1RequestFraming framing)
+        public static Accepted Accept(Http1RequestFraming framing)
         {
             ArgumentNullException.ThrowIfNull(framing);
             return new Accepted(framing);
         }
 
-        public static Http1RequestFramingAnalysisResult Reject(Http1ParseError error)
+        public static Rejected Reject(Http1ParseError error)
         {
             if (error == Http1ParseError.None)
             {
@@ -32,7 +32,7 @@ public static partial class Http1RequestParser
         public sealed record Rejected(Http1ParseError Error) : Http1RequestFramingAnalysisResult;
     }
 
-    private static Http1RequestFramingAnalysisResult AnalyzeRequestFraming(IReadOnlyList<string> contentLengthValues, IReadOnlyList<string> transferEncodingValues)
+    private static Http1RequestFramingAnalysisResult AnalyzeRequestFraming(List<string> contentLengthValues, List<string> transferEncodingValues)
     {
         if (transferEncodingValues.Count > 0 && contentLengthValues.Count > 0)
         {

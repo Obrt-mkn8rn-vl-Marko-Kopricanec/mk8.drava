@@ -12,7 +12,7 @@ public static partial class ProxyRouteDiagnosticsRequestReader
         "Set-Cookie",
         "X-MDRAVA-Admin-Key"
     };
-    private static IReadOnlyList<ProxyHeaderField> BuildHeaders(RouteMatchDryRunRequest request, List<RouteMatchDryRunFinding> findings)
+    private static List<ProxyHeaderField> BuildHeaders(RouteMatchDryRunRequest request, List<RouteMatchDryRunFinding> findings)
     {
         List<ProxyHeaderField> headers = [new("Host", request.Host.Trim())];
         foreach (var header in request.Headers.OrderBy(static pair => pair.Key, StringComparer.OrdinalIgnoreCase))

@@ -402,7 +402,7 @@ public sealed partial class ProxyForwarder
         }
     }
 
-    private IReadOnlyList<ProxyHeaderField> BuildHttp2RequestHeaders(Http1RequestHead requestHead, RuntimeRoute route, RuntimeUpstream upstream, string upstreamTarget, ForwardedHeadersContext forwardedHeaders)
+    private List<ProxyHeaderField> BuildHttp2RequestHeaders(Http1RequestHead requestHead, RuntimeRoute route, RuntimeUpstream upstream, string upstreamTarget, ForwardedHeadersContext forwardedHeaders)
     {
         var filtered = _headerPolicy.FilterForForwarding(requestHead.Headers, preserveTransferEncoding: false, preserveTrailer: false, preserveTeTrailers: true);
         var requestHeaders = ProxyHeaderMutationPolicy.ApplyRequestHeaders(filtered, ProxyHeaderMutationRuntimeMapper.ToPolicyInput(route.HeaderPolicy), forwardedHeaders);

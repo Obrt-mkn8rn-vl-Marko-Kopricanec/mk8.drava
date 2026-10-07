@@ -31,7 +31,7 @@ public static class AdminBindWebHostConfigurator
         return AdminBindPolicy.Resolve(AdminBindPolicyInputMapper.FromStartupConfiguration(startupSecurity, ReadConfiguredUrls(configuration, MdravaAdminUrlsConfigurationKey), MdravaAdminUrlsConfigurationKey, ReadConfiguredUrls(configuration, AspNetCoreUrlsConfigurationKey), AspNetCoreUrlsConfigurationKey), new ProxyAdminUrlPolicy());
     }
 
-    private static IReadOnlyList<string> ReadConfiguredUrls(IConfiguration configuration, string key)
+    private static string[] ReadConfiguredUrls(IConfiguration configuration, string key)
     {
         var section = configuration.GetSection(key);
         var children = section.GetChildren().Select(static child => child.Value).Where(static value => !string.IsNullOrWhiteSpace(value)).Select(static value => value!.Trim()).ToArray();

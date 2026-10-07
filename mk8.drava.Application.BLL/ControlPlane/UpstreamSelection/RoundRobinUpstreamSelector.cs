@@ -72,7 +72,7 @@ public sealed class RoundRobinUpstreamSelector : IUpstreamSelector
         return null;
     }
 
-    private RuntimeUpstream SelectWeighted(UpstreamSelectionRoute route, IReadOnlyList<RuntimeUpstream> candidates)
+    private RuntimeUpstream SelectWeighted(UpstreamSelectionRoute route, List<RuntimeUpstream> candidates)
     {
         var totalWeight = candidates.Sum(static upstream => upstream.Weight);
         if (totalWeight <= 0)
@@ -83,7 +83,7 @@ public sealed class RoundRobinUpstreamSelector : IUpstreamSelector
         var index = _nextIndexes.AddOrUpdate(route.Name, 1, (_, current) => current == int.MaxValue ? 0 : current + 1);
         var position = Math.Abs(index - 1) % totalWeight;
         var cumulative = 0;
-        foreach (var upstream in candidates)
+        foreach (ref var upstream in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(candidates))
         {
             cumulative += upstream.Weight;
             if (position < cumulative)

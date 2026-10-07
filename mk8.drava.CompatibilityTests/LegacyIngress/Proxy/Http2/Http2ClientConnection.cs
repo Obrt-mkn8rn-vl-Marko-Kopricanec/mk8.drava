@@ -506,12 +506,12 @@ public sealed class Http2ClientConnection
         {
         }
 
-        public static Http2RequestBuildResult Accept(Http1RequestHead requestHead)
+        public static Accepted Accept(Http1RequestHead requestHead)
         {
             return new Accepted(requestHead);
         }
 
-        public static Http2RequestBuildResult Reject(string reason)
+        public static Rejected Reject(string reason)
         {
             return new Rejected(reason);
         }

@@ -75,7 +75,7 @@ public sealed class ProxyBackupService : IProxyBackupOperations
         return ProxyRestoreValidationResultBuilder.Build(generatedAtUtc, _activeConfigurationVersionReader.ActiveConfigVersion, configValidation, manifest, errors, warnings, MaxWarnings);
     }
 
-    private IReadOnlyList<ProxyBackupDirectoryStatus> ExpectedDirectories(string root)
+    private ProxyBackupDirectoryStatus[] ExpectedDirectories(string root)
     {
         return ProxyBackupDirectoryLayoutPolicy.ExpectedDirectories().Select(requirement => DirectoryStatus(root, requirement)).ToArray();
     }

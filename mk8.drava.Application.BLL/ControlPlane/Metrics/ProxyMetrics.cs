@@ -375,7 +375,7 @@ public sealed partial class ProxyMetrics : IProxyStatusMetricsSource, IProxyUpst
         public long Count;
     }
 
-    private IReadOnlyDictionary<string, long> ReadRequestFailuresByKind()
+    private Dictionary<string, long> ReadRequestFailuresByKind()
     {
         Dictionary<string, long> failuresByKind = new(StringComparer.Ordinal);
         foreach (var failureKind in FailureKinds)
@@ -406,12 +406,12 @@ public sealed partial class ProxyMetrics : IProxyStatusMetricsSource, IProxyUpst
         return _upstreamSelectionsByUpstream.Select(static pair => new ProxyUpstreamSelectionSnapshot(pair.Key.Route, pair.Key.Upstream, pair.Key.Scheme, pair.Key.Protocol, Interlocked.Read(ref pair.Value.Count))).OrderBy(static item => item.Route, StringComparer.Ordinal).ThenBy(static item => item.Upstream, StringComparer.Ordinal).ThenBy(static item => item.Scheme, StringComparer.Ordinal);
     }
 
-    private IReadOnlyDictionary<string, long> ReadHttp2ProtocolErrors()
+    private Dictionary<string, long> ReadHttp2ProtocolErrors()
     {
         return _http2ProtocolErrors.ToDictionary(static pair => pair.Key, static pair => Interlocked.Read(ref pair.Value.Count), StringComparer.Ordinal);
     }
 
-    private IReadOnlyDictionary<string, long> ReadUpstreamHttp3ProtocolErrors()
+    private Dictionary<string, long> ReadUpstreamHttp3ProtocolErrors()
     {
         return _upstreamHttp3ProtocolErrors.ToDictionary(static pair => pair.Key, static pair => Interlocked.Read(ref pair.Value.Count), StringComparer.Ordinal);
     }
@@ -421,12 +421,12 @@ public sealed partial class ProxyMetrics : IProxyStatusMetricsSource, IProxyUpst
         return _http3RequestsByOutcome.Select(static pair => new ProxyHttp3RequestOutcomeSnapshot(pair.Key.Method, pair.Key.Outcome, pair.Key.StatusClass, Interlocked.Read(ref pair.Value.Count))).OrderBy(static item => item.Method, StringComparer.Ordinal).ThenBy(static item => item.Outcome, StringComparer.Ordinal).ThenBy(static item => item.StatusClass, StringComparer.Ordinal);
     }
 
-    private IReadOnlyDictionary<string, long> ReadHttp3RejectedRequests()
+    private Dictionary<string, long> ReadHttp3RejectedRequests()
     {
         return _http3RejectedRequests.ToDictionary(static pair => pair.Key, static pair => Interlocked.Read(ref pair.Value.Count), StringComparer.Ordinal);
     }
 
-    private IReadOnlyDictionary<string, long> ReadHttp3ProtocolErrors()
+    private Dictionary<string, long> ReadHttp3ProtocolErrors()
     {
         return _http3ProtocolErrors.ToDictionary(static pair => pair.Key, static pair => Interlocked.Read(ref pair.Value.Count), StringComparer.Ordinal);
     }

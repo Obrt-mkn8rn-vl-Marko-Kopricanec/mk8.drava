@@ -131,7 +131,7 @@ internal static class OperatorStatusTests
         var listener = Listener();
         var runtime = new ProxyRuntimeState(TimeProvider.System);
         runtime.ReplaceListeners([ListenerStatus(listener, ProxyListenerState.Active)], null);
-        IProxyStatusRuntimeStateSource source = runtime;
+        ProxyRuntimeState source = runtime;
         var summary = source.ReadRuntimeSummary();
         AssertEx.True(summary.ListenerLive);
         AssertEx.Equal(listener.Name, summary.ListenerName);

@@ -297,7 +297,7 @@ internal static class UpstreamHttp2Tests
                 if (frame.Type == Http2TestFrameType.Headers)
                 {
                     streamId = frame.StreamId;
-                    foreach (var header in DecodeHeaders(frame.Payload.ToArray()))
+                    foreach (ref var header in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(DecodeHeaders(frame.Payload.ToArray())))
                     {
                         requestHeaders[header.Name] = header.Value;
                     }
@@ -475,7 +475,7 @@ internal static class UpstreamHttp2Tests
         return memory.ToArray();
     }
 
-    private static IReadOnlyList<(string Name, string Value)> DecodeHeaders(byte[] block)
+    private static List<(string Name, string Value)> DecodeHeaders(byte[] block)
     {
         List<(string Name, string Value)> headers = [];
         List<(string Name, string Value)> dynamicTable = [];

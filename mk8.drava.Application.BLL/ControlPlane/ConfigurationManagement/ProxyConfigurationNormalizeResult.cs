@@ -55,7 +55,7 @@ public abstract record ProxyConfigurationNormalizeResult
             }
         }
 
-        private static IReadOnlyList<string> CreateErrors(IReadOnlyList<ProxyConfigurationFileError> fileErrors)
+        private static string[] CreateErrors(IReadOnlyList<ProxyConfigurationFileError> fileErrors)
         {
             ArgumentNullException.ThrowIfNull(fileErrors);
             return fileErrors.Select(static error => error.Path is null ? error.Message : $"{error.Path}: {error.Message}").ToArray();

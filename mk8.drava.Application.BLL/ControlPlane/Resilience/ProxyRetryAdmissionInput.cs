@@ -21,7 +21,7 @@ public sealed record ProxyRetryAdmissionInput
     public string RequestMethod { get; }
     public bool HasRequestBody { get; }
 
-    private static IReadOnlyList<string> CopyRetryMethods(IReadOnlyList<string> methods)
+    private static ReadOnlyCollection<string> CopyRetryMethods(IReadOnlyList<string> methods)
     {
         var copy = new List<string>();
         foreach (var method in methods)

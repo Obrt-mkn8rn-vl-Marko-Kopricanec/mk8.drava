@@ -118,7 +118,7 @@ public static class Http3RequestTranslator
         return name is ":method" or ":scheme" or ":authority" or ":path" or ":protocol";
     }
 
-    private static Http3RequestTranslationResult BuildConnectRequest(IReadOnlyDictionary<string, string> pseudo, List<ProxyHeaderField> regularHeaders, Http3RequestTranslationListenerInput listener, string method)
+    private static Http3RequestTranslationResult BuildConnectRequest(Dictionary<string, string> pseudo, List<ProxyHeaderField> regularHeaders, Http3RequestTranslationListenerInput listener, string method)
     {
         if (pseudo.ContainsKey(":scheme") || pseudo.ContainsKey(":path"))
         {
@@ -244,13 +244,13 @@ public static class Http3RequestTranslator
         {
         }
 
-        public static Http3RequestFramingDecision Accepted(Http1RequestFraming framing)
+        public static AcceptedDecision Accepted(Http1RequestFraming framing)
         {
             ArgumentNullException.ThrowIfNull(framing);
             return new AcceptedDecision(framing);
         }
 
-        public static Http3RequestFramingDecision Rejected(string reason)
+        public static RejectedDecision Rejected(string reason)
         {
             return new RejectedDecision(reason);
         }

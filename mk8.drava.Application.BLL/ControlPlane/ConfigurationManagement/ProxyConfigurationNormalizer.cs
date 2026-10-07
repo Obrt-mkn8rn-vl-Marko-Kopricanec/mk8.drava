@@ -84,7 +84,7 @@ public sealed class ProxyConfigurationNormalizer : IProxyConfigurationNormalizeO
 
         public static ProxyConfigurationNormalizeFormatDecision Rejected { get; } = new RejectedDecision();
 
-        public static ProxyConfigurationNormalizeFormatDecision Accept(ProxyConfigurationNormalizeFormat format)
+        public static Accepted Accept(ProxyConfigurationNormalizeFormat format)
         {
             return new Accepted(format);
         }

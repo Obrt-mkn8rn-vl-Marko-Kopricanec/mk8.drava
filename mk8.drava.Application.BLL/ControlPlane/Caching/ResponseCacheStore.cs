@@ -152,7 +152,7 @@ public sealed partial class ResponseCacheStore : IProxyCacheControl
         }
     }
 
-    private static IReadOnlyList<ProxyHeaderField> SanitizeStoredHeaders(IReadOnlyList<ProxyHeaderField> headers)
+    private static ProxyHeaderField[] SanitizeStoredHeaders(IReadOnlyList<ProxyHeaderField> headers)
     {
         return headers.Where(static header =>
         {
@@ -278,12 +278,12 @@ public sealed partial class ResponseCacheStore : IProxyCacheControl
         {
         }
 
-        public static CacheKeyCreation Create(string key)
+        public static Created Create(string key)
         {
             return new Created(key);
         }
 
-        public static CacheKeyCreation Reject(string reason)
+        public static Rejected Reject(string reason)
         {
             return new Rejected(reason);
         }

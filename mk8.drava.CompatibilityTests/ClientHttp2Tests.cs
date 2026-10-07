@@ -1200,7 +1200,7 @@ internal static class ClientHttp2Tests
                     headerBlock.Write(frame.Payload.Span);
                     if ((frame.Flags & Http2TestFlags.EndHeaders) != 0)
                     {
-                        foreach (var header in DecodeHeaders(headerBlock.ToArray()))
+                        foreach (ref var header in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(DecodeHeaders(headerBlock.ToArray())))
                         {
                             if (string.Equals(header.Name, ":status", StringComparison.Ordinal))
                             {
@@ -1445,7 +1445,7 @@ internal static class ClientHttp2Tests
             stream.WriteByte((byte)value);
         }
 
-        private static IReadOnlyList<(string Name, string Value)> DecodeHeaders(byte[] block)
+        private static List<(string Name, string Value)> DecodeHeaders(byte[] block)
         {
             List<(string Name, string Value)> headers = [];
             List<(string Name, string Value)> dynamicTable = [];
@@ -1547,7 +1547,7 @@ internal static class ClientHttp2Tests
 
             public void DecodeHeaders()
             {
-                foreach (var header in Http2TestClient.DecodeHeaders(HeaderBlock.ToArray()))
+                foreach (ref var header in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Http2TestClient.DecodeHeaders(HeaderBlock.ToArray())))
                 {
                     if (string.Equals(header.Name, ":status", StringComparison.Ordinal))
                     {

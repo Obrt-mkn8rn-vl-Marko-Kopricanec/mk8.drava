@@ -19,7 +19,7 @@ public sealed record ProxyAdminPresentedCredentials
         return new ProxyAdminPresentedCredentials(CopyNonNull(authorizationHeaders, nameof(authorizationHeaders)), CopyNonNull(apiKeyHeaders, nameof(apiKeyHeaders)));
     }
 
-    private static IReadOnlyList<string> CopyValidated(IReadOnlyList<string> values, string parameterName)
+    private static List<string> CopyValidated(IReadOnlyList<string> values, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(values);
         var copy = new List<string>(values.Count);
@@ -36,7 +36,7 @@ public sealed record ProxyAdminPresentedCredentials
         return copy;
     }
 
-    private static IReadOnlyList<string> CopyNonNull(IEnumerable<string?> values, string parameterName)
+    private static List<string> CopyNonNull(IEnumerable<string?> values, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(values);
         var copy = new List<string>();

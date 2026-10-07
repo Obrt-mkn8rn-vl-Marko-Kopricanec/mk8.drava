@@ -144,7 +144,7 @@ public sealed class ProxyConfigurationLoader : IProxyConfigurationLoader, IProxy
         return ProxyConfigurationLoadResult.Loaded(sourceDirectory, snapshot, BuildDiscovery());
     }
 
-    private static IReadOnlyDictionary<string, RuntimeCertificate> LoadCertificates(ProxyOperationalOptions operationalOptions, string dataDirectory, List<ProxyConfigurationFileError> errors)
+    private static Dictionary<string, RuntimeCertificate> LoadCertificates(ProxyOperationalOptions operationalOptions, string dataDirectory, List<ProxyConfigurationFileError> errors)
     {
         Dictionary<string, RuntimeCertificate> certificates = new(StringComparer.OrdinalIgnoreCase);
         foreach (var certificateOptions in operationalOptions.Certificates)

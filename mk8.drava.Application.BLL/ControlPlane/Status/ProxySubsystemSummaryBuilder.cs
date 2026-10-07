@@ -36,26 +36,26 @@ public static partial class ProxySubsystemSummaryBuilder
         return new ProxyAcmeSubsystemSummary(configuration.Enabled, configuration.ConfiguredCertificates, acmeStatuses.Count(static status => status.Active), activeFailures.Length, renewalBackoffs.Length, BuildAcmeLastIssue(activeFailures, renewalBackoffs));
     }
 
-    private static ProxySubsystemIssueSummary? BuildCertificateLastIssue(IReadOnlyList<string> missing, IReadOnlyList<ProxyCertificateValiditySource> expired, IReadOnlyList<ProxyCertificateValiditySource> notYetValid, IReadOnlyList<ProxyCertificateValiditySource> expiringSoon, DateTimeOffset now)
+    private static ProxySubsystemIssueSummary? BuildCertificateLastIssue(string[] missing, ProxyCertificateValiditySource[] expired, ProxyCertificateValiditySource[] notYetValid, ProxyCertificateValiditySource[] expiringSoon, DateTimeOffset now)
     {
-        if (missing.Count > 0)
+        if (missing.Length > 0)
         {
             return Issue(now, "certificate", "missing_reference", missing[0]);
         }
 
-        if (expired.Count > 0)
+        if (expired.Length > 0)
         {
             var certificate = expired[0];
             return Issue(CertificateTime(certificate.NotAfter), "certificate", "expired", certificate.Id);
         }
 
-        if (notYetValid.Count > 0)
+        if (notYetValid.Length > 0)
         {
             var certificate = notYetValid[0];
             return Issue(CertificateTime(certificate.NotBefore), "certificate", "not_yet_valid", certificate.Id);
         }
 
-        if (expiringSoon.Count > 0)
+        if (expiringSoon.Length > 0)
         {
             var certificate = expiringSoon[0];
             return Issue(CertificateTime(certificate.NotAfter), "certificate", "expiring_soon", certificate.Id);
@@ -64,15 +64,15 @@ public static partial class ProxySubsystemSummaryBuilder
         return null;
     }
 
-    private static ProxySubsystemIssueSummary? BuildAcmeLastIssue(IReadOnlyList<AcmeCertificateLifecycleStatus> activeFailures, IReadOnlyList<AcmeCertificateLifecycleStatus> renewalBackoffs)
+    private static ProxySubsystemIssueSummary? BuildAcmeLastIssue(AcmeCertificateLifecycleStatus[] activeFailures, AcmeCertificateLifecycleStatus[] renewalBackoffs)
     {
-        if (activeFailures.Count > 0)
+        if (activeFailures.Length > 0)
         {
             var status = activeFailures[0];
             return Issue(status.LastFailedAtUtc!.Value, "acme", NormalizeAcmeReason(status.LastResult), status.CertificateId);
         }
 
-        if (renewalBackoffs.Count > 0)
+        if (renewalBackoffs.Length > 0)
         {
             var status = renewalBackoffs[0];
             return Issue(status.NextAttemptNotBeforeUtc!.Value, "acme", "renewal_backoff", status.CertificateId);

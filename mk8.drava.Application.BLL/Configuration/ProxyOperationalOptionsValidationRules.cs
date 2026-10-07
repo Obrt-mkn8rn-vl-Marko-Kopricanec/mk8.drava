@@ -270,7 +270,7 @@ public static partial class ProxyOperationalOptionsValidationRules
         return value.Any(char.IsControl);
     }
 
-    private static void ValidateCertificates(List<string> failures, IReadOnlyList<CertificateOptions> certificates)
+    private static void ValidateCertificates(List<string> failures, System.Collections.ObjectModel.Collection<CertificateOptions> certificates)
     {
         HashSet<string> ids = new(StringComparer.OrdinalIgnoreCase);
         for (var index = 0; index < certificates.Count; index++)

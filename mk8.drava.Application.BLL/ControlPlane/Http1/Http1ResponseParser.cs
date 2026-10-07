@@ -6,7 +6,7 @@ using System.Text;
 namespace Mk8.Drava.Application.BLL.ControlPlane.Http1;
 public static partial class Http1ResponseParser
 {
-    private static Http1ResponseFramingAnalysisResult AnalyzeResponseFraming(string requestMethod, int statusCode, IReadOnlyList<string> contentLengthValues, IReadOnlyList<string> transferEncodingValues)
+    private static Http1ResponseFramingAnalysisResult AnalyzeResponseFraming(string requestMethod, int statusCode, List<string> contentLengthValues, List<string> transferEncodingValues)
     {
         if (IsNoBodyResponse(requestMethod, statusCode))
         {
@@ -52,13 +52,13 @@ public static partial class Http1ResponseParser
         {
         }
 
-        public static Http1ResponseFramingAnalysisResult Accept(Http1ResponseFraming framing)
+        public static Accepted Accept(Http1ResponseFraming framing)
         {
             ArgumentNullException.ThrowIfNull(framing);
             return new Accepted(framing);
         }
 
-        public static Http1ResponseFramingAnalysisResult Reject(Http1ParseError error)
+        public static Rejected Reject(Http1ParseError error)
         {
             if (error == Http1ParseError.None)
             {
