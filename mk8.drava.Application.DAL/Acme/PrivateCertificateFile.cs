@@ -2,20 +2,25 @@ namespace Mk8.Drava.Application.DAL.Acme;
 
 public static class PrivateCertificateFile
 {
-    public static byte[] Read(string path)
+    public static byte[] Read(string path) => ReadProtected(path, 128, 65536);
+
+    internal static byte[] ReadProtected(string path, int minimumBytes, int maximumBytes)
     {
         ValidatePath(path);
         var file = new FileInfo(path);
-        if (!file.Exists || file.Length is < 128 or > 65536) throw new InvalidDataException("Private certificate material is absent or invalid.");
+        if (!file.Exists || file.Length < minimumBytes || file.Length > maximumBytes) throw new InvalidDataException("Private material is absent or invalid.");
         if (!OperatingSystem.IsWindows() && (File.GetUnixFileMode(path) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None)
             throw new InvalidDataException("Private certificate material must be restricted to its owner.");
         return File.ReadAllBytes(path);
     }
 
-    public static async ValueTask WriteNewAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken)
+    public static ValueTask WriteNewAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken) =>
+        WriteProtectedAsync(path, bytes, overwrite: false, 128, 65536, cancellationToken);
+
+    internal static async ValueTask WriteProtectedAsync(string path, ReadOnlyMemory<byte> bytes, bool overwrite, int minimumBytes, int maximumBytes, CancellationToken cancellationToken)
     {
         ValidatePath(path);
-        if (bytes.Length is < 128 or > 65536) throw new InvalidDataException("Invalid private certificate material size.");
+        if (bytes.Length < minimumBytes || bytes.Length > maximumBytes) throw new InvalidDataException("Invalid private material size.");
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -27,7 +32,7 @@ public static class PrivateCertificateFile
                 await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
-            File.Move(temporary, path, overwrite: false);
+            File.Move(temporary, path, overwrite);
         }
         finally { File.Delete(temporary); }
     }
@@ -37,8 +42,10 @@ public static class PrivateCertificateFile
         if (!Path.IsPathFullyQualified(path) || new FileInfo(path).LinkTarget is not null || !Directory.Exists(Path.GetDirectoryName(path)))
             throw new InvalidDataException("Certificate material requires a private absolute file path.");
         var parent = Path.GetDirectoryName(path)!;
-        if (new DirectoryInfo(parent).LinkTarget is not null || (!OperatingSystem.IsWindows() &&
-            (File.GetUnixFileMode(parent) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None))
+        for (var directory = new DirectoryInfo(parent); directory is not null; directory = directory.Parent)
+            if (directory.LinkTarget is not null) throw new InvalidDataException("Private material cannot traverse a symbolic link.");
+        if (!OperatingSystem.IsWindows() &&
+            (File.GetUnixFileMode(parent) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None)
             throw new InvalidDataException("Certificate material directory must be private to its owner.");
     }
 }

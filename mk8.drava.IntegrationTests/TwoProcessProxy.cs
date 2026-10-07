@@ -14,7 +14,7 @@ namespace Mk8.Drava.IntegrationTests;
 internal sealed class TwoProcessProxy : IAsyncDisposable
 {
     private readonly string _directory;
-    private DevelopmentProcess _application;
+    private DevelopmentProcess? _application;
     private DevelopmentProcess _gateway;
     public int Port { get; }
     public IpcEndpoint Ipc { get; }
@@ -32,22 +32,50 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public async Task RestartAsync()
     {
         await _gateway.DisposeAsync().ConfigureAwait(false);
-        await _application.DisposeAsync().ConfigureAwait(false);
+        if (_application is not null) await _application.DisposeAsync().ConfigureAwait(false);
         var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "noconf-tests", Path.GetFileName(_directory))).FullName;
         await File.WriteAllTextAsync(Path.Combine(evidence, "gateway-before-restart.log"), _gateway.CapturedLog).ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-restart.log"), _application.CapturedLog).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-restart.log"), _application?.CapturedLog ?? "").ConfigureAwait(false);
         var root = FindRoot();
         _application = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), Path.Combine(_directory, "application.json"));
         _gateway = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Gateway", "bin", "Release", "net10.0", "mk8.drava.Gateway.dll"), Path.Combine(_directory, "gateway.json"));
         await WaitUntilBoundAsync().ConfigureAwait(false);
     }
+    public string ApplicationPlanPath => Path.Combine(_directory, "app", "gateway-serving.plan");
+    public string GatewayPlanPath => Path.Combine(_directory, "gateway", "serving.plan");
+
+    public async Task StopApplicationAsync()
+    {
+        if (_application is null) return;
+        await _application.DisposeAsync().ConfigureAwait(false);
+        var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "recovery-tests", Path.GetFileName(_directory))).FullName;
+        await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-stop.log"), _application.CapturedLog).ConfigureAwait(false);
+        _application = null;
+    }
+
+    public async Task StartApplicationAsync()
+    {
+        if (_application is not null) throw new InvalidOperationException("Development Application is already started.");
+        _application = new DevelopmentProcess(Path.Combine(FindRoot(), "mk8.drava.Application/bin/Release/net10.0/mk8.drava.Application.dll"), Path.Combine(_directory, "application.json"));
+        await WaitUntilBoundAsync().ConfigureAwait(false);
+    }
+
+    public async Task RestartGatewayAsync()
+    {
+        await _gateway.DisposeAsync().ConfigureAwait(false);
+        var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "recovery-tests", Path.GetFileName(_directory))).FullName;
+        await File.WriteAllTextAsync(Path.Combine(evidence, "gateway-before-restart.log"), _gateway.CapturedLog).ConfigureAwait(false);
+        _gateway = new DevelopmentProcess(Path.Combine(FindRoot(), "mk8.drava.Gateway/bin/Release/net10.0/mk8.drava.Gateway.dll"), Path.Combine(_directory, "gateway.json"));
+        await WaitUntilBoundAsync().ConfigureAwait(false);
+    }
+
     public Task WriteManualRouteAsync(int upstreamPort, int? listenerPort = null) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "sites", "service.json"), JsonSerializer.Serialize(new
     {
         name = "test", host = "app.test", listeners = new[] { new { name = "http", address = "127.0.0.1", port = listenerPort ?? Port } },
         pathPrefix = "/", upstreams = new[] { new { name = "test", address = "127.0.0.1", port = upstreamPort } },
     }));
 
-    private TwoProcessProxy(string directory, int port, IpcEndpoint ipc, DevelopmentProcess application, DevelopmentProcess gateway)
+    private TwoProcessProxy(string directory, int port, IpcEndpoint ipc, DevelopmentProcess? application, DevelopmentProcess gateway)
     {
         _directory = directory;
         Port = port;
@@ -59,7 +87,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true)
     {
         var directory = Path.Combine(Path.GetTempPath(), "drava_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -79,7 +107,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var relayAddress = relayNode ? LocalRelayAddress() : null;
         var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress).ConfigureAwait(false);
         var root = FindRoot();
-        var application = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), applicationPath);
+        var application = startApplication ? new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), applicationPath) : null;
         DevelopmentProcess? gateway = null;
         try
         {
@@ -92,7 +120,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         catch
         {
             if (gateway is not null) await gateway.DisposeAsync().ConfigureAwait(false);
-            await application.DisposeAsync().ConfigureAwait(false);
+            if (application is not null) await application.DisposeAsync().ConfigureAwait(false);
             Directory.Delete(directory, recursive: true);
             throw;
         }
@@ -161,7 +189,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         while (true)
         {
-            _application.ThrowIfExited(); _gateway.ThrowIfExited();
+            _application?.ThrowIfExited(); _gateway.ThrowIfExited();
             try
             {
                 await WaitForListenerAsync(Port, timeout.Token).ConfigureAwait(false);
@@ -171,9 +199,15 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
                     await WaitForListenerAsync(RegistrationPort, timeout.Token).ConfigureAwait(false);
                     if (ManagementPort > 0) await WaitForListenerAsync(ManagementPort, timeout.Token).ConfigureAwait(false);
                 }
-                if (OperatingSystem.IsWindows() || File.Exists(Ipc.UnixSocketPath)) return;
+                if (TlsPort > 0 && _application is not null)
+                {
+                    using var probe = new DevelopmentSiteClient(RootCertificatePath, TlsPort, "probe.site.test");
+                    using var healthy = await probe.Client.GetAsync(new Uri("/_drava/live", UriKind.Relative), timeout.Token).ConfigureAwait(false);
+                    if (healthy.StatusCode != HttpStatusCode.OK) throw new HttpRequestException("Gateway presentation is not live.");
+                }
+                if (_application is null || OperatingSystem.IsWindows() || File.Exists(Ipc.UnixSocketPath)) return;
             }
-            catch (SocketException) { }
+            catch (Exception exception) when (exception is SocketException or HttpRequestException) { }
             await Task.Delay(25, timeout.Token).ConfigureAwait(false);
         }
     }
@@ -206,10 +240,10 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     {
         Client.Dispose();
         await _gateway.DisposeAsync().ConfigureAwait(false);
-        await _application.DisposeAsync().ConfigureAwait(false);
+        if (_application is not null) await _application.DisposeAsync().ConfigureAwait(false);
         var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "noconf-tests", Path.GetFileName(_directory))).FullName;
         await File.WriteAllTextAsync(Path.Combine(evidence, "gateway.log"), _gateway.CapturedLog).ConfigureAwait(false);
-        await File.WriteAllTextAsync(Path.Combine(evidence, "application.log"), _application.CapturedLog).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(evidence, "application.log"), _application?.CapturedLog ?? "").ConfigureAwait(false);
         Directory.Delete(_directory, recursive: true);
     }
 }

@@ -85,23 +85,24 @@ public sealed class SignedRegistrationHandler
         if (!_registry.State.Instances.TryGetValue(identity.InstanceId, out var current) || current.Identity != identity)
             throw new InvalidDataException("Unknown or superseded instance boot.");
         var status = _availability.Status(identity);
+        var gateway = _publication?.ReadPublicationProof();
+        var urls = gateway is not null && gateway.ValidUntilUtc > _clock.GetUtcNow() && status.Publication?.GatewayGeneration == gateway.Generation
+            ? AssignedUrls(identity, gateway) : [];
         var phase = _registry.State.IsTombstoned(identity) ? RegistrationPhase.Revoked : current.Draining ? RegistrationPhase.Draining : status.Revoked ? RegistrationPhase.Revoked : !status.LeaseValid ? RegistrationPhase.LeaseExpired :
-            !status.ReadinessValid ? RegistrationPhase.Checking : status.PublicationValid ? RegistrationPhase.Ready :
+            !status.ReadinessValid ? RegistrationPhase.Checking : status.PublicationValid && urls.Count > 0 ? RegistrationPhase.Ready :
             status.Publication is { RouteRevision: > 0, CertificateVerified: false } ? RegistrationPhase.CertificatePending :
             status.Publication is { RouteRevision: > 0, DnsVerified: false } ? RegistrationPhase.DnsPending : RegistrationPhase.Checking;
         return new RegistrationStatus
         {
             Identity = command.Identity, Phase = phase, DesiredRevision = _registry.State.Revision,
             LeaseSeconds = 90, RenewAfterSeconds = 30,
-            AssignedUrls = phase == RegistrationPhase.Ready ? AssignedUrls(identity) : [],
+            AssignedUrls = phase == RegistrationPhase.Ready ? urls : [],
             Reason = phase == RegistrationPhase.Checking ? "Readiness and acknowledged publication are required." : "",
         };
     }
 
-    private IReadOnlyList<string> AssignedUrls(RegisteredUpstreamIdentity identity)
+    private static IReadOnlyList<string> AssignedUrls(RegisteredUpstreamIdentity identity, GatewayPublicationProof gateway)
     {
-        var gateway = _publication?.ReadPublicationProof();
-        if (gateway is null) return [];
         var host = identity.ServiceId + "." + gateway.Domain;
         return gateway.HttpsPort > 0 ? ["https://" + host + (gateway.HttpsPort == 443 ? "" : ":" + gateway.HttpsPort.ToString(System.Globalization.CultureInfo.InvariantCulture)) + "/"] :
             gateway.HttpPort > 0 ? ["http://" + host + (gateway.HttpPort == 80 ? "" : ":" + gateway.HttpPort.ToString(System.Globalization.CultureInfo.InvariantCulture)) + "/"] : [];

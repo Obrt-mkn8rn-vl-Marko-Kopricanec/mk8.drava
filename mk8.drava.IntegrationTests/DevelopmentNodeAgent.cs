@@ -62,6 +62,6 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
     {
         await _process.DisposeAsync().ConfigureAwait(false);
         var evidence = Directory.CreateDirectory(Path.Combine(TwoProcessProxy.FindRoot(), "artifacts", "node-relay-tests", Path.GetFileName(Path.GetDirectoryName(_proxy.NodeCertificatePath)!))).FullName;
-        await File.WriteAllTextAsync(Path.Combine(evidence, "node-agent.log"), _process.CapturedLog).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(evidence, "node-agent-" + Descriptor.AgentBootId + ".log"), _process.CapturedLog).ConfigureAwait(false);
     }
 }

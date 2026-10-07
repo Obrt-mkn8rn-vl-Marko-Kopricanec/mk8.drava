@@ -48,6 +48,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
         RegisteredRelayConnector? relay = null;
         X509Certificate2? relayRoot = null;
         X509Certificate2? relayController = null;
+        ServingPlanState? plans = null;
         try
         {
             authority = LocalSiteCertificateAuthority.Open(controller.CertificateAuthorityPath, controller.EnrollmentRootFingerprint, clock);
@@ -55,23 +56,20 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
             await registry.InitializeAsync(cancellationToken).ConfigureAwait(false);
             using var root = authority.PublicCertificate;
             verifier = new EnrollmentVerifier(root, registry, clock);
-            var plans = new ServingPlanState(bootstrap, authority);
+            plans = await ServingPlanState.OpenAsync(bootstrap, authority, clock, cancellationToken).ConfigureAwait(false);
             var handler = new SignedRegistrationHandler(bootstrap.SiteId, registry, availability, verifier, new EnrollmentChallenges(clock), clock, plans);
             relayRoot = authority.PublicCertificate;
             relayController = authority.IssueController(bootstrap.SiteId, Guid.NewGuid().ToString("N"));
             relay = new RegisteredRelayConnector(bootstrap.SiteId, bootstrap.NodeId, registry, availability, relayController, relayRoot, clock,
                 RelayPolicyMapping.ToPolicy(controller.Relay));
             var runtime = new RegistrationRuntime(repository, authority, registry, verifier, handler, plans, relay, relayRoot, relayController);
-            repository = null;
-            authority = null;
-            registry = null;
-            verifier = null;
-            relay = null; relayRoot = null; relayController = null;
+            (repository, authority, registry, verifier, relay, relayRoot, relayController, plans) = (null, null, null, null, null, null, null, null);
             return runtime;
         }
         finally
         {
             verifier?.Dispose();
+            plans?.Dispose();
             if (relay is not null) await relay.DisposeAsync().ConfigureAwait(false);
             relayController?.Dispose(); relayRoot?.Dispose();
             registry?.Dispose();
@@ -86,6 +84,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
         _relayController.Dispose(); _relayRoot.Dispose();
         _verifier.Dispose();
         Registry.Dispose();
+        Plans.Dispose();
         _authority.Dispose();
         await _repository.DisposeAsync().ConfigureAwait(false);
     }
