@@ -2,7 +2,7 @@ using Mk8.Drava.Application.BLL.ControlPlane.Acme;
 using Microsoft.Extensions.Logging;
 
 namespace Mk8.Drava.Application.INF.Observability;
-public sealed class AcmeCertificateRenewalLogger : IAcmeCertificateRenewalEventSink
+public sealed partial class AcmeCertificateRenewalLogger : IAcmeCertificateRenewalEventSink
 {
     private readonly ILogger<AcmeCertificateRenewalLogger> _logger;
     public AcmeCertificateRenewalLogger(ILogger<AcmeCertificateRenewalLogger> logger)
@@ -12,6 +12,9 @@ public sealed class AcmeCertificateRenewalLogger : IAcmeCertificateRenewalEventS
 
     public void RenewalFailed(string certificateId, string? errorSummary)
     {
-        _logger.LogWarning("ACME renewal for certificate {CertificateId} failed: {ErrorSummary}", certificateId, errorSummary);
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+        {
+            LogACMERenewalForCertificateFailed10008(_logger, certificateId, errorSummary, null);
+        }
     }
 }

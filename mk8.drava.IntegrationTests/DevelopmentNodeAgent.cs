@@ -37,8 +37,7 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
         await File.WriteAllTextAsync(path, BootstrapFile.Serialize(bootstrap)).ConfigureAwait(false);
         var profile = proxy.NodeCertificatePath + ".agent.json";
         var previous = File.Exists(profile) ? await BootstrapFile.LoadAsync<NodeAgentDescriptor>(profile, CancellationToken.None).ConfigureAwait(false) : null;
-        var source = TwoProcessProxy.FindRoot();
-        var process = new DevelopmentProcess(Path.Combine(source, "mk8.drava.Application/bin/Release/net10.0/mk8.drava.Application.dll"), path, "--node-agent-bootstrap");
+        var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path, "--node-agent-bootstrap");
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));

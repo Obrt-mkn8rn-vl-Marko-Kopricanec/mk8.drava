@@ -35,7 +35,7 @@ using Microsoft.Extensions.Logging;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Hosting;
-public sealed class ProxyListenerService : BackgroundService, IProxyListenerReloadApplier
+public sealed partial class ProxyListenerService : BackgroundService, IProxyListenerReloadApplier
 {
     private readonly IProxyActiveConfigurationSnapshotReader _configurationStore;
     private readonly IRouteMatcher _routeMatcher;
@@ -127,7 +127,10 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
                     var listener = nextListeners[key];
                     var handle = ManagedListener.Bind(listener, _timeProvider);
                     pending.Add(key, handle);
-                    _logger.LogInformation("Proxy listener {ListenerName} prepared on {Address}:{Port}", listener.Name, listener.Address, listener.Port);
+                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
+                    {
+                        LogProxyListenerPreparedOn10041(_logger, listener.Name, listener.Address, listener.Port, null);
+                    }
                 }
             }
             catch (Exception exception)when (exception is SocketException or IOException or InvalidOperationException)
@@ -141,7 +144,10 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
                 _metrics.ListenerReloadFailed();
                 var result = BuildReloadResult(ProxyListenerReloadApplicationState.Failed, attemptedAt, diff, quicDiff, pending, pendingQuic, [SafeError(exception)], plan.CurrentTcpListeners, plan.CurrentQuicListeners);
                 UpdateRuntimeState(result);
-                _logger.LogWarning(exception, "Proxy listener reload failed while preparing new listeners.");
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogProxyListenerReloadFailedWhile10042(_logger, exception);
+                }
                 return result;
             }
 
@@ -153,7 +159,10 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
                     var handle = await ManagedQuicListener.BindAsync(listener, snapshot, _quicListenerFactory, _timeProvider, cancellationToken).ConfigureAwait(false);
                     pendingQuic.Add(key, handle);
                     _metrics.QuicListenerStarted();
-                    _logger.LogInformation("HTTP/3 QUIC listener {ListenerName} prepared on {Address}:{Port}", listener.Name, listener.Address, listener.Port);
+                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
+                    {
+                        LogHTTPQUICListenerPreparedOn10043(_logger, listener.Name, listener.Address, listener.Port, null);
+                    }
                 }
                 catch (Exception exception)when (exception is QuicException or SocketException or IOException or InvalidOperationException or PlatformNotSupportedException)
                 {
@@ -162,7 +171,10 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
                     var error = $"quic:{listener.Name}:{SafeError(exception)}";
                     listenerErrors.Add(error);
                     pendingQuic.Add(key, ManagedQuicListener.Failed(listener, SafeError(exception), _timeProvider));
-                    _logger.LogWarning(exception, "HTTP/3 QUIC listener {ListenerName} failed to start.", listener.Name);
+                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                    {
+                        LogHTTPQUICListenerFailedTo10044(_logger, listener.Name, exception);
+                    }
                 }
             }
 
@@ -278,7 +290,10 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
             var success = BuildReloadResult(ProxyListenerReloadApplicationState.Applied, attemptedAt, diff, quicDiff, pending, pendingQuic, listenerErrors, plan.CurrentTcpListeners, plan.CurrentQuicListeners);
             _metrics.ListenerReloadSucceeded(diff.Added.Count + quicDiff.Added.Count, diff.Removed.Count + quicDiff.Removed.Count, diff.Changed.Count + quicDiff.Changed.Count, diff.Unchanged.Count + quicDiff.Unchanged.Count);
             UpdateRuntimeState(success);
-            _logger.LogInformation("Proxy listener reload applied: added={Added} removed={Removed} changed={Changed} unchanged={Unchanged}", diff.Added.Count + quicDiff.Added.Count, diff.Removed.Count + quicDiff.Removed.Count, diff.Changed.Count + quicDiff.Changed.Count, diff.Unchanged.Count + quicDiff.Unchanged.Count);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
+            {
+                LogProxyListenerReloadAppliedAdded10045(_logger, diff.Added.Count + quicDiff.Added.Count, diff.Removed.Count + quicDiff.Removed.Count, diff.Changed.Count + quicDiff.Changed.Count, diff.Unchanged.Count + quicDiff.Unchanged.Count, null);
+            }
             return success;
         }
         finally
@@ -545,12 +560,18 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
         catch (Exception exception)when (exception is SocketException or IOException)
         {
             handle.MarkFailed(SafeError(exception));
-            _logger.LogWarning(exception, "Proxy listener {ListenerName} stopped after socket failure.", handle.Listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogProxyListenerStoppedAfterSocket10046(_logger, handle.Listener.Name, exception);
+            }
         }
         catch (Exception exception)
         {
             handle.MarkFailed(SafeError(exception));
-            _logger.LogError(exception, "Proxy listener {ListenerName} stopped unexpectedly.", handle.Listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
+            {
+                LogProxyListenerStoppedUnexpectedly10047(_logger, handle.Listener.Name, exception);
+            }
         }
         finally
         {
@@ -597,12 +618,18 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
         catch (Exception exception)when (exception is QuicException or SocketException or IOException)
         {
             handle.MarkFailed(SafeError(exception));
-            _logger.LogWarning(exception, "HTTP/3 QUIC listener {ListenerName} stopped after transport failure.", handle.Listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogHTTPQUICListenerStoppedAfter10048(_logger, handle.Listener.Name, exception);
+            }
         }
         catch (Exception exception)
         {
             handle.MarkFailed(SafeError(exception));
-            _logger.LogError(exception, "HTTP/3 QUIC listener {ListenerName} stopped unexpectedly.", handle.Listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
+            {
+                LogHTTPQUICListenerStoppedUnexpectedly10049(_logger, handle.Listener.Name, exception);
+            }
         }
         finally
         {
@@ -623,11 +650,17 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
         }
         catch (Exception exception)when (exception is SocketException or IOException)
         {
-            _logger.LogDebug(exception, "Client connection ended with an I/O error.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogClientConnectionEndedWithAn10050(_logger, exception);
+            }
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Client connection failed unexpectedly.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
+            {
+                LogClientConnectionFailedUnexpectedly10051(_logger, exception);
+            }
         }
         finally
         {
@@ -648,11 +681,17 @@ public sealed class ProxyListenerService : BackgroundService, IProxyListenerRelo
         }
         catch (Exception exception)when (exception is QuicException or IOException)
         {
-            _logger.LogDebug(exception, "HTTP/3 client connection ended with an I/O error.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogHTTPClientConnectionEndedWith10052(_logger, exception);
+            }
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "HTTP/3 client connection failed unexpectedly.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
+            {
+                LogHTTPClientConnectionFailedUnexpectedly10053(_logger, exception);
+            }
         }
         finally
         {

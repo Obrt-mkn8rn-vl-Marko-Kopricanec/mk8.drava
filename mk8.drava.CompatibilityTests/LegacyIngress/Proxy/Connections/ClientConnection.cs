@@ -33,7 +33,7 @@ using System.Net;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Connections;
-public sealed class ClientConnection
+public sealed partial class ClientConnection
 {
     private readonly Socket _socket;
     private readonly ProxyConfigurationSnapshot _configurationSnapshot;
@@ -176,7 +176,10 @@ public sealed class ClientConnection
                     }
 
                     _metrics.MalformedRequestRejected();
-                    _logger.LogDebug("Rejected malformed request head with parse error {ParseError}", parseError);
+                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+                    {
+                        LogRejectedMalformedRequestHeadWith10035(_logger, parseError, null);
+                    }
                     await WriteGeneratedResponseAsync(clientStream, 400, "Bad Request", "Bad Request", currentContext, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
                     CompleteContext(ref currentContext);
                     return;
@@ -287,7 +290,10 @@ public sealed class ClientConnection
         catch (ProxyTimeoutException exception)when (exception.Kind == ProxyTimeoutKind.ClientRequestHead)
         {
             _metrics.ClientRequestHeadTimedOut();
-            _logger.LogDebug(exception, "Client timed out before sending a complete request head.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogClientTimedOutBeforeSending10036(_logger, exception);
+            }
             if (currentContext is not null)
             {
                 await WriteGeneratedResponseAsync(clientStream, 408, "Request Timeout", "Request Timeout", currentContext, ProxyFailureKind.ClientRequestHeadTimeout, cancellationToken).ConfigureAwait(false);
@@ -297,12 +303,18 @@ public sealed class ClientConnection
         catch (ProxyTimeoutException exception)when (exception.Kind == ProxyTimeoutKind.ClientKeepAliveIdle)
         {
             _metrics.ClientConnectionClosedByIdleTimeout();
-            _logger.LogDebug(exception, "Client keep-alive idle timeout elapsed.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogClientKeepAliveIdleTimeout10037(_logger, exception);
+            }
         }
         catch (ProxyTimeoutException exception)when (exception.Kind == ProxyTimeoutKind.DownstreamWrite)
         {
             _metrics.DownstreamWriteTimedOut();
-            _logger.LogDebug(exception, "Timed out while writing a generated response to the client.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogTimedOutWhileWritingA10038(_logger, exception);
+            }
             if (currentContext is not null)
             {
                 currentContext.RecordClientDisconnect();
@@ -312,7 +324,10 @@ public sealed class ClientConnection
         catch (IOException exception)when (IsClientDisconnect(exception))
         {
             _metrics.ClientPrematureDisconnect();
-            _logger.LogDebug(exception, "Client disconnected during request processing.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogClientDisconnectedDuringRequestProcessing10039(_logger, exception);
+            }
             if (currentContext is not null)
             {
                 currentContext.RecordClientDisconnect();
@@ -448,7 +463,10 @@ public sealed class ClientConnection
         {
             _metrics.UpgradeRequestRejected();
             _metrics.MalformedRequestRejected();
-            _logger.LogDebug("Rejected Upgrade request for {Method} {Target}: {RejectionReason}", requestHead.Method, requestHead.Target, rejectedUpgrade.Reason);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogRejectedUpgradeRequestFor10040(_logger, requestHead.Method, requestHead.Target, rejectedUpgrade.Reason, null);
+            }
             await WriteGeneratedResponseAsync(clientStream, 400, "Bad Request", "Bad Request", context, ProxyFailureKind.UpgradeValidationFailed, cancellationToken).ConfigureAwait(false);
             return false;
         }

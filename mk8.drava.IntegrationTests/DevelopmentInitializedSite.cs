@@ -97,5 +97,5 @@ internal sealed class DevelopmentInitializedSite : IAsyncDisposable
         System.IO.Directory.Delete(_parent, recursive: true);
     }
 
-    private static string Assembly(string project) => Path.Combine(TwoProcessProxy.FindRoot(), project, "bin", "Release", "net10.0", project + ".dll");
+    private static string Assembly(string project) => DevelopmentBinaryPaths.ForProject(project);
 }

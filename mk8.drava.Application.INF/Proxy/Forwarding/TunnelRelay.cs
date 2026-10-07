@@ -6,7 +6,7 @@ using System.Buffers;
 using System.Net.Sockets;
 
 namespace Mk8.Drava.Application.INF.Proxy.Forwarding;
-public sealed class TunnelRelay
+public sealed partial class TunnelRelay
 {
     private readonly ProxyMetrics _metrics;
     private readonly ILogger<TunnelRelay> _logger;
@@ -55,7 +55,10 @@ public sealed class TunnelRelay
             if (completed == idleMonitor && idleTimedOut)
             {
                 _metrics.TunnelIdleTimedOut();
-                _logger.LogDebug("Upgraded tunnel idle timeout elapsed.");
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+                {
+                    LogUpgradedTunnelIdleTimeoutElapsed10026(_logger, null);
+                }
             }
         }
         finally
@@ -134,7 +137,10 @@ public sealed class TunnelRelay
         {
             _metrics.TunnelRelayFailed();
             onRelayFailure();
-            _logger.LogDebug(exception, "Upgraded tunnel relay ended with an I/O failure.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogUpgradedTunnelRelayEndedWith10027(_logger, exception);
+            }
         }
         finally
         {

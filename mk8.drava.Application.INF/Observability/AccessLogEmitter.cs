@@ -4,7 +4,7 @@ using Mk8.Drava.Application.BLL.ControlPlane.RequestDiagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace Mk8.Drava.Application.INF.Observability;
-public sealed class AccessLogEmitter
+public sealed partial class AccessLogEmitter
 {
     private const int MaxDiagnosticTextLength = 512;
     private readonly RecentRequestDiagnosticsStore _diagnostics;
@@ -37,7 +37,11 @@ public sealed class AccessLogEmitter
 
         _metrics.AccessLogEmitted();
         _logPersistenceStore.WriteAccess(new ProxyAccessLogEntry(diagnostic.TimestampUtc, diagnostic.RequestId, diagnostic.ConfigVersion, diagnostic.ListenerName, diagnostic.Transport, context.Protocol, diagnostic.Method, diagnostic.Host, diagnostic.Target, context.SiteName, diagnostic.RouteName, context.RouteAction, diagnostic.UpstreamName, diagnostic.UpstreamEndpoint, diagnostic.ResponseStatusCode, diagnostic.DurationMilliseconds, diagnostic.FailureKind, diagnostic.ResponseStarted, diagnostic.KeepClientConnectionOpen, diagnostic.IsUpgrade, diagnostic.TunnelEstablished));
-        _logger.LogInformation("Proxy access {RequestId} listener={ListenerName} transport={Transport} protocol={Protocol} client={ClientEndpoint} method={Method} host={Host} targetPath={TargetPath} route={RouteName} upstream={UpstreamName} upstreamEndpoint={UpstreamEndpoint} status={StatusCode} durationMs={DurationMilliseconds} failure={FailureKind} responseStarted={ResponseStarted} keepAlive={KeepAlive} upgrade={IsUpgrade} tunnel={TunnelEstablished} configVersion={ConfigVersion}", diagnostic.RequestId, diagnostic.ListenerName, diagnostic.Transport, context.Protocol, diagnostic.ClientEndpoint, diagnostic.Method, diagnostic.Host, StripQuery(diagnostic.Target), diagnostic.RouteName, diagnostic.UpstreamName, diagnostic.UpstreamEndpoint, diagnostic.ResponseStatusCode, diagnostic.DurationMilliseconds, diagnostic.FailureKind, diagnostic.ResponseStarted, diagnostic.KeepClientConnectionOpen, diagnostic.IsUpgrade, diagnostic.TunnelEstablished, diagnostic.ConfigVersion);
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
+        {
+            var targetPath = StripQuery(diagnostic.Target);
+            LogProxyAccessListenerTransportProtocol10007(_logger, diagnostic.RequestId, diagnostic.ListenerName, diagnostic.Transport, context.Protocol, diagnostic.ClientEndpoint, diagnostic.Method, diagnostic.Host, targetPath, diagnostic.RouteName, diagnostic.UpstreamName, diagnostic.UpstreamEndpoint, diagnostic.ResponseStatusCode, diagnostic.DurationMilliseconds, diagnostic.FailureKind, diagnostic.ResponseStarted, diagnostic.KeepClientConnectionOpen, diagnostic.IsUpgrade, diagnostic.TunnelEstablished, diagnostic.ConfigVersion, null);
+        }
     }
 
     private static string? StripQuery(string? value)

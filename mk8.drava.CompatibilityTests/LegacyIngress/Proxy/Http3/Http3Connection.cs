@@ -27,7 +27,7 @@ using Mk8.Drava.Application.INF.Observability;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http3;
-public sealed class Http3Connection
+public sealed partial class Http3Connection
 {
     private const int MaxFramePayloadBytes = 1024 * 1024;
     private const int MaxProtocolErrorsPerConnection = 8;
@@ -107,11 +107,17 @@ public sealed class Http3Connection
         }
         catch (QuicException exception)
         {
-            _logger.LogDebug(exception, "HTTP/3 QUIC connection ended.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogHTTPQUICConnectionEnded10055(_logger, exception);
+            }
         }
         catch (IOException exception)
         {
-            _logger.LogDebug(exception, "HTTP/3 connection ended with I/O failure.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogHTTPConnectionEndedWithI10056(_logger, exception);
+            }
         }
         finally
         {
@@ -235,7 +241,10 @@ public sealed class Http3Connection
                 _metrics.Http3StreamReset();
             }
 
-            _logger.LogDebug(exception, "HTTP/3 stream ended with I/O failure.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogHTTPStreamEndedWithI10057(_logger, exception);
+            }
             CompleteContext(ref context);
             return true;
         }
@@ -301,7 +310,10 @@ public sealed class Http3Connection
         }
         catch (Exception exception)when (exception is QuicException or IOException)
         {
-            _logger.LogDebug(exception, "HTTP/3 failed to send SETTINGS.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogHTTPFailedToSendSETTINGS10058(_logger, exception);
+            }
         }
     }
 
@@ -315,7 +327,10 @@ public sealed class Http3Connection
             }
             catch (Exception exception)when (exception is OperationCanceledException or QuicException or IOException)
             {
-                _logger.LogDebug(exception, "HTTP/3 unidirectional stream ended.");
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+                {
+                    LogHTTPUnidirectionalStreamEnded10059(_logger, exception);
+                }
             }
         }, CancellationToken.None);
     }

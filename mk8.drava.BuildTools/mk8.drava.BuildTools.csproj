@@ -6,4 +6,7 @@
     <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(MSBuildToolsPath)/Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath></Reference>
     <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(MSBuildToolsPath)/Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath></Reference>
   </ItemGroup>
+  <Target Name="PublishProtocolAnnotationTask" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath);@(ReferenceCopyLocalPaths)" DestinationFolder="$(MSBuildProjectDirectory)/../artifacts/build-task" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

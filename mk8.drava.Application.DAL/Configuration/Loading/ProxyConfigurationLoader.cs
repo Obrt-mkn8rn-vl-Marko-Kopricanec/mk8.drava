@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 using YamlDotNet.Core;
 
 namespace Mk8.Drava.Application.DAL.Configuration.Loading;
-public sealed class ProxyConfigurationLoader : IProxyConfigurationLoader, IProxyRestoreConfigurationValidator
+public sealed partial class ProxyConfigurationLoader : IProxyConfigurationLoader, IProxyRestoreConfigurationValidator
 {
     private readonly IMdravaDataDirectoryProvider _dataDirectoryProvider;
     private readonly ProxyDataDirectoryBootstrapper _bootstrapper;
@@ -123,7 +123,10 @@ public sealed class ProxyConfigurationLoader : IProxyConfigurationLoader, IProxy
         }
         else
         {
-            _logger.LogWarning("No proxy site configuration files were found in {SourcePath}; MDRAVA will start with no configured sites, listeners, or routes.", sourceDirectory);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogNoProxySiteConfigurationFiles10000(_logger, sourceDirectory, null);
+            }
         }
 
         var certificates = LoadCertificates(operationalOptions, _dataDirectoryProvider.GetDataDirectory(), errors);
@@ -212,7 +215,10 @@ public sealed class ProxyConfigurationLoader : IProxyConfigurationLoader, IProxy
         if (!File.Exists(operationalConfigPath))
         {
             discoveries.Add(new ProxyConfigurationFileDiscovery(operationalConfigPath, "json", "skipped", "Proxy operational configuration file does not exist; defaults are used."));
-            _logger.LogInformation("Proxy operational configuration file {ConfigPath} was not found; using in-memory default timeout settings.", operationalConfigPath);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
+            {
+                LogProxyOperationalConfigurationFileWas10001(_logger, operationalConfigPath, null);
+            }
             return new ProxyOperationalOptions();
         }
 

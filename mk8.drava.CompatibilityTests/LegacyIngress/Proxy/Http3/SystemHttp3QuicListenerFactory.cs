@@ -13,7 +13,7 @@ using Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Tls;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http3;
-public sealed class SystemHttp3QuicListenerFactory : IHttp3QuicListenerFactory
+public sealed partial class SystemHttp3QuicListenerFactory : IHttp3QuicListenerFactory
 {
     private readonly IProxyActiveConfigurationSnapshotReader _configurationStore;
     private readonly ProxyMetrics _metrics;
@@ -50,7 +50,10 @@ public sealed class SystemHttp3QuicListenerFactory : IHttp3QuicListenerFactory
                 if (certificate is null)
                 {
                     _metrics.TlsNoCertificateForSni();
-                    _logger.LogDebug("No QUIC certificate matched SNI host {HostName} for listener {ListenerName}.", clientHello.ServerName ?? "<none>", listener.Name);
+                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+                    {
+                        LogNoQUICCertificateMatchedSNI10060(_logger, clientHello.ServerName ?? "<none>", listener.Name, null);
+                    }
                     throw new AuthenticationException("no_certificate");
                 }
 

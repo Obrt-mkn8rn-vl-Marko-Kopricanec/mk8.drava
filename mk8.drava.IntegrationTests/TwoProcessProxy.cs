@@ -36,9 +36,8 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "noconf-tests", Path.GetFileName(_directory))).FullName;
         await File.WriteAllTextAsync(Path.Combine(evidence, "gateway-before-restart.log"), _gateway.CapturedLog).ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-restart.log"), _application?.CapturedLog ?? "").ConfigureAwait(false);
-        var root = FindRoot();
-        _application = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), Path.Combine(_directory, "application.json"));
-        _gateway = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Gateway", "bin", "Release", "net10.0", "mk8.drava.Gateway.dll"), Path.Combine(_directory, "gateway.json"));
+        _application = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), Path.Combine(_directory, "application.json"));
+        _gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), Path.Combine(_directory, "gateway.json"));
         await WaitUntilBoundAsync().ConfigureAwait(false);
     }
     public string ApplicationPlanPath => Path.Combine(_directory, "app", "gateway-serving.plan");
@@ -56,7 +55,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public async Task StartApplicationAsync()
     {
         if (_application is not null) throw new InvalidOperationException("Development Application is already started.");
-        _application = new DevelopmentProcess(Path.Combine(FindRoot(), "mk8.drava.Application/bin/Release/net10.0/mk8.drava.Application.dll"), Path.Combine(_directory, "application.json"));
+        _application = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), Path.Combine(_directory, "application.json"));
         await WaitUntilBoundAsync().ConfigureAwait(false);
     }
 
@@ -65,7 +64,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         await _gateway.DisposeAsync().ConfigureAwait(false);
         var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "recovery-tests", Path.GetFileName(_directory))).FullName;
         await File.WriteAllTextAsync(Path.Combine(evidence, "gateway-before-restart.log"), _gateway.CapturedLog).ConfigureAwait(false);
-        _gateway = new DevelopmentProcess(Path.Combine(FindRoot(), "mk8.drava.Gateway/bin/Release/net10.0/mk8.drava.Gateway.dll"), Path.Combine(_directory, "gateway.json"));
+        _gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), Path.Combine(_directory, "gateway.json"));
         await WaitUntilBoundAsync().ConfigureAwait(false);
     }
 
@@ -106,12 +105,11 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var managementPort = administration ? UnusedPort() : 0;
         var relayAddress = relayNode ? LocalRelayAddress() : null;
         var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache).ConfigureAwait(false);
-        var root = FindRoot();
-        var application = startApplication ? new DevelopmentProcess(Path.Combine(root, "mk8.drava.Application", "bin", "Release", "net10.0", "mk8.drava.Application.dll"), applicationPath) : null;
+        var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath) : null;
         DevelopmentProcess? gateway = null;
         try
         {
-            gateway = new DevelopmentProcess(Path.Combine(root, "mk8.drava.Gateway", "bin", "Release", "net10.0", "mk8.drava.Gateway.dll"), gatewayPath);
+            gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), gatewayPath);
             var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { TlsPort = tlsPort, RegistrationPort = registrationPort, ManagementPort = managementPort,
                 EnrolledNodeId = relayNode ? "remote" : "local", NodeRelayAddress = relayAddress ?? "127.0.0.1" };
             try { await result.WaitUntilBoundAsync().ConfigureAwait(false); return result; }
@@ -234,7 +232,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
 
     internal static string FindRoot()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        var directory = new DirectoryInfo(Environment.GetEnvironmentVariable("MK8_DRAVA_DEVELOPMENT_CHECKOUT") ?? AppContext.BaseDirectory);
         while (directory is not null)
         {
             if (File.Exists(Path.Combine(directory.FullName, "mk8.drava.slnx"))) return directory.FullName;

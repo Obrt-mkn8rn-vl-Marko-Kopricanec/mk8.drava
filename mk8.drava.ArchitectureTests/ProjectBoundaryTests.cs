@@ -93,7 +93,7 @@ public sealed class ProjectBoundaryTests
 
     private static string FindRoot()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        var directory = new DirectoryInfo(Environment.GetEnvironmentVariable("MK8_DRAVA_DEVELOPMENT_CHECKOUT") ?? AppContext.BaseDirectory);
         while (directory is not null)
         {
             if (File.Exists(Path.Combine(directory.FullName, "mk8.drava.slnx"))) return directory.FullName;

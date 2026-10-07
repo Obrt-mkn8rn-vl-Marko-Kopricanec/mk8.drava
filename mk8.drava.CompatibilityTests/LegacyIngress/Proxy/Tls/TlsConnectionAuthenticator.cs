@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Tls;
-public sealed class TlsConnectionAuthenticator
+public sealed partial class TlsConnectionAuthenticator
 {
     private readonly ProxyMetrics _metrics;
     private readonly ProxyAdmissionController _admission;
@@ -30,12 +30,14 @@ public sealed class TlsConnectionAuthenticator
         var handshakeAdmission = _admission.AcquireTlsHandshake(snapshot.Limits.MaxConcurrentTlsHandshakes);
         if (handshakeAdmission is not ProxyAdmissionDecision.AcceptedResult acceptedHandshake)
         {
-            _logger.LogDebug("Rejected TLS handshake for listener {ListenerName} because the concurrent handshake limit is exhausted.", listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogRejectedTLSHandshakeForListener10061(_logger, listener.Name, null);
+            }
             return null;
         }
 
         using var handshakeLease = acceptedHandshake.Lease;
-        var sslStream = new SslStream(transportStream, false);
         var options = new SslServerAuthenticationOptions
         {
             EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
@@ -44,6 +46,12 @@ public sealed class TlsConnectionAuthenticator
             ApplicationProtocols = ListenerProtocolAdvertisement.BuildTcpAlpn(listener.Protocols),
             ServerCertificateSelectionCallback = (_, hostName) => SelectCertificateForHandshake(snapshot, listener, hostName) ?? null!
         };
+        return await AuthenticateStreamAsync(transportStream, options, snapshot, listener, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<TlsAuthenticationResult?> AuthenticateStreamAsync(Stream transportStream, SslServerAuthenticationOptions options, ProxyConfigurationSnapshot snapshot, RuntimeListener listener, CancellationToken cancellationToken)
+    {
+        var sslStream = new SslStream(transportStream, false);
         try
         {
             await ProxyTimeoutPolicy.RunAsync(async timeoutToken =>
@@ -56,28 +64,40 @@ public sealed class TlsConnectionAuthenticator
         catch (ProxyTimeoutException)
         {
             _metrics.TlsHandshakeTimedOut();
-            _logger.LogDebug("TLS handshake timed out for listener {ListenerName}.", listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogTLSHandshakeTimedOutFor10062(_logger, listener.Name, null);
+            }
             await sslStream.DisposeAsync().ConfigureAwait(false);
             return null;
         }
         catch (AuthenticationException exception)
         {
             _metrics.TlsHandshakeFailed();
-            _logger.LogDebug(exception, "TLS handshake failed for listener {ListenerName}.", listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogTLSHandshakeFailedForListener10063(_logger, listener.Name, exception);
+            }
             await sslStream.DisposeAsync().ConfigureAwait(false);
             return null;
         }
         catch (IOException exception)
         {
             _metrics.TlsHandshakeFailed();
-            _logger.LogDebug(exception, "TLS handshake ended with I/O failure for listener {ListenerName}.", listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogTLSHandshakeEndedWithI10064(_logger, listener.Name, exception);
+            }
             await sslStream.DisposeAsync().ConfigureAwait(false);
             return null;
         }
         catch (Exception exception)
         {
             _metrics.TlsHandshakeFailed();
-            _logger.LogError(exception, "TLS handshake failed unexpectedly for listener {ListenerName}.", listener.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
+            {
+                LogTLSHandshakeFailedUnexpectedlyFor10065(_logger, listener.Name, exception);
+            }
             await sslStream.DisposeAsync().ConfigureAwait(false);
             return null;
         }
@@ -97,6 +117,9 @@ public sealed class TlsConnectionAuthenticator
     private void RecordNoCertificate(RuntimeListener listener, string? hostName)
     {
         _metrics.TlsNoCertificateForSni();
-        _logger.LogDebug("No TLS certificate matched SNI host {HostName} for listener {ListenerName}.", hostName ?? "<none>", listener.Name);
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+        {
+            LogNoTLSCertificateMatchedSNI10066(_logger, hostName ?? "<none>", listener.Name, null);
+        }
     }
 }

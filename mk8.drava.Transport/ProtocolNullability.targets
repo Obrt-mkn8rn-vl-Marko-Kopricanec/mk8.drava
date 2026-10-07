@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup><MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects></PropertyGroup>
-  <UsingTask TaskName="Mk8.Drava.BuildTools.AnnotateDravaProtocol" AssemblyFile="$(MSBuildThisFileDirectory)../mk8.drava.BuildTools/bin/$(Configuration)/net10.0/mk8.drava.BuildTools.dll" />
+  <UsingTask TaskName="Mk8.Drava.BuildTools.AnnotateDravaProtocol" AssemblyFile="$(MSBuildThisFileDirectory)../artifacts/build-task/mk8.drava.BuildTools.dll" />
   <Target Name="AnnotateGeneratedDravaProtocol" BeforeTargets="CoreCompile" DependsOnTargets="Protobuf_Compile">
     <AnnotateDravaProtocol MessagesFile="$(Protobuf_OutputPath)Drava.cs" ServicesFile="$(Protobuf_OutputPath)DravaGrpc.cs" />
   </Target>

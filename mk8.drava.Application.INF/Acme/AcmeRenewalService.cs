@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Mk8.Drava.Application.INF.Acme;
-public sealed class AcmeRenewalService : BackgroundService
+public sealed partial class AcmeRenewalService : BackgroundService
 {
     private readonly IAcmeRenewalScheduleInputSource _scheduleInputSource;
     private readonly AcmeCertificateManager _manager;
@@ -33,7 +33,10 @@ public sealed class AcmeRenewalService : BackgroundService
             }
             catch (Exception exception)
             {
-                _logger.LogWarning(exception, "ACME renewal check failed unexpectedly.");
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogACMERenewalCheckFailedUnexpectedly10003(_logger, exception);
+                }
             }
 
             var delay = ResolveDelay();

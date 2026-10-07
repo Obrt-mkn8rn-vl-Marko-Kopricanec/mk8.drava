@@ -7,7 +7,7 @@ using Mk8.Drava.Application.BLL.ControlPlane.Observability;
 using Microsoft.Extensions.Logging;
 
 namespace Mk8.Drava.Application.DAL.Observability;
-public sealed class ProxyPersistentLogWriter : IProxyLogPersistenceStore
+public sealed partial class ProxyPersistentLogWriter : IProxyLogPersistenceStore
 {
     private const int MaxTextLength = 256;
     private const int MaxPathLength = 512;
@@ -133,7 +133,10 @@ public sealed class ProxyPersistentLogWriter : IProxyLogPersistenceStore
         catch (Exception exception)when (exception is IOException or UnauthorizedAccessException)
         {
             RecordWriteFailure(logName, exception);
-            _logger.LogWarning(exception, "Failed to persist {LogName} log entry.", logName);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogFailedToPersistLogEntry10002(_logger, logName, exception);
+            }
         }
     }
 

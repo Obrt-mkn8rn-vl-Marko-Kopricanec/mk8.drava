@@ -93,7 +93,10 @@ public sealed partial class ProxyForwarder
             }
 
             _metrics.UpstreamSucceeded();
-            _logger.LogDebug("Proxied {Method} {Target} to upstream {UpstreamName}", requestHead.Method, requestHead.Target, upstream.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogProxiedToUpstream10013(_logger, requestHead.Method, requestHead.Target, upstream.Name, null);
+            }
             return ForwardingResult.Success(responseStarted, responseResult.KeepClientConnectionOpen, responseResult.StatusCode);
         }
         catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)
@@ -110,7 +113,10 @@ public sealed partial class ProxyForwarder
         {
             _metrics.RequestBodySizeRejected();
             _metrics.ClientBodyRelayFailed();
-            _logger.LogDebug(exception, "Rejected oversized request body for {Method} {Target}", requestHead.Method, requestHead.Target);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogRejectedOversizedRequestBodyFor10014(_logger, requestHead.Method, requestHead.Target, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.RequestPayloadTooLarge, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -121,7 +127,10 @@ public sealed partial class ProxyForwarder
         catch (Http1ClientProtocolException exception)
         {
             _metrics.MalformedRequestRejected();
-            _logger.LogDebug(exception, "Rejected malformed request body for {Method} {Target}", requestHead.Method, requestHead.Target);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogRejectedMalformedRequestBodyFor10015(_logger, requestHead.Method, requestHead.Target, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.ClientMalformedRequest, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -138,7 +147,10 @@ public sealed partial class ProxyForwarder
                 _metrics.UpstreamConnectFailed();
             }
 
-            _logger.LogWarning(exception, "Upstream response framing failed for {Method} {Target} to upstream {UpstreamName}", requestHead.Method, requestHead.Target, upstream.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogUpstreamResponseFramingFailedFor10016(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamMalformedResponse, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -156,7 +168,10 @@ public sealed partial class ProxyForwarder
                 _metrics.UpstreamConnectFailed();
             }
 
-            _logger.LogWarning(exception, "Upstream HTTP/2 response framing failed for {Method} {Target} to upstream {UpstreamName}", requestHead.Method, requestHead.Target, upstream.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogUpstreamHTTPResponseFramingFailed10017(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamMalformedResponse, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -179,7 +194,10 @@ public sealed partial class ProxyForwarder
                 _metrics.UpstreamConnectFailed();
             }
 
-            _logger.LogWarning(exception, "Upstream HTTP/3 forwarding failed for {Method} {Target} to upstream {UpstreamName}", requestHead.Method, requestHead.Target, upstream.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogUpstreamHTTPForwardingFailedFor10018(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, failureKind, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -195,7 +213,10 @@ public sealed partial class ProxyForwarder
                 _metrics.UpstreamHttp2AlpnFailed();
             }
 
-            _logger.LogWarning(exception, "Upstream TLS failed for {Method} {Target} to upstream {UpstreamName}", requestHead.Method, requestHead.Target, upstream.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogUpstreamTLSFailedForTo10019(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectFailed, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -207,7 +228,10 @@ public sealed partial class ProxyForwarder
         catch (Exception exception)when (exception is SocketException or IOException)
         {
             _metrics.UpstreamFailed();
-            _logger.LogWarning(exception, "Upstream forwarding failed for {Method} {Target} to upstream {UpstreamName}", requestHead.Method, requestHead.Target, upstream.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogUpstreamForwardingFailedForTo10020(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectFailed, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -363,7 +387,10 @@ public sealed partial class ProxyForwarder
         {
             case ProxyTimeoutKind.ClientRequestBodyIdle:
                 _metrics.ClientRequestBodyTimedOut();
-                _logger.LogDebug(exception, "Client request body timed out for {Method} {Target}", requestHead.Method, requestHead.Target);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+                {
+                    LogClientRequestBodyTimedOut10021(_logger, requestHead.Method, requestHead.Target, exception);
+                }
                 if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
                 {
                     await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.ClientRequestBodyTimeout, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -373,7 +400,10 @@ public sealed partial class ProxyForwarder
             case ProxyTimeoutKind.UpstreamConnect:
                 _metrics.UpstreamConnectTimedOut();
                 _metrics.UpstreamFailed();
-                _logger.LogWarning(exception, "Timed out connecting to upstream {UpstreamName}", upstream.Name);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogTimedOutConnectingToUpstream10022(_logger, upstream.Name, exception);
+                }
                 if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
                 {
                     await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectTimeout, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -383,7 +413,10 @@ public sealed partial class ProxyForwarder
             case ProxyTimeoutKind.UpstreamResponseHead:
                 _metrics.UpstreamResponseHeadTimedOut();
                 _metrics.UpstreamFailed();
-                _logger.LogWarning(exception, "Timed out waiting for upstream response head from {UpstreamName}", upstream.Name);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogTimedOutWaitingForUpstream10023(_logger, upstream.Name, exception);
+                }
                 if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
                 {
                     await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamResponseHeadTimeout, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -393,11 +426,17 @@ public sealed partial class ProxyForwarder
             case ProxyTimeoutKind.UpstreamResponseBodyIdle:
                 _metrics.UpstreamResponseBodyTimedOut();
                 _metrics.UpstreamFailed();
-                _logger.LogWarning(exception, "Timed out relaying upstream response body from {UpstreamName}", upstream.Name);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogTimedOutRelayingUpstreamResponse10024(_logger, upstream.Name, exception);
+                }
                 break;
             case ProxyTimeoutKind.DownstreamWrite:
                 _metrics.DownstreamWriteTimedOut();
-                _logger.LogDebug(exception, "Downstream write timed out for {Method} {Target}", requestHead.Method, requestHead.Target);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+                {
+                    LogDownstreamWriteTimedOutFor10025(_logger, requestHead.Method, requestHead.Target, exception);
+                }
                 break;
         }
     }

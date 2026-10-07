@@ -32,7 +32,7 @@ using Mk8.Drava.Application.INF.Observability;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http2;
-public sealed class Http2ClientConnection
+public sealed partial class Http2ClientConnection
 {
     private static readonly byte[] ClientPreface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"u8.ToArray();
     private readonly Stream _stream;
@@ -115,7 +115,10 @@ public sealed class Http2ClientConnection
         catch (IOException exception)
         {
             _metrics.ClientPrematureDisconnect();
-            _logger.LogDebug(exception, "HTTP/2 client connection ended with I/O failure.");
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                LogHTTPClientConnectionEndedWith10054(_logger, exception);
+            }
         }
     }
 

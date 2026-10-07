@@ -18,7 +18,7 @@ using Mk8.Drava.Application.DAL.Observability;
 using Mk8.Drava.Application.INF.Observability;
 
 namespace Mk8.Drava.Application.INF.Proxy.Forwarding;
-public sealed class UpgradeForwarder
+public sealed partial class UpgradeForwarder
 {
     private const string WebSocketAcceptGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     private readonly UpstreamConnectionFactory _connectionFactory;
@@ -87,7 +87,10 @@ public sealed class UpgradeForwarder
                 responseStarted = true;
                 _metrics.UpgradeRequestSucceeded();
                 _metrics.TunnelStarted();
-                _logger.LogDebug("Upgraded {Method} {Target} to protocol {Protocol} through upstream {UpstreamName}", requestHead.Method, requestHead.Target, upgrade.Protocol, upstream.Name);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+                {
+                    LogUpgradedToProtocolThroughUpstream10028(_logger, requestHead.Method, requestHead.Target, upgrade.Protocol, upstream.Name, null);
+                }
                 using var tunnelInput = new PrefixReadStream(upstreamStream, responseHeadRead.InitialBodyBytes);
                 var tunnelResult = await _tunnelRelay.RelayAsync(clientStream, tunnelInput, listener, timeouts, cancellationToken).ConfigureAwait(false);
                 return ForwardingResult.TunnelCompleted(responseStatusCode: 101, tunnel: tunnelResult);
@@ -112,7 +115,10 @@ public sealed class UpgradeForwarder
             _metrics.UpstreamMalformedResponse();
             _metrics.UpgradeUpstreamFailed();
             _metrics.UpstreamFailed();
-            _logger.LogWarning(exception, "Upstream Upgrade response failed for {Method} {Target} to upstream {UpstreamName}", requestHead.Method, requestHead.Target, upstream.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogUpstreamUpgradeResponseFailedFor10029(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamMalformedResponse, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -124,7 +130,10 @@ public sealed class UpgradeForwarder
         {
             _metrics.UpgradeUpstreamFailed();
             _metrics.UpstreamFailed();
-            _logger.LogWarning(exception, "Upgrade forwarding failed for {Method} {Target} to upstream {UpstreamName}", requestHead.Method, requestHead.Target, upstream.Name);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                LogUpgradeForwardingFailedForTo10030(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+            }
             if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
             {
                 await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectFailed, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -146,7 +155,10 @@ public sealed class UpgradeForwarder
                 _metrics.UpstreamConnectTimedOut();
                 _metrics.UpgradeUpstreamFailed();
                 _metrics.UpstreamFailed();
-                _logger.LogWarning(exception, "Timed out connecting Upgrade request to upstream {UpstreamName}", upstream.Name);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogTimedOutConnectingUpgradeRequest10031(_logger, upstream.Name, exception);
+                }
                 if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
                 {
                     await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectTimeout, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -157,7 +169,10 @@ public sealed class UpgradeForwarder
                 _metrics.UpstreamResponseHeadTimedOut();
                 _metrics.UpgradeUpstreamFailed();
                 _metrics.UpstreamFailed();
-                _logger.LogWarning(exception, "Timed out waiting for upstream Upgrade response head from {UpstreamName}", upstream.Name);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogTimedOutWaitingForUpstream10032(_logger, upstream.Name, exception);
+                }
                 if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
                 {
                     await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamResponseHeadTimeout, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
@@ -167,11 +182,17 @@ public sealed class UpgradeForwarder
             case ProxyTimeoutKind.UpstreamResponseBodyIdle:
                 _metrics.UpstreamResponseBodyTimedOut();
                 _metrics.UpstreamFailed();
-                _logger.LogWarning(exception, "Timed out relaying non-101 upstream response body from {UpstreamName}", upstream.Name);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogTimedOutRelayingNonUpstream10033(_logger, upstream.Name, exception);
+                }
                 break;
             case ProxyTimeoutKind.DownstreamWrite:
                 _metrics.DownstreamWriteTimedOut();
-                _logger.LogDebug(exception, "Downstream write timed out for Upgrade {Method} {Target}", requestHead.Method, requestHead.Target);
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+                {
+                    LogDownstreamWriteTimedOutFor10034(_logger, requestHead.Method, requestHead.Target, exception);
+                }
                 break;
         }
     }
