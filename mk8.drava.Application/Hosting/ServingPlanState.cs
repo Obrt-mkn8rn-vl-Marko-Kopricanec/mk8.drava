@@ -27,6 +27,8 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
     public static async ValueTask<ServingPlanState> OpenAsync(ApplicationBootstrap bootstrap, LocalSiteCertificateAuthority authority, TimeProvider clock, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(bootstrap); ArgumentNullException.ThrowIfNull(authority); ArgumentNullException.ThrowIfNull(clock);
+        bootstrap.Controller!.ServingPlan.Validate();
+        var settings = bootstrap.Controller.ServingPlan;
         var stored = GatewayMaterialStore.Read(bootstrap.StateDirectory);
         var prior = stored is null ? null : PresentationPlan.Parser.ParseFrom(stored);
         if (prior is not null)
@@ -35,7 +37,8 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
             if (!string.Equals(prior.Certificates[0].HostNames[0], "*." + bootstrap.Controller!.Domain, StringComparison.Ordinal))
                 throw new InvalidDataException("Stored plan belongs to another site domain.");
         }
-        var plan = prior is null || prior.ValidUntilUnixSeconds <= clock.GetUtcNow().AddDays(7).ToUnixTimeSeconds()
+        var plan = prior is null || prior.AcknowledgmentLeaseSeconds != settings.AcknowledgmentLeaseSeconds || prior.LeafLifetimeDays != settings.LeafLifetimeDays ||
+            prior.ValidUntilUnixSeconds <= clock.GetUtcNow().AddDays(settings.RenewalLeadDays).ToUnixTimeSeconds()
             ? BuildPlan(bootstrap, authority, prior is null ? 1 : checked(prior.Generation + 1)) : prior;
         if (!ReferenceEquals(plan, prior)) await GatewayMaterialStore.WriteAsync(bootstrap.StateDirectory, plan.ToByteArray(), cancellationToken).ConfigureAwait(false);
         return new ServingPlanState(bootstrap, authority, clock, plan);
@@ -58,9 +61,10 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
         {
             var elapsed = _clock.GetElapsedTime(_acknowledgedAt);
             var now = _clock.GetUtcNow();
-            if (!_acknowledged || elapsed >= TimeSpan.FromSeconds(30) || _plan.ValidUntilUnixSeconds <= now.ToUnixTimeSeconds()) return null;
+            var acknowledgmentLease = TimeSpan.FromSeconds(_plan.AcknowledgmentLeaseSeconds);
+            if (!_acknowledged || elapsed < TimeSpan.Zero || elapsed >= acknowledgmentLease || _plan.ValidUntilUnixSeconds <= now.ToUnixTimeSeconds()) return null;
             var valid = DateTimeOffset.FromUnixTimeSeconds(_plan.ValidUntilUnixSeconds);
-            var heartbeatUntil = now.Add(TimeSpan.FromSeconds(30) - elapsed);
+            var heartbeatUntil = now.Add(acknowledgmentLease - elapsed);
             return new(checked((long)_plan.Generation), valid < heartbeatUntil ? valid : heartbeatUntil, _bootstrap.Controller!.Domain, _bootstrap.HttpPort, _bootstrap.HttpsPort);
         }
     }
@@ -84,7 +88,7 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
         try
         {
             var prior = Read(_bootstrap.GatewayId);
-            if (prior.ValidUntilUnixSeconds > _clock.GetUtcNow().AddDays(7).ToUnixTimeSeconds()) return;
+            if (prior.ValidUntilUnixSeconds > _clock.GetUtcNow().AddDays(_bootstrap.Controller!.ServingPlan.RenewalLeadDays).ToUnixTimeSeconds()) return;
             var plan = BuildPlan(_bootstrap, _authority, checked(prior.Generation + 1));
             using var validated = new ValidatedServingPlan(plan, GatewayScope(_bootstrap), _clock, requireCurrent: true);
             await GatewayMaterialStore.WriteAsync(_bootstrap.StateDirectory, plan.ToByteArray(), cancellationToken).ConfigureAwait(false);
@@ -105,11 +109,12 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
     private static PresentationPlan BuildPlan(ApplicationBootstrap bootstrap, LocalSiteCertificateAuthority authority, ulong generation)
     {
         var controller = bootstrap.Controller ?? throw new InvalidOperationException("Controller configuration is missing.");
-        using var certificate = authority.IssueGateway(controller.Domain, [bootstrap.IngressAddress]);
+        using var certificate = authority.IssueGateway(controller.Domain, [bootstrap.IngressAddress], controller.ServingPlan.LeafLifetimeDays);
         using var root = authority.PublicCertificate;
         var plan = new PresentationPlan
         {
             Version = 1, SiteId = bootstrap.SiteId, GatewayId = bootstrap.GatewayId, Generation = generation,
+            AcknowledgmentLeaseSeconds = checked((uint)controller.ServingPlan.AcknowledgmentLeaseSeconds), LeafLifetimeDays = checked((uint)controller.ServingPlan.LeafLifetimeDays),
             EnrollmentCaDer = ByteString.CopyFrom(root.RawData), ValidUntilUnixSeconds = new DateTimeOffset(certificate.NotAfter.ToUniversalTime()).ToUnixTimeSeconds(),
         };
         plan.Certificates.Add(new ServingCertificate { CertificateId = "site", Pfx = ByteString.CopyFrom(certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12)),

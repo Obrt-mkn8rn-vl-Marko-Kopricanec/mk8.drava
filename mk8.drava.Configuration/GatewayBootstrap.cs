@@ -13,6 +13,7 @@ public sealed record GatewayBootstrap
     public bool DiscoveryEnabled { get; init; } = true;
     public string StateDirectory { get; init; } = "";
     public IpcEndpoint Application { get; init; } = new();
+    public GatewayPlanSettings Plan { get; init; } = new();
     public int MaxConcurrentExchanges { get; init; } = 256;
     public int MaxHeaderBytes { get; init; } = 32 * 1024;
     public long MaxRequestBodyBytes { get; init; } = 100L * 1024 * 1024;
@@ -29,7 +30,7 @@ public sealed record GatewayBootstrap
         if (new[] { HttpPort, HttpsPort, RegistrationPort, ManagementPort }.Where(static port => port != 0).Distinct().Count() != new[] { HttpPort, HttpsPort, RegistrationPort, ManagementPort }.Count(static port => port != 0)) throw new InvalidDataException("Gateway listener ports must be distinct.");
         if (MaxConcurrentExchanges is < 1 or > 4096 || MaxHeaderBytes is < 1024 or > 65536 || MaxRequestBodyBytes < 0 || FrameBytes is < 1024 or > 32768 || StreamWindowFrames is < 1 or > 8) throw new InvalidDataException("Invalid Gateway resource bounds.");
         if (!Path.IsPathFullyQualified(StateDirectory)) throw new InvalidDataException("Gateway state directory must be absolute.");
-        Application.Validate();
+        Application.Validate(); Plan.Validate();
         if (EnrollmentRootFingerprint.Length != 0)
         {
             if (EnrollmentRootFingerprint.Length != 64) throw new InvalidDataException("Invalid enrollment root fingerprint.");

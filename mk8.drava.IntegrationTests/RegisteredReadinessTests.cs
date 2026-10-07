@@ -12,6 +12,22 @@ namespace Mk8.Drava.IntegrationTests;
 public sealed class RegisteredReadinessTests
 {
     [Fact]
+    public async Task ExplicitReadinessTimeoutRejectsASlowResponseWithoutChangingItsDeclaredPathAsync()
+    {
+        var server = await DevelopmentHttpUpstream.StartAsync(async context =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500), context.RequestAborted).ConfigureAwait(false);
+            await context.Response.WriteAsync("ready", context.RequestAborted).ConfigureAwait(false);
+        }).ConfigureAwait(true);
+        await using var serverLifetime = server.ConfigureAwait(true);
+        var intent = Intent(server.Port, "http");
+        var shortProbe = new RegisteredReadinessProbe(null, new RegistrationRuntimePolicy { ReadinessTimeoutMilliseconds = 100 });
+        var longProbe = new RegisteredReadinessProbe(null, new RegistrationRuntimePolicy { ReadinessTimeoutMilliseconds = 2000 });
+        Assert.False(await shortProbe.CheckAsync(intent, Upstream(intent, RuntimeUpstreamTlsOptions.Default), CancellationToken.None).ConfigureAwait(true));
+        Assert.True(await longProbe.CheckAsync(intent, Upstream(intent, RuntimeUpstreamTlsOptions.Default), CancellationToken.None).ConfigureAwait(true));
+    }
+
+    [Fact]
     public async Task ReadinessPinsTheEnrolledLiteralAndHonorsExplicitTlsAndSniSettingsAsync()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);

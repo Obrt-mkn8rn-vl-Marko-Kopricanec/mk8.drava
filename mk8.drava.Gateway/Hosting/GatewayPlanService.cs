@@ -21,27 +21,30 @@ internal sealed class GatewayPlanService(GatewayBootstrap bootstrap, Application
         var available = true;
         while (!stoppingToken.IsCancellationRequested)
         {
-            var delay = TimeSpan.FromSeconds(5);
-            try { await RefreshAsync(stoppingToken).ConfigureAwait(false); available = true; }
+            var delay = RefreshDelay(bootstrap.Plan, material.Read());
+            try { await RefreshAsync(stoppingToken).ConfigureAwait(false); available = true; delay = RefreshDelay(bootstrap.Plan, material.Read()); }
             catch (Exception exception) when (exception is RpcException or IOException or InvalidDataException or System.Security.Cryptography.CryptographicException)
             {
                 if (available) PlanUnavailable(logger, exception);
-                available = false; delay = TimeSpan.FromSeconds(1);
+                available = false; delay = TimeSpan.FromSeconds(bootstrap.Plan.RetrySeconds);
             }
             await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
         }
     }
 
+    internal static TimeSpan RefreshDelay(GatewayPlanSettings settings, PresentationPlan? plan) =>
+        TimeSpan.FromSeconds(Math.Min(settings.RefreshSeconds, (plan?.AcknowledgmentLeaseSeconds is > 0 ? plan.AcknowledgmentLeaseSeconds : 30) / 3d));
+
     private async Task RefreshAsync(CancellationToken cancellationToken)
     {
         var client = new ApplicationControl.ApplicationControlClient(channel.Invoker);
         using var call = client.GatewayPlanAsync(new GatewayIdentity { Version = 1, GatewayId = bootstrap.GatewayId }, channel.Credentials,
-            deadline: DateTime.UtcNow.AddSeconds(3), cancellationToken: cancellationToken);
+            deadline: DateTime.UtcNow.AddSeconds(bootstrap.Plan.RequestDeadlineSeconds), cancellationToken: cancellationToken);
         var plan = await call.ResponseAsync.ConfigureAwait(false);
         if (!material.Matches(plan)) await InstallAsync(plan, cancellationToken).ConfigureAwait(false);
         var actual = material.Read() ?? throw new InvalidDataException("Applied presentation material is absent.");
         using var acknowledgment = client.AcknowledgePlanAsync(new PlanAcknowledgment { Version = 1, GatewayId = actual.GatewayId, Generation = actual.Generation,
-            ContentSha256 = actual.ContentSha256, Applied = true }, channel.Credentials, deadline: DateTime.UtcNow.AddSeconds(3), cancellationToken: cancellationToken);
+            ContentSha256 = actual.ContentSha256, Applied = true }, channel.Credentials, deadline: DateTime.UtcNow.AddSeconds(bootstrap.Plan.RequestDeadlineSeconds), cancellationToken: cancellationToken);
         if ((await acknowledgment.ResponseAsync.ConfigureAwait(false)).StatusCode != 200) throw new InvalidDataException("Application rejected the installed presentation generation.");
     }
 
@@ -50,6 +53,7 @@ internal sealed class GatewayPlanService(GatewayBootstrap bootstrap, Application
         GatewayServingMaterial? candidate = new(plan, bootstrap);
         try
         {
+            material.RequireInstallable(candidate.Plan);
             await cache.WriteAsync(plan, cancellationToken).ConfigureAwait(false);
             material.Install(candidate);
             candidate = null;

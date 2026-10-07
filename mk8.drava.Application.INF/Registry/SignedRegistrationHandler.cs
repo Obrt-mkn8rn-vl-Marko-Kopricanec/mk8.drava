@@ -16,10 +16,10 @@ public sealed class SignedRegistrationHandler
     private readonly EnrollmentChallenges _challenges;
     private readonly TimeProvider _clock;
     private readonly IGatewayPublicationSource? _publication;
-    private static readonly TimeSpan Lease = TimeSpan.FromSeconds(90);
+    private readonly RegistrationRuntimePolicy _policy;
 
     public SignedRegistrationHandler(string siteId, RegistryCoordinator registry, DestinationAvailabilityStore availability,
-        EnrollmentVerifier enrollments, EnrollmentChallenges challenges, TimeProvider clock, IGatewayPublicationSource? publication = null)
+        EnrollmentVerifier enrollments, EnrollmentChallenges challenges, TimeProvider clock, IGatewayPublicationSource? publication = null, RegistrationRuntimePolicy? policy = null)
     {
         RegistryNames.RequireLabel(siteId);
         ArgumentNullException.ThrowIfNull(registry);
@@ -34,6 +34,8 @@ public sealed class SignedRegistrationHandler
         _challenges = challenges;
         _clock = clock;
         _publication = publication;
+        _policy = policy ?? new RegistrationRuntimePolicy();
+        _policy.Validate();
     }
 
     public ChallengeReply Challenge(ChallengeRequest request)
@@ -72,13 +74,13 @@ public sealed class SignedRegistrationHandler
             var metadata = command.Advertisement ?? throw new InvalidDataException("Register requires the bound endpoint metadata.");
             var intent = new InstanceIntent(identity, metadata.DeploymentId, metadata.Address, metadata.Port, metadata.Protocol,
                 metadata.Scheme, metadata.ReadinessPath, metadata.Zone, metadata.Weight, draining: false, metadata.Relay);
-            await _registry.RegisterAsync(enrollment.CertificateFingerprint, intent, Lease, cancellationToken).ConfigureAwait(false);
+            await _registry.RegisterAsync(enrollment.CertificateFingerprint, intent, TimeSpan.FromSeconds(_policy.LeaseSeconds), cancellationToken).ConfigureAwait(false);
         }
         else
         {
             if (command.Advertisement is not null) throw new InvalidDataException("Only register can supply endpoint metadata.");
             if (command.Operation == RegistrationOperation.Renew)
-                await _registry.RenewAsync(enrollment.CertificateFingerprint, identity, Lease, cancellationToken).ConfigureAwait(false);
+                await _registry.RenewAsync(enrollment.CertificateFingerprint, identity, TimeSpan.FromSeconds(_policy.LeaseSeconds), cancellationToken).ConfigureAwait(false);
             else if (command.Operation == RegistrationOperation.Drain)
                 await _registry.DrainAsync(enrollment.CertificateFingerprint, identity, cancellationToken).ConfigureAwait(false);
         }
@@ -95,7 +97,7 @@ public sealed class SignedRegistrationHandler
         return new RegistrationStatus
         {
             Identity = command.Identity, Phase = phase, DesiredRevision = _registry.State.Revision,
-            LeaseSeconds = 90, RenewAfterSeconds = 30,
+            LeaseSeconds = _policy.LeaseSeconds, RenewAfterSeconds = _policy.RenewAfterSeconds,
             AssignedUrls = phase == RegistrationPhase.Ready ? urls : [],
             Reason = phase == RegistrationPhase.Checking ? "Readiness and acknowledged publication are required." : "",
         };

@@ -10,10 +10,12 @@ public sealed record ControllerBootstrap
     public string DnsServerAddress { get; init; } = "";
     public int DnsServerPort { get; init; } = 53;
     public RelayLimits Relay { get; init; } = new();
+    public RegistrationSettings Registration { get; init; } = new();
+    public ServingPlanSettings ServingPlan { get; init; } = new();
 
     public void Validate()
     {
-        Relay.Validate();
+        Relay.Validate(); Registration.Validate(); ServingPlan.Validate();
         if (Domain.Length is < 3 or > 189 || !Domain.Contains('.', StringComparison.Ordinal)) throw new InvalidDataException("Site requires a fully qualified domain with room for its service label.");
         foreach (var label in Domain.Split('.'))
         {

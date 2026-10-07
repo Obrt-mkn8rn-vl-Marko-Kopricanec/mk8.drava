@@ -57,7 +57,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
             using var root = authority.PublicCertificate;
             verifier = new EnrollmentVerifier(root, registry, clock);
             plans = await ServingPlanState.OpenAsync(bootstrap, authority, clock, cancellationToken).ConfigureAwait(false);
-            var handler = new SignedRegistrationHandler(bootstrap.SiteId, registry, availability, verifier, new EnrollmentChallenges(clock), clock, plans);
+            var handler = new SignedRegistrationHandler(bootstrap.SiteId, registry, availability, verifier, new EnrollmentChallenges(clock), clock, plans, RegistrationPolicyMapping.ToPolicy(controller.Registration));
             relayRoot = authority.PublicCertificate;
             relayController = authority.IssueController(bootstrap.SiteId, Guid.NewGuid().ToString("N"));
             relay = new RegisteredRelayConnector(bootstrap.SiteId, bootstrap.NodeId, registry, availability, relayController, relayRoot, clock,

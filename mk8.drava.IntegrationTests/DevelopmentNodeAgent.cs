@@ -15,7 +15,7 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
     { _process = process; _proxy = proxy; Descriptor = descriptor; StateDirectory = stateDirectory; }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "Successful construction transfers the child process to this async-disposable fixture. Failed descriptor loading kills and joins the process in the catch; fixture disposal kills and joins it before preserving logs. The analyzer does not recognize this async ownership transfer.")]
-    public static async Task<DevelopmentNodeAgent> StartAsync(TwoProcessProxy proxy, RelayLimits? relay = null)
+    public static async Task<DevelopmentNodeAgent> StartAsync(TwoProcessProxy proxy, RelayLimits? relay = null, int mappingLeaseSeconds = 90)
     {
         var directory = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(proxy.NodeCertificatePath)!, "agent")).FullName;
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
@@ -31,7 +31,7 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
                 RootCertificatePath = proxy.RootCertificatePath, NodeCertificatePath = proxy.NodeCertificatePath },
             NodeId = proxy.EnrolledNodeId, OwnerId = "development", ServicePrefix = "svc", StateDirectory = directory, LocalListen = local,
             RelayAddress = proxy.NodeRelayAddress, RelayPort = 0, EndpointAddresses = proxy.NodeRelayAddress is "127.0.0.1" ? ["127.0.0.1"] : ["127.0.0.1", proxy.NodeRelayAddress],
-            Relay = relay ?? new RelayLimits(),
+            Relay = relay ?? new RelayLimits(), MappingLeaseSeconds = mappingLeaseSeconds,
         };
         var path = Path.Combine(directory, "agent.json");
         await File.WriteAllTextAsync(path, BootstrapFile.Serialize(bootstrap)).ConfigureAwait(false);

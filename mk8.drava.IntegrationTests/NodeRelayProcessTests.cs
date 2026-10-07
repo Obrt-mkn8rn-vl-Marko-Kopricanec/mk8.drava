@@ -18,15 +18,16 @@ namespace Mk8.Drava.IntegrationTests;
 public sealed class NodeRelayProcessTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task LogicalRemoteLoopbackSdkUsesTheAgentAndNeverFallsBackToControllerLoopbackAsync(bool backendTls)
+    [InlineData(false, 90)]
+    [InlineData(true, 90)]
+    [InlineData(false, 15)]
+    public async Task LogicalRemoteLoopbackSdkUsesTheAgentAndNeverFallsBackToControllerLoopbackAsync(bool backendTls, int mappingLeaseSeconds)
     {
         var dns = new DevelopmentDnsServer(IPAddress.Loopback);
         await using var dnsLifetime = dns.ConfigureAwait(true);
         var proxy = await TwoProcessProxy.StartAsync(TwoProcessProxy.UnusedPort(), enrolledSite: true, manualRoute: false, dnsPort: dns.Port, relayNode: true).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
-        var agent = await DevelopmentNodeAgent.StartAsync(proxy, new RelayLimits { StreamWindowFrames = 1, MaximumBytesPerDirection = 8 * 1024 * 1024, MaximumDurationSeconds = 20 }).ConfigureAwait(true);
+        var agent = await DevelopmentNodeAgent.StartAsync(proxy, new RelayLimits { StreamWindowFrames = 1, MaximumBytesPerDirection = 8 * 1024 * 1024, MaximumDurationSeconds = 20 }, mappingLeaseSeconds).ConfigureAwait(true);
         await using var agentLifetime = agent.ConfigureAwait(true);
         Assert.Equal("remote", agent.Descriptor.NodeId);
         Assert.False(IPAddress.IsLoopback(IPAddress.Parse(agent.Descriptor.RelayAddress)));
@@ -38,10 +39,11 @@ public sealed class NodeRelayProcessTests
         var names = new ConcurrentQueue<string?>();
         var backend = await DevelopmentHttpUpstream.StartAsync(RespondAsync, backendTls ? certificate : null, names.Enqueue, Options(proxy)).ConfigureAwait(true);
         await using var backendLifetime = backend.ConfigureAwait(true);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(mappingLeaseSeconds < 30 ? 90 : 45));
         while (backend.RegistrationState.Status?.Phase != RegistrationPhase.Ready) await Task.Delay(100, timeout.Token).ConfigureAwait(true);
         Assert.Equal("remote", backend.RegistrationState.Status!.Identity.NodeId);
         using var client = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.TlsPort, "svc.site.test");
+        if (mappingLeaseSeconds < 30) await Task.Delay(TimeSpan.FromSeconds(18), timeout.Token).ConfigureAwait(true);
         await AssertTrafficAsync(client.Client, timeout.Token).ConfigureAwait(true);
         if (backendTls) Assert.Contains("backend.site.invalid", names, StringComparer.Ordinal);
         await agent.DisposeAsync().ConfigureAwait(true);

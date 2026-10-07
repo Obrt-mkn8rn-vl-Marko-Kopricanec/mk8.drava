@@ -28,7 +28,7 @@ internal static class Program
         bootstrap.Validate();
         using var channel = new ApplicationChannel(bootstrap.Application);
         using var cache = new GatewayPlanCache(bootstrap.StateDirectory);
-        using var material = new GatewayMaterialState();
+        using var material = new GatewayMaterialState(bootstrap.Plan.MaximumRetainedGenerations);
         var enrolled = bootstrap.EnrollmentRootFingerprint.Length != 0;
         if (!enrolled && bootstrap.HttpsPort != 0) throw new InvalidDataException("TLS presentation requires enrolled site trust.");
         if (enrolled)
@@ -124,23 +124,23 @@ internal static class Program
                 options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.HttpsPort, listener =>
                 {
                     listener.Protocols = HttpProtocols.Http1AndHttp2;
-                    ConfigureTls(listener, material, clientCertificate: false);
+                    ConfigureTls(listener, material, bootstrap.Plan, clientCertificate: false);
                 });
             options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.RegistrationPort, listener =>
             {
                 listener.Protocols = HttpProtocols.Http2;
-                ConfigureTls(listener, material, clientCertificate: true);
+                ConfigureTls(listener, material, bootstrap.Plan, clientCertificate: true);
             });
             if (bootstrap.ManagementPort > 0)
                 options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.ManagementPort, listener =>
                 {
                     listener.Protocols = HttpProtocols.Http1AndHttp2;
-                    ConfigureTls(listener, material, clientCertificate: true);
+                    ConfigureTls(listener, material, bootstrap.Plan, clientCertificate: true);
                 });
         });
     }
 
-    private static void ConfigureTls(ListenOptions listener, GatewayMaterialState material, bool clientCertificate)
+    private static void ConfigureTls(ListenOptions listener, GatewayMaterialState material, GatewayPlanSettings settings, bool clientCertificate)
     {
         listener.Use(next => async connection =>
         {
@@ -151,7 +151,7 @@ internal static class Program
         listener.UseHttps(https =>
         {
             https.SslProtocols = SslProtocols.None;
-            https.HandshakeTimeout = TimeSpan.FromSeconds(5);
+            https.HandshakeTimeout = TimeSpan.FromSeconds(settings.TlsHandshakeSeconds);
             https.ServerCertificateSelector = (connection, _) => GatewayMaterialState.SelectCertificate(connection);
             if (clientCertificate)
             {

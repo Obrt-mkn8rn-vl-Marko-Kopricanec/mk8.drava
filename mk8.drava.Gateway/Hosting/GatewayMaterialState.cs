@@ -13,6 +13,14 @@ internal sealed class GatewayMaterialState : IDisposable
     private readonly HashSet<Entry> _entries = [];
     private Entry? _current;
     private bool _disposed;
+    private readonly int _maximumRetainedGenerations;
+
+    public GatewayMaterialState() : this(16) { }
+    public GatewayMaterialState(int maximumRetainedGenerations)
+    {
+        if (maximumRetainedGenerations is < 2 or > 64) throw new ArgumentOutOfRangeException(nameof(maximumRetainedGenerations));
+        _maximumRetainedGenerations = maximumRetainedGenerations;
+    }
 
     public PresentationPlan? Read()
     {
@@ -28,21 +36,31 @@ internal sealed class GatewayMaterialState : IDisposable
     {
         lock (_gate)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            var plan = material.Plan;
-            if (_current is not null)
-            {
-                var current = _current.Material.Plan;
-                if (plan.Generation < current.Generation || plan.Generation == current.Generation && !plan.ContentSha256.Equals(current.ContentSha256))
-                    throw new InvalidDataException("Presentation plan regressed or changed without a new generation.");
-            }
-            if (_entries.Count >= 16) throw new InvalidDataException("Presentation material is waiting for older TLS connections to drain.");
+            RequireReplacement(material.Plan);
             var replacement = new Entry(material);
             _entries.Add(replacement);
             var previous = _current;
             _current = replacement;
             if (previous is not null) { previous.Retired = true; Prune(previous); }
         }
+    }
+
+    public void RequireInstallable(PresentationPlan plan)
+    {
+        lock (_gate) RequireReplacement(plan);
+    }
+
+    private void RequireReplacement(PresentationPlan plan)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_current is not null)
+        {
+            var current = _current.Material.Plan;
+            if (plan.Generation < current.Generation || plan.Generation == current.Generation && !plan.ContentSha256.Equals(current.ContentSha256))
+                throw new InvalidDataException("Presentation plan regressed or changed without a new generation.");
+        }
+        if (_entries.Count >= _maximumRetainedGenerations && _current?.References > 0)
+            throw new InvalidDataException("Presentation material is waiting for older TLS connections to drain.");
     }
 
     public MaterialLease Acquire()

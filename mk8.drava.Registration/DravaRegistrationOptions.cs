@@ -17,6 +17,10 @@ public sealed record DravaRegistrationOptions
     public string UpstreamProtocol { get; init; } = "http1";
     public string Zone { get; init; } = "local";
     public int Weight { get; init; } = 1;
+    public int PendingRetrySeconds { get; init; } = 5;
+    public int RenewJitterPercent { get; init; } = 20;
+    public int ShutdownDeadlineMilliseconds { get; init; } = 3000;
+    public int AgentDrainDeadlineMilliseconds { get; init; } = 1000;
     public bool MulticastDiscovery { get; init; } = true;
     public IReadOnlyList<DiscoveryCandidate> GatewaySeeds { get; init; } = [];
 
@@ -24,6 +28,9 @@ public sealed record DravaRegistrationOptions
     {
         if (Site is null || GatewaySeeds is null) throw new InvalidDataException("Enrollment and seed collection are required.");
         Site.Validate();
+        if (PendingRetrySeconds is < 1 or > 60 || RenewJitterPercent is < 0 or > 25 || ShutdownDeadlineMilliseconds is < 100 or > 30_000 ||
+            AgentDrainDeadlineMilliseconds is < 100 or > 10_000 || AgentDrainDeadlineMilliseconds >= ShutdownDeadlineMilliseconds)
+            throw new InvalidDataException("Invalid SDK retry or shutdown settings.");
         RegistrationSiteTrust.RequireLabel(NodeId);
         RegistrationSiteTrust.RequireLabel(OwnerId);
         RegistrationSiteTrust.RequireLabel(ServiceId);

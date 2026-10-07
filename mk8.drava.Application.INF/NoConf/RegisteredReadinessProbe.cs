@@ -12,8 +12,14 @@ namespace Mk8.Drava.Application.INF.NoConf;
 public sealed class RegisteredReadinessProbe : IRegisteredReadinessProbe
 {
     private readonly RegisteredRelayConnector? _relay;
-    public RegisteredReadinessProbe() { }
-    public RegisteredReadinessProbe(RegisteredRelayConnector relay) { ArgumentNullException.ThrowIfNull(relay); _relay = relay; }
+    private readonly TimeSpan _timeout;
+    public RegisteredReadinessProbe() : this(null, new RegistrationRuntimePolicy()) { }
+    public RegisteredReadinessProbe(RegisteredRelayConnector relay) : this(relay, new RegistrationRuntimePolicy()) { }
+    public RegisteredReadinessProbe(RegisteredRelayConnector? relay, RegistrationRuntimePolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy); policy.Validate();
+        _relay = relay; _timeout = TimeSpan.FromMilliseconds(policy.ReadinessTimeoutMilliseconds);
+    }
     public async ValueTask<bool> CheckAsync(InstanceIntent intent, RuntimeUpstream upstream, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(intent);
@@ -48,7 +54,7 @@ public sealed class RegisteredReadinessProbe : IRegisteredReadinessProbe
         request.Version = string.Equals(intent.Protocol, "http2", StringComparison.Ordinal) ? HttpVersion.Version20 : HttpVersion.Version11;
         request.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(2));
+        deadline.CancelAfter(_timeout);
         try
         {
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token).ConfigureAwait(false);

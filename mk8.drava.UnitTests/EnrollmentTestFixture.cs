@@ -11,7 +11,7 @@ namespace Mk8.Drava.UnitTests;
 
 internal sealed class EnrollmentTestFixture : IDisposable
 {
-    public EnrollmentTestFixture(IGatewayPublicationSource? publication = null)
+    public EnrollmentTestFixture(IGatewayPublicationSource? publication = null, RegistrationRuntimePolicy? policy = null)
     {
         Root = CreateRoot(Clock);
         Leaf = CreateLeaf(Root, Clock, client: true);
@@ -19,7 +19,7 @@ internal sealed class EnrollmentTestFixture : IDisposable
         Registry = new RegistryCoordinator(new MemoryRegistryRepository(), Availability, Clock);
         Verifier = new EnrollmentVerifier(Root, Registry, Clock);
         Challenges = new EnrollmentChallenges(Clock);
-        Handler = new SignedRegistrationHandler("site", Registry, Availability, Verifier, Challenges, Clock, publication);
+        Handler = new SignedRegistrationHandler("site", Registry, Availability, Verifier, Challenges, Clock, publication, policy);
     }
 
     public RegistryTimeProvider Clock { get; } = new();

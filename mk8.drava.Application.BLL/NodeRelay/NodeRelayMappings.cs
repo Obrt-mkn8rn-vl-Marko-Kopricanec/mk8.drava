@@ -19,14 +19,19 @@ public sealed class NodeRelayMappings
     private readonly string _agentBootId;
     private readonly NodeGrant _grant;
     private readonly TimeProvider _clock;
+    private readonly TimeSpan _mappingLease;
     private readonly long _startedAt;
     private readonly DateTimeOffset _startedUtc;
     private DateTimeOffset _utcFloor;
     private long _lastPrunedAt;
     private bool _revoked;
 
-    public NodeRelayMappings(string siteId, string agentBootId, NodeGrant grant, IEnumerable<string> localAddresses, TimeProvider clock)
+    public NodeRelayMappings(string siteId, string agentBootId, NodeGrant grant, IEnumerable<string> localAddresses, TimeProvider clock) : this(siteId, agentBootId, grant, localAddresses, clock, TimeSpan.FromSeconds(90)) { }
+
+    public NodeRelayMappings(string siteId, string agentBootId, NodeGrant grant, IEnumerable<string> localAddresses, TimeProvider clock, TimeSpan mappingLease)
     {
+        DestinationAvailabilityStore.ValidateLease(mappingLease);
+        _mappingLease = mappingLease;
         RegistryNames.RequireLabel(siteId);
         RegistryNames.RequireEpoch(agentBootId);
         ArgumentNullException.ThrowIfNull(grant);
@@ -89,7 +94,7 @@ public sealed class NodeRelayMappings
                 capability.IssuedAtUnixMilliseconds > now + 1000 || capability.ExpiresAtUnixMilliseconds <= now ||
                 capability.ExpiresAtUnixMilliseconds - capability.IssuedAtUnixMilliseconds is <= 0 or > 15_000)
                 throw new UnauthorizedAccessException("Relay capability or local authority is expired or mismatched.");
-            if (!_mappings.TryGetValue(capability.Identity.InstanceId, out var mapping) || _clock.GetElapsedTime(mapping.RenewedAt) >= TimeSpan.FromSeconds(90) || mapping.Identity != capability.Identity ||
+            if (!_mappings.TryGetValue(capability.Identity.InstanceId, out var mapping) || _clock.GetElapsedTime(mapping.RenewedAt) >= _mappingLease || mapping.Identity != capability.Identity ||
                 mapping.Advertisement != capability.Advertisement) throw new UnauthorizedAccessException("Relay capability does not select a live local mapping.");
             RequireScope(mapping.Identity, mapping.Intent);
             var replayKey = capability.ControllerEpoch + "|" + capability.CapabilityId;
@@ -125,7 +130,7 @@ public sealed class NodeRelayMappings
     {
         if (_clock.GetElapsedTime(_lastPrunedAt) < TimeSpan.FromSeconds(1)) return;
         _lastPrunedAt = _clock.GetTimestamp();
-        foreach (var key in _mappings.Where(pair => _clock.GetElapsedTime(pair.Value.RenewedAt) >= TimeSpan.FromSeconds(90)).Select(static pair => pair.Key).ToArray())
+        foreach (var key in _mappings.Where(pair => _clock.GetElapsedTime(pair.Value.RenewedAt) >= _mappingLease).Select(static pair => pair.Key).ToArray())
         {
             _mappings.Remove(key);
         }

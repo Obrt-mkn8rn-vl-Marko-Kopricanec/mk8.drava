@@ -1039,3 +1039,9 @@ Mk8.Drava.Transport.Certificates.ValidatedServingPlan.Plan.get -> Mk8.Drava.Tran
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.ServingCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate2!
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.ValidateClientCertificate(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> bool
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.ValidatedServingPlan(Mk8.Drava.Transport.Protocol.V1.PresentationPlan! plan, Mk8.Drava.Configuration.GatewayBootstrap! bootstrap, System.TimeProvider! clock, bool requireCurrent) -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.AcknowledgmentLeaseSeconds.get -> uint
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.AcknowledgmentLeaseSeconds.set -> void
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.LeafLifetimeDays.get -> uint
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.LeafLifetimeDays.set -> void
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.AcknowledgmentLeaseSecondsFieldNumber = 10 -> int
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.LeafLifetimeDaysFieldNumber = 11 -> int

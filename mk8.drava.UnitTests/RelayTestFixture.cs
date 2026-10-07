@@ -20,12 +20,12 @@ internal sealed class RelayTestFixture : IDisposable
     public NodeRelayAuthorizer Authorizer { get; }
     public RegistrationCommand Command { get; } = EnrollmentTestFixture.Command();
 
-    public RelayTestFixture()
+    public RelayTestFixture(TimeSpan? mappingLease = null)
     {
         Root = EnrollmentTestFixture.CreateRoot(Clock);
         Controller = CreateController(Root, Clock, "site", ControllerEpoch);
         var grant = new NodeGrant("node", "owner", RegistryTestFixture.Fingerprint, "svc", ["127.0.0.1", "192.0.2.10"], 1024, 65535, Clock.GetUtcNow().AddDays(1), revoked: false);
-        Mappings = new NodeRelayMappings("site", AgentBootId, grant, ["127.0.0.1"], Clock);
+        Mappings = new NodeRelayMappings("site", AgentBootId, grant, ["127.0.0.1"], Clock, mappingLease ?? TimeSpan.FromSeconds(90));
         Authorizer = new NodeRelayAuthorizer("site", Root, Mappings, Clock);
         Mappings.Renew(Command.Identity, Command.Advertisement!);
     }

@@ -17,11 +17,13 @@ public sealed record NodeAgentBootstrap
     public int MinimumPort { get; init; } = 1024;
     public int MaximumPort { get; init; } = 65535;
     public RelayLimits Relay { get; init; } = new();
+    public int MappingLeaseSeconds { get; init; } = 90;
 
     public void Validate()
     {
         if (SchemaVersion != 1) throw new InvalidDataException("Unsupported node-agent schema.");
         Site.Validate(); LocalListen.Validate(); Relay.Validate();
+        if (MappingLeaseSeconds is < 15 or > 300) throw new InvalidDataException("Invalid local mapping lease lifetime.");
         foreach (var label in new[] { NodeId, OwnerId, ServicePrefix }) RegistrationSiteTrust.RequireLabel(label);
         if (!Path.IsPathFullyQualified(StateDirectory) || LocalListen.HttpsAddress.Length != 0)
             throw new InvalidDataException("Node SDK mappings require a private local socket or current-user pipe.");

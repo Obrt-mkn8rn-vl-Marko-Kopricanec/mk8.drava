@@ -30,7 +30,7 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
         await _started.Task.WaitAsync(stoppingToken).ConfigureAwait(false);
         while (!stoppingToken.IsCancellationRequested && Volatile.Read(ref _draining) == 0)
         {
-            var delay = TimeSpan.FromSeconds(5);
+            var delay = TimeSpan.FromSeconds(options.PendingRetrySeconds);
             await _operations.WaitAsync(stoppingToken).ConfigureAwait(false);
             try
             {
@@ -44,7 +44,7 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
                     var result = await _channel.SubmitAsync(new RegistrationCommand { Identity = _identity, Operation = _registered ? RegistrationOperation.Renew : RegistrationOperation.Register, Advertisement = _registered ? null : advertisement }, stoppingToken).ConfigureAwait(false);
                     _registered = true;
                     state.Accept(result);
-                    delay = TimeSpan.FromSeconds((result.Phase == RegistrationPhase.Ready ? result.RenewAfterSeconds : 5) * (System.Security.Cryptography.RandomNumberGenerator.GetInt32(800, 1201) / 1000d));
+                    delay = RenewalDelay(options, result, _agent?.Descriptor);
                 }
             }
             catch (Exception exception) when (exception is RpcException or HttpRequestException or InvalidDataException or IOException or System.Text.Json.JsonException)
@@ -54,6 +54,14 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
             finally { _operations.Release(); }
             await Task.Delay(delay, stoppingToken).ConfigureAwait(false);
         }
+    }
+
+    internal static TimeSpan RenewalDelay(DravaRegistrationOptions settings, RegistrationStatus status, Mk8.Drava.Configuration.NodeAgentDescriptor? agent)
+    {
+        var seconds = Math.Min(status.RenewAfterSeconds, (agent?.MappingLeaseSeconds ?? 300) / 3d);
+        if (status.Phase != RegistrationPhase.Ready) seconds = Math.Min(seconds, settings.PendingRetrySeconds);
+        var jitter = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100 - settings.RenewJitterPercent, 101 + settings.RenewJitterPercent) / 100d;
+        return TimeSpan.FromSeconds(seconds * jitter);
     }
 
     private async ValueTask<ServiceAdvertisement> RenewAgentAsync(SiteRegistrationChannel channel, CancellationToken cancellationToken)
@@ -84,7 +92,7 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
     {
         Interlocked.Exchange(ref _draining, 1);
         using var drain = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        drain.CancelAfter(TimeSpan.FromSeconds(3));
+        drain.CancelAfter(TimeSpan.FromMilliseconds(options.ShutdownDeadlineMilliseconds));
         try
         {
             await _operations.WaitAsync(drain.Token).ConfigureAwait(false);
@@ -104,7 +112,7 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
     private async ValueTask DrainAgentAsync(NodeAgentLocalClient agent, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(1));
+        timeout.CancelAfter(TimeSpan.FromMilliseconds(options.AgentDrainDeadlineMilliseconds));
         try { await agent.ApplyAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Drain }, timeout.Token).ConfigureAwait(false); }
         catch (Exception exception) when (exception is RpcException or InvalidDataException or IOException or System.Text.Json.JsonException or OperationCanceledException) { }
     }

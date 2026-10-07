@@ -42,3 +42,11 @@ override Mk8.Drava.Registration.DravaRegistrationOptions.ToString() -> string!
 static Mk8.Drava.Registration.DravaRegistrationExtensions.AddDravaRegistration(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Mk8.Drava.Registration.DravaRegistrationOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Mk8.Drava.Registration.DravaRegistrationOptions.operator !=(Mk8.Drava.Registration.DravaRegistrationOptions? left, Mk8.Drava.Registration.DravaRegistrationOptions? right) -> bool
 static Mk8.Drava.Registration.DravaRegistrationOptions.operator ==(Mk8.Drava.Registration.DravaRegistrationOptions? left, Mk8.Drava.Registration.DravaRegistrationOptions? right) -> bool
+Mk8.Drava.Registration.DravaRegistrationOptions.AgentDrainDeadlineMilliseconds.get -> int
+Mk8.Drava.Registration.DravaRegistrationOptions.AgentDrainDeadlineMilliseconds.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.PendingRetrySeconds.get -> int
+Mk8.Drava.Registration.DravaRegistrationOptions.PendingRetrySeconds.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.RenewJitterPercent.get -> int
+Mk8.Drava.Registration.DravaRegistrationOptions.RenewJitterPercent.init -> void
+Mk8.Drava.Registration.DravaRegistrationOptions.ShutdownDeadlineMilliseconds.get -> int
+Mk8.Drava.Registration.DravaRegistrationOptions.ShutdownDeadlineMilliseconds.init -> void

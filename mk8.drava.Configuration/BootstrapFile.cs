@@ -33,7 +33,24 @@ public static class BootstrapFile
             count += read;
         }
         if (count > MaximumBytes) throw new InvalidDataException("Bootstrap file exceeds its size bound.");
-        return JsonSerializer.Deserialize<T>(bytes.AsSpan(0, count), Options) ?? throw new InvalidDataException("Bootstrap file must contain an object.");
+        using var document = JsonDocument.Parse(bytes.AsMemory(0, count), new JsonDocumentOptions { MaxDepth = 16 });
+        RequireUniqueProperties(document.RootElement);
+        return document.RootElement.Deserialize<T>(Options) ?? throw new InvalidDataException("Bootstrap file must contain an object.");
+    }
+
+    private static void RequireUniqueProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!names.Add(property.Name)) throw new InvalidDataException("Duplicate bootstrap property.");
+                RequireUniqueProperties(property.Value);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+            foreach (var item in element.EnumerateArray()) RequireUniqueProperties(item);
     }
 
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);

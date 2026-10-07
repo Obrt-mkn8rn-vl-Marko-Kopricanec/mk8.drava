@@ -36,7 +36,7 @@ internal static class NodeAgentHost
         var boot = Guid.NewGuid().ToString("N");
         var grant = new NodeGrant(bootstrap.NodeId, bootstrap.OwnerId, fingerprint, bootstrap.ServicePrefix, bootstrap.EndpointAddresses,
             bootstrap.MinimumPort, bootstrap.MaximumPort, new DateTimeOffset(node.NotAfter.ToUniversalTime()), revoked: false);
-        var mappings = new NodeRelayMappings(bootstrap.Site.SiteId, boot, grant, localAddresses, TimeProvider.System);
+        var mappings = new NodeRelayMappings(bootstrap.Site.SiteId, boot, grant, localAddresses, TimeProvider.System, TimeSpan.FromSeconds(bootstrap.MappingLeaseSeconds));
         using var authorizer = new NodeRelayAuthorizer(bootstrap.Site.SiteId, root, mappings, TimeProvider.System);
         var policy = RelayPolicyMapping.ToPolicy(bootstrap.Relay);
         using var admission = new SemaphoreSlim(policy.MaximumConcurrentConnections, policy.MaximumConcurrentConnections);
@@ -97,7 +97,7 @@ internal static class NodeAgentHost
             var bound = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>() ?? throw new InvalidDataException("Bound relay endpoint is absent.");
             var addresses = bound.Addresses.Where(static value => value.StartsWith("https://", StringComparison.Ordinal)).Select(static value => new Uri(value)).ToArray();
             if (addresses.Length != 1 || addresses[0].Port < bootstrap.MinimumPort || addresses[0].Port > bootstrap.MaximumPort) throw new InvalidDataException("Bound relay port is outside the enrollment scope.");
-            var descriptor = new NodeAgentDescriptor { SiteId = bootstrap.Site.SiteId, NodeId = bootstrap.NodeId, AgentBootId = boot, RelayAddress = bootstrap.RelayAddress,
+            var descriptor = new NodeAgentDescriptor { SiteId = bootstrap.Site.SiteId, NodeId = bootstrap.NodeId, AgentBootId = boot, RelayAddress = bootstrap.RelayAddress, MappingLeaseSeconds = bootstrap.MappingLeaseSeconds,
                 RelayPort = addresses[0].Port, CertificateFingerprint = fingerprint, LocalEndpoint = bootstrap.LocalListen };
             state.Install(descriptor);
             await WriteProfileAsync(profilePath, descriptor).ConfigureAwait(false);

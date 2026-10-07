@@ -19,18 +19,21 @@ namespace Mk8.Drava.IntegrationTests;
 public sealed class RegistrationSdkTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task HostingSdkRegistersTheActualRandomBoundPortWithoutAProxyFileAndDrainsOnStopAsync(bool automaticDiscovery)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task HostingSdkRegistersTheActualRandomBoundPortWithoutAProxyFileAndDrainsOnStopAsync(bool automaticDiscovery, bool customLifetimes)
     {
         var unused = TwoProcessProxy.UnusedPort();
         var dns = new DevelopmentDnsServer(IPAddress.Loopback);
         await using var dnsLifetime = dns.ConfigureAwait(true);
-        var proxy = await TwoProcessProxy.StartAsync(unused, enrolledSite: true, manualRoute: false, dnsPort: dns.Port, discovery: automaticDiscovery).ConfigureAwait(true);
+        var proxy = await TwoProcessProxy.StartAsync(unused, enrolledSite: true, manualRoute: false, dnsPort: dns.Port, discovery: automaticDiscovery, lifecycleSettings: customLifetimes ? DevelopmentLifecycleSettings.Fast : null).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
-        builder.Services.AddDravaRegistration(automaticDiscovery ? Options(proxy) with { MulticastDiscovery = true, GatewaySeeds = [] } : Options(proxy));
+        var sdkOptions = customLifetimes ? Options(proxy) with { PendingRetrySeconds = 1, RenewJitterPercent = 0, ShutdownDeadlineMilliseconds = 1500, AgentDrainDeadlineMilliseconds = 500 } : Options(proxy);
+        builder.Services.AddDravaRegistration(automaticDiscovery ? sdkOptions with { MulticastDiscovery = true, GatewaySeeds = [] } : sdkOptions);
         var application = builder.Build();
         await using var applicationLifetime = application.ConfigureAwait(true);
         application.Run(context => context.Response.WriteAsync(string.Equals(context.Request.Path.Value, "/ready", StringComparison.Ordinal) ? "ready" : "sdk-body"));
@@ -41,6 +44,7 @@ public sealed class RegistrationSdkTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         while (state.Status?.Phase != RegistrationPhase.Ready) await Task.Delay(100, timeout.Token).ConfigureAwait(true);
         Assert.NotEmpty(Assert.IsType<RegistrationStatus>(state.Status).AssignedUrls);
+        if (customLifetimes) await AssertConfiguredLifetimesAsync(proxy, state, timeout.Token).ConfigureAwait(true);
         using var client = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.TlsPort, "svc.site.test");
         using var response = await client.Client.GetAsync(new Uri("/", UriKind.Relative), timeout.Token).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -60,6 +64,17 @@ public sealed class RegistrationSdkTests
         Assert.Throws<InvalidDataException>(() => new SiteRegistrationChannel(options.Site with { RootFingerprint = new string('A', 64) }, new DiscoveryCandidate("127.0.0.1", proxy.RegistrationPort)));
         using var wrongName = new SiteRegistrationChannel(options.Site with { Domain = "different.test" }, new DiscoveryCandidate("127.0.0.1", proxy.RegistrationPort));
         await Assert.ThrowsAsync<Grpc.Core.RpcException>(() => wrongName.VerifySiteAsync(CancellationToken.None).AsTask()).ConfigureAwait(true);
+    }
+
+    private static async Task AssertConfiguredLifetimesAsync(TwoProcessProxy proxy, DravaRegistrationState state, CancellationToken cancellationToken)
+    {
+        Assert.Equal(15, state.Status!.LeaseSeconds);
+        Assert.Equal(4, state.Status.RenewAfterSeconds);
+        var plan = Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Parser.ParseFrom(await File.ReadAllBytesAsync(proxy.GatewayPlanPath, cancellationToken).ConfigureAwait(false));
+        Assert.Equal(6U, plan.AcknowledgmentLeaseSeconds);
+        Assert.Equal(7U, plan.LeafLifetimeDays);
+        await Task.Delay(TimeSpan.FromSeconds(8), cancellationToken).ConfigureAwait(false);
+        Assert.Equal(RegistrationPhase.Ready, state.Status?.Phase);
     }
 
     private static DravaRegistrationOptions Options(TwoProcessProxy proxy)

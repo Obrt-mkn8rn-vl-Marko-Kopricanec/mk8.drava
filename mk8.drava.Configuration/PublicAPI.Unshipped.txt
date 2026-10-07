@@ -235,3 +235,79 @@ override Mk8.Drava.Configuration.RelayLimits.GetHashCode() -> int
 override Mk8.Drava.Configuration.RelayLimits.ToString() -> string!
 static Mk8.Drava.Configuration.RelayLimits.operator !=(Mk8.Drava.Configuration.RelayLimits? left, Mk8.Drava.Configuration.RelayLimits? right) -> bool
 static Mk8.Drava.Configuration.RelayLimits.operator ==(Mk8.Drava.Configuration.RelayLimits? left, Mk8.Drava.Configuration.RelayLimits? right) -> bool
+Mk8.Drava.Configuration.ControllerBootstrap.Registration.get -> Mk8.Drava.Configuration.RegistrationSettings!
+Mk8.Drava.Configuration.ControllerBootstrap.Registration.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.ServingPlan.get -> Mk8.Drava.Configuration.ServingPlanSettings!
+Mk8.Drava.Configuration.ControllerBootstrap.ServingPlan.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.Plan.get -> Mk8.Drava.Configuration.GatewayPlanSettings!
+Mk8.Drava.Configuration.GatewayBootstrap.Plan.init -> void
+Mk8.Drava.Configuration.GatewayPlanSettings
+Mk8.Drava.Configuration.GatewayPlanSettings.<Clone>$() -> Mk8.Drava.Configuration.GatewayPlanSettings!
+Mk8.Drava.Configuration.GatewayPlanSettings.Equals(Mk8.Drava.Configuration.GatewayPlanSettings? other) -> bool
+Mk8.Drava.Configuration.GatewayPlanSettings.GatewayPlanSettings() -> void
+Mk8.Drava.Configuration.GatewayPlanSettings.MaximumRetainedGenerations.get -> int
+Mk8.Drava.Configuration.GatewayPlanSettings.MaximumRetainedGenerations.init -> void
+Mk8.Drava.Configuration.GatewayPlanSettings.RefreshSeconds.get -> int
+Mk8.Drava.Configuration.GatewayPlanSettings.RefreshSeconds.init -> void
+Mk8.Drava.Configuration.GatewayPlanSettings.RequestDeadlineSeconds.get -> int
+Mk8.Drava.Configuration.GatewayPlanSettings.RequestDeadlineSeconds.init -> void
+Mk8.Drava.Configuration.GatewayPlanSettings.RetrySeconds.get -> int
+Mk8.Drava.Configuration.GatewayPlanSettings.RetrySeconds.init -> void
+Mk8.Drava.Configuration.GatewayPlanSettings.TlsHandshakeSeconds.get -> int
+Mk8.Drava.Configuration.GatewayPlanSettings.TlsHandshakeSeconds.init -> void
+Mk8.Drava.Configuration.GatewayPlanSettings.Validate() -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.MappingLeaseSeconds.get -> int
+Mk8.Drava.Configuration.NodeAgentBootstrap.MappingLeaseSeconds.init -> void
+Mk8.Drava.Configuration.RegistrationSettings
+Mk8.Drava.Configuration.RegistrationSettings.<Clone>$() -> Mk8.Drava.Configuration.RegistrationSettings!
+Mk8.Drava.Configuration.RegistrationSettings.Equals(Mk8.Drava.Configuration.RegistrationSettings? other) -> bool
+Mk8.Drava.Configuration.RegistrationSettings.LeaseSeconds.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.LeaseSeconds.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.MaximumConcurrentProbes.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.MaximumConcurrentProbes.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessFailures.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessFailures.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessIntervalMilliseconds.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessIntervalMilliseconds.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessSuccesses.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessSuccesses.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessTimeoutMilliseconds.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessTimeoutMilliseconds.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessValiditySeconds.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.ReadinessValiditySeconds.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.ReconcileIntervalMilliseconds.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.ReconcileIntervalMilliseconds.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.RegistrationSettings() -> void
+Mk8.Drava.Configuration.RegistrationSettings.RenewAfterSeconds.get -> int
+Mk8.Drava.Configuration.RegistrationSettings.RenewAfterSeconds.init -> void
+Mk8.Drava.Configuration.RegistrationSettings.Validate() -> void
+Mk8.Drava.Configuration.ServingPlanSettings
+Mk8.Drava.Configuration.ServingPlanSettings.<Clone>$() -> Mk8.Drava.Configuration.ServingPlanSettings!
+Mk8.Drava.Configuration.ServingPlanSettings.AcknowledgmentLeaseSeconds.get -> int
+Mk8.Drava.Configuration.ServingPlanSettings.AcknowledgmentLeaseSeconds.init -> void
+Mk8.Drava.Configuration.ServingPlanSettings.Equals(Mk8.Drava.Configuration.ServingPlanSettings? other) -> bool
+Mk8.Drava.Configuration.ServingPlanSettings.LeafLifetimeDays.get -> int
+Mk8.Drava.Configuration.ServingPlanSettings.LeafLifetimeDays.init -> void
+Mk8.Drava.Configuration.ServingPlanSettings.RenewalCheckSeconds.get -> int
+Mk8.Drava.Configuration.ServingPlanSettings.RenewalCheckSeconds.init -> void
+Mk8.Drava.Configuration.ServingPlanSettings.RenewalLeadDays.get -> int
+Mk8.Drava.Configuration.ServingPlanSettings.RenewalLeadDays.init -> void
+Mk8.Drava.Configuration.ServingPlanSettings.ServingPlanSettings() -> void
+Mk8.Drava.Configuration.ServingPlanSettings.Validate() -> void
+override Mk8.Drava.Configuration.GatewayPlanSettings.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.GatewayPlanSettings.GetHashCode() -> int
+override Mk8.Drava.Configuration.GatewayPlanSettings.ToString() -> string!
+override Mk8.Drava.Configuration.RegistrationSettings.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.RegistrationSettings.GetHashCode() -> int
+override Mk8.Drava.Configuration.RegistrationSettings.ToString() -> string!
+override Mk8.Drava.Configuration.ServingPlanSettings.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.ServingPlanSettings.GetHashCode() -> int
+override Mk8.Drava.Configuration.ServingPlanSettings.ToString() -> string!
+static Mk8.Drava.Configuration.GatewayPlanSettings.operator !=(Mk8.Drava.Configuration.GatewayPlanSettings? left, Mk8.Drava.Configuration.GatewayPlanSettings? right) -> bool
+static Mk8.Drava.Configuration.GatewayPlanSettings.operator ==(Mk8.Drava.Configuration.GatewayPlanSettings? left, Mk8.Drava.Configuration.GatewayPlanSettings? right) -> bool
+static Mk8.Drava.Configuration.RegistrationSettings.operator !=(Mk8.Drava.Configuration.RegistrationSettings? left, Mk8.Drava.Configuration.RegistrationSettings? right) -> bool
+static Mk8.Drava.Configuration.RegistrationSettings.operator ==(Mk8.Drava.Configuration.RegistrationSettings? left, Mk8.Drava.Configuration.RegistrationSettings? right) -> bool
+static Mk8.Drava.Configuration.ServingPlanSettings.operator !=(Mk8.Drava.Configuration.ServingPlanSettings? left, Mk8.Drava.Configuration.ServingPlanSettings? right) -> bool
+static Mk8.Drava.Configuration.ServingPlanSettings.operator ==(Mk8.Drava.Configuration.ServingPlanSettings? left, Mk8.Drava.Configuration.ServingPlanSettings? right) -> bool
+Mk8.Drava.Configuration.NodeAgentDescriptor.MappingLeaseSeconds.get -> int
+Mk8.Drava.Configuration.NodeAgentDescriptor.MappingLeaseSeconds.init -> void

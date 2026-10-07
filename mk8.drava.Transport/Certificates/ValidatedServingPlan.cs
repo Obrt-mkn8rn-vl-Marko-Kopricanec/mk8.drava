@@ -26,6 +26,9 @@ public sealed class ValidatedServingPlan : IDisposable
             !string.Equals(plan.SiteId, bootstrap.SiteId, StringComparison.Ordinal) || !string.Equals(plan.GatewayId, bootstrap.GatewayId, StringComparison.Ordinal) ||
             plan.Certificates.Count != 1 || plan.EnrollmentCaDer.Length is < 128 or > 16384 || plan.Certificates[0].Pfx.Length is < 128 or > 65536)
             throw new InvalidDataException("Gateway plan is invalid or outside supported bounds.");
+        if (plan.AcknowledgmentLeaseSeconds != 0 && plan.AcknowledgmentLeaseSeconds is < 5 or > 300 ||
+            plan.LeafLifetimeDays != 0 && plan.LeafLifetimeDays is < 2 or > 90)
+            throw new InvalidDataException("Gateway plan contains invalid acknowledgment or certificate policy.");
         ValidateListeners(plan, bootstrap);
         _root = X509CertificateLoader.LoadCertificate(plan.EnrollmentCaDer.Span);
         try

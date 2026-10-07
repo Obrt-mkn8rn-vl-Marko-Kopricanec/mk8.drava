@@ -16,7 +16,8 @@ internal static class NoConfHosting
         services.AddSingleton(new NoConfIngressGuard(bootstrap.NodeId, protectedAddresses, [bootstrap.HttpPort, bootstrap.HttpsPort, controller.RegistrationPort, bootstrap.ManagementPort]));
         services.AddSingleton<NoConfSnapshotCompiler>();
         services.AddSingleton(registration.Relay);
-        services.AddSingleton<IRegisteredReadinessProbe, RegisteredReadinessProbe>();
+        var runtimePolicy = RegistrationPolicyMapping.ToPolicy(controller.Registration);
+        services.AddSingleton<IRegisteredReadinessProbe>(_ => new RegisteredReadinessProbe(registration.Relay, runtimePolicy));
         services.AddSingleton<IServiceDnsVerifier>(_ => new ServiceDnsVerifier(publicAddresses, controller.DnsServerAddress, controller.DnsServerPort));
         services.AddSingleton<IGatewayPublicationSource>(registration.Plans);
         services.AddSingleton(provider => new NoConfReconciler(registration.Registry,
@@ -24,7 +25,7 @@ internal static class NoConfHosting
             provider.GetRequiredService<NoConfSnapshotCompiler>(), provider.GetRequiredService<IRegisteredReadinessProbe>(),
             provider.GetRequiredService<IServiceDnsVerifier>(), registration.Plans,
             Path.Combine(bootstrap.StateDirectory, "config", "noconf.json"), controller.Domain, bootstrap.NodeId, TimeProvider.System,
-            provider.GetRequiredService<ILogger<NoConfReconciler>>(), registration.Policies));
+            provider.GetRequiredService<ILogger<NoConfReconciler>>(), registration.Policies, runtimePolicy));
         services.AddHostedService(provider => provider.GetRequiredService<NoConfReconciler>());
     }
 }

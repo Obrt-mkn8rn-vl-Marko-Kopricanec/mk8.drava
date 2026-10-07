@@ -18,6 +18,7 @@ public sealed partial class NoConfReconciler : BackgroundService
     private readonly ProxyConfigurationStore _store;
     private readonly NoConfSnapshotCompiler _compiler;
     private readonly IRegisteredReadinessProbe _readiness;
+    private readonly RegistrationRuntimePolicy _runtimePolicy;
     private readonly IServiceDnsVerifier _dns;
     private readonly IGatewayPublicationSource _gateway;
     private readonly string _policyPath;
@@ -39,7 +40,7 @@ public sealed partial class NoConfReconciler : BackgroundService
 
     public NoConfReconciler(RegistryCoordinator registry, DestinationAvailabilityStore availability, ProxyConfigurationStore store,
         NoConfSnapshotCompiler compiler, IRegisteredReadinessProbe readiness, IServiceDnsVerifier dns, IGatewayPublicationSource gateway,
-        string policyPath, string domain, string localNodeId, TimeProvider clock, ILogger<NoConfReconciler> logger, IPolicyRepository policies)
+        string policyPath, string domain, string localNodeId, TimeProvider clock, ILogger<NoConfReconciler> logger, IPolicyRepository policies, RegistrationRuntimePolicy? runtimePolicy = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(policies);
@@ -56,6 +57,8 @@ public sealed partial class NoConfReconciler : BackgroundService
         RegistryNames.RequireLabel(localNodeId);
         _registry = registry; _availability = availability; _store = store; _compiler = compiler; _readiness = readiness; _dns = dns; _gateway = gateway;
         _policies = policies;
+        _runtimePolicy = runtimePolicy ?? new RegistrationRuntimePolicy();
+        _runtimePolicy.Validate();
         _policyPath = policyPath; _domain = domain; _localNodeId = localNodeId; _clock = clock; _logger = logger;
     }
 
@@ -76,7 +79,7 @@ public sealed partial class NoConfReconciler : BackgroundService
 
     private async Task CompileLoopAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), _clock);
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(_runtimePolicy.ReconcileIntervalMilliseconds), _clock);
         do
         {
             await CompileLatestAsync(stoppingToken).ConfigureAwait(false);
@@ -85,7 +88,7 @@ public sealed partial class NoConfReconciler : BackgroundService
 
     private async Task ProbeLoopAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10), _clock);
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(_runtimePolicy.ReadinessIntervalMilliseconds), _clock);
         do { await ProbeAndPublishAsync(stoppingToken).ConfigureAwait(false); }
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
     }
@@ -174,7 +177,7 @@ public sealed partial class NoConfReconciler : BackgroundService
                 }
         foreach (var key in _trackers.Keys)
             if (!retained.Contains(key)) _trackers.TryRemove(key, out _);
-        await Parallel.ForEachAsync(work, new ParallelOptions { MaxDegreeOfParallelism = 32, CancellationToken = cancellationToken },
+        await Parallel.ForEachAsync(work, new ParallelOptions { MaxDegreeOfParallelism = _runtimePolicy.MaximumConcurrentProbes, CancellationToken = cancellationToken },
             async (workItem, token) => await ProbeInstanceAsync(workItem, compiled, token).ConfigureAwait(false)).ConfigureAwait(false);
     }
 
@@ -182,9 +185,9 @@ public sealed partial class NoConfReconciler : BackgroundService
     {
         var intent = work.Intent;
         var successful = await _readiness.CheckAsync(intent, work.Upstream, cancellationToken).ConfigureAwait(false);
-        var tracker = _trackers.GetOrAdd(work.Key, static _ => new ReadinessTracker());
+        var tracker = _trackers.GetOrAdd(work.Key, static (_, policy) => new ReadinessTracker(policy.ReadinessSuccesses, policy.ReadinessFailures), _runtimePolicy);
         var ready = tracker.Record(intent.Identity, successful);
-        if (!_availability.SetReadiness(intent.Identity, ready, TimeSpan.FromSeconds(30), work.Generation)) return;
+        if (!_availability.SetReadiness(intent.Identity, ready, TimeSpan.FromSeconds(_runtimePolicy.ReadinessValiditySeconds), work.Generation)) return;
         if (!ready || !ReferenceEquals(compiled, Compiled)) return;
         var gateway = _gateway.ReadPublicationProof();
         if (gateway is null)

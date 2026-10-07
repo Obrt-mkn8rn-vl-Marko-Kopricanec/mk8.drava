@@ -87,7 +87,7 @@ public sealed class SiteRegistrationChannel : IDisposable
         var reply = await call.ResponseAsync.ConfigureAwait(false);
         if (reply.StatusCode != 200) throw new InvalidDataException("Registration was rejected.");
         var status = RegistrationJson.DecodeStatus(reply.JsonPayload.Span);
-        if (status.Identity != command.Identity || !Enum.IsDefined(status.Phase) || status.AssignedUrls is null || status.AssignedUrls.Count > 16 || status.LeaseSeconds is < 15 or > 300 || status.RenewAfterSeconds is < 1 or > 60)
+        if (status.Identity != command.Identity || !Enum.IsDefined(status.Phase) || status.AssignedUrls is null || status.AssignedUrls.Count > 16 || status.LeaseSeconds is < 15 or > 300 || status.RenewAfterSeconds is < 1 or > 60 || status.RenewAfterSeconds > status.LeaseSeconds / 3)
             throw new InvalidDataException("Registration response is inconsistent with the enrolled command.");
         if (status.Phase != RegistrationPhase.Ready && status.AssignedUrls.Count != 0) throw new InvalidDataException("Pending membership cannot supply an assigned URL.");
         if (status.Phase == RegistrationPhase.Ready && status.AssignedUrls.Count == 0) throw new InvalidDataException("Ready membership requires an assigned URL.");

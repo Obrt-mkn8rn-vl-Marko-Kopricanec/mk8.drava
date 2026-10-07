@@ -53,14 +53,17 @@ public sealed class LocalSiteCertificateAuthority : IDisposable
         return issuer.GetCertHashString(HashAlgorithmName.SHA256);
     }
 
-    public X509Certificate2 IssueGateway(string domain, IReadOnlyList<string> addresses)
+    public X509Certificate2 IssueGateway(string domain, IReadOnlyList<string> addresses) => IssueGateway(domain, addresses, 30);
+
+    public X509Certificate2 IssueGateway(string domain, IReadOnlyList<string> addresses, int lifetimeDays)
     {
+        if (lifetimeDays is < 2 or > 90) throw new ArgumentOutOfRangeException(nameof(lifetimeDays));
         ArgumentNullException.ThrowIfNull(addresses);
         var names = new SubjectAlternativeNameBuilder();
         names.AddDnsName("*." + domain);
         names.AddDnsName("register." + domain);
         foreach (var address in addresses) names.AddIpAddress(IPAddress.Parse(address));
-        return Issue("gateway", names, client: false, server: true);
+        return Issue("gateway", names, client: false, server: true, lifetimeDays);
     }
 
     public X509Certificate2 IssueNode(string nodeId, IReadOnlyList<string> addresses)
@@ -82,10 +85,10 @@ public sealed class LocalSiteCertificateAuthority : IDisposable
 
     public void Dispose() => _issuer.Dispose();
 
-    private X509Certificate2 Issue(string subject, SubjectAlternativeNameBuilder names, bool client, bool server)
+    private X509Certificate2 Issue(string subject, SubjectAlternativeNameBuilder names, bool client, bool server, int lifetimeDays = 30)
     {
         var now = _clock.GetUtcNow();
-        var until = now.AddDays(30);
+        var until = now.AddDays(lifetimeDays);
         var issuerUntil = new DateTimeOffset(_issuer.NotAfter.ToUniversalTime()).AddMinutes(-5);
         if (until > issuerUntil) until = issuerUntil;
         if (until < now.AddDays(1)) throw new InvalidOperationException("Site CA requires renewal before issuing another leaf.");
