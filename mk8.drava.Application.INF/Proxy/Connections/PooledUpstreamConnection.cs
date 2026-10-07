@@ -1,4 +1,6 @@
 using System.Net.Sockets;
+using System.Net.Security;
+using System.Security.Authentication;
 using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
 
 namespace Mk8.Drava.Application.INF.Proxy.Connections;
@@ -40,6 +42,28 @@ internal sealed class PooledUpstreamConnection : IDisposable
             {
                 return false;
             }
+        }
+    }
+
+    public async ValueTask<bool> PrepareForReuseAsync(CancellationToken cancellationToken)
+    {
+        if (!IsIdleAndUsable) return false;
+        if (Stream is not SslStream tls) return true;
+        using var probeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        try
+        {
+            var pending = tls.ReadAsync(new byte[1], probeCancellation.Token);
+            if (!pending.IsCompleted) await probeCancellation.CancelAsync().ConfigureAwait(false);
+            await pending.ConfigureAwait(false);
+            return false; // Both unsolicited application data and TLS EOF forbid reuse.
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && probeCancellation.IsCancellationRequested)
+        {
+            return IsIdleAndUsable;
+        }
+        catch (Exception exception) when (exception is IOException or SocketException or AuthenticationException or ObjectDisposedException)
+        {
+            return false;
         }
     }
 

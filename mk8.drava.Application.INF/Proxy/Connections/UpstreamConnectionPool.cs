@@ -51,10 +51,23 @@ public sealed class UpstreamConnectionPool : IUpstreamConnectionPruner, IDisposa
 
         if (connection is not null)
         {
-            connection.MarkBorrowed(limits.MaxIdleUpstreamConnectionsPerUpstream);
-            _metrics.UpstreamConnectionReused();
-            _metrics.UpstreamPoolConnectionBorrowed();
-            return new UpstreamConnectionLease(this, connection);
+            bool reusable;
+            try { reusable = await connection.PrepareForReuseAsync(cancellationToken).ConfigureAwait(false); }
+            catch
+            {
+                connection.Dispose();
+                _metrics.UpstreamConnectionDiscarded();
+                throw;
+            }
+            if (reusable)
+            {
+                connection.MarkBorrowed(limits.MaxIdleUpstreamConnectionsPerUpstream);
+                _metrics.UpstreamConnectionReused();
+                _metrics.UpstreamPoolConnectionBorrowed();
+                return new UpstreamConnectionLease(this, connection);
+            }
+            connection.Dispose();
+            _metrics.UpstreamConnectionDiscarded();
         }
 
         var transport = await _connectionFactory.ConnectAsync(endpoint, timeouts.UpstreamConnectTimeout, cancellationToken).ConfigureAwait(false);
