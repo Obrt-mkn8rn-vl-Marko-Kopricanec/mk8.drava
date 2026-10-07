@@ -66,6 +66,18 @@ public sealed class LocalSiteCertificateAuthority : IDisposable
         return Issue("gateway", names, client: false, server: true, lifetimeDays);
     }
 
+    public X509Certificate2 IssueEnrollmentGateway(string domain, IReadOnlyList<string> addresses, int lifetimeDays)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        if (lifetimeDays is < 2 or > 90) throw new ArgumentOutOfRangeException(nameof(lifetimeDays));
+        ArgumentNullException.ThrowIfNull(addresses);
+        var names = new SubjectAlternativeNameBuilder();
+        names.AddDnsName("register." + domain);
+        names.AddDnsName("admin." + domain);
+        foreach (var address in addresses) names.AddIpAddress(IPAddress.Parse(address));
+        return Issue("enrollment-gateway", names, client: false, server: true, lifetimeDays);
+    }
+
     public X509Certificate2 IssueNode(string nodeId, IReadOnlyList<string> addresses)
     {
         RegistryNames.RequireLabel(nodeId);

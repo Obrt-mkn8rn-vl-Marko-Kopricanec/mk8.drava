@@ -1035,6 +1035,7 @@ const Mk8.Drava.Transport.Protocol.V1.RelayAccepted.MaximumBytesPerDirectionFiel
 const Mk8.Drava.Transport.Protocol.V1.RelayAccepted.MaximumDurationSecondsFieldNumber = 5 -> int
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.Dispose() -> void
+Mk8.Drava.Transport.Certificates.ValidatedServingPlan.EnrollmentCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate2!
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.Plan.get -> Mk8.Drava.Transport.Protocol.V1.PresentationPlan!
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.ServingCertificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate2!
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.ValidateClientCertificate(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> bool

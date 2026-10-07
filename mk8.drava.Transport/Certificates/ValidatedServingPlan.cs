@@ -11,6 +11,7 @@ public sealed class ValidatedServingPlan : IDisposable
 {
     private readonly X509Certificate2 _root;
     public X509Certificate2 ServingCertificate { get; }
+    public X509Certificate2 EnrollmentCertificate { get; }
     private readonly PresentationPlan _plan;
     private readonly TimeProvider _clock;
     private readonly bool _requireCurrent;
@@ -24,24 +25,26 @@ public sealed class ValidatedServingPlan : IDisposable
         _clock = clock; _requireCurrent = requireCurrent;
         if (plan.Version != 1 || plan.Generation is < 1 or > long.MaxValue || !PresentationPlanDigest.Verify(plan) || (requireCurrent && plan.ValidUntilUnixSeconds <= clock.GetUtcNow().ToUnixTimeSeconds()) || plan.CalculateSize() > 128 * 1024 ||
             !string.Equals(plan.SiteId, bootstrap.SiteId, StringComparison.Ordinal) || !string.Equals(plan.GatewayId, bootstrap.GatewayId, StringComparison.Ordinal) ||
-            plan.Certificates.Count != 1 || plan.EnrollmentCaDer.Length is < 128 or > 16384 || plan.Certificates[0].Pfx.Length is < 128 or > 65536)
+            plan.Certificates.Count is < 1 or > 2 || plan.EnrollmentCaDer.Length is < 128 or > 16384)
             throw new InvalidDataException("Gateway plan is invalid or outside supported bounds.");
         if (plan.AcknowledgmentLeaseSeconds != 0 && plan.AcknowledgmentLeaseSeconds is < 5 or > 300 ||
             plan.LeafLifetimeDays != 0 && plan.LeafLifetimeDays is < 2 or > 90)
             throw new InvalidDataException("Gateway plan contains invalid acknowledgment or certificate policy.");
+        foreach (var certificate in plan.Certificates)
+            if (certificate.Pfx.Length is < 128 or > 65536 || certificate.PfxPassword.Length > 256)
+                throw new InvalidDataException("Gateway certificate material exceeds its bound.");
         ValidateListeners(plan, bootstrap);
         _root = X509CertificateLoader.LoadCertificate(plan.EnrollmentCaDer.Span);
         try
         {
             if (!string.Equals(_root.GetCertHashString(HashAlgorithmName.SHA256), bootstrap.EnrollmentRootFingerprint, StringComparison.Ordinal))
                 throw new InvalidDataException("Gateway plan enrollment root differs from its bootstrap trust.");
-            ServingCertificate = X509CertificateLoader.LoadPkcs12(plan.Certificates[0].Pfx.Span, plan.Certificates[0].PfxPassword, X509KeyStorageFlags.EphemeralKeySet);
-            if (!ServingCertificate.HasPrivateKey || !ValidateLeaf(ServingCertificate, client: false))
-                throw new InvalidDataException("Gateway serving certificate identity or lifetime is invalid.");
+            ServingCertificate = LoadServerCertificate(plan.Certificates[0]);
             ValidateNamesAndLifetime(plan, ServingCertificate);
+            EnrollmentCertificate = ReadEnrollmentCertificate(plan, bootstrap);
             _plan = plan.Clone();
         }
-        catch { ServingCertificate?.Dispose(); _root.Dispose(); throw; }
+        catch { DisposeLeaves(); _root.Dispose(); throw; }
     }
 
     public bool ValidateClientCertificate(X509Certificate2 certificate)
@@ -52,8 +55,52 @@ public sealed class ValidatedServingPlan : IDisposable
 
     public void Dispose()
     {
-        ServingCertificate.Dispose();
+        DisposeLeaves();
         _root.Dispose();
+    }
+
+    private void DisposeLeaves()
+    {
+        if (!ReferenceEquals(EnrollmentCertificate, ServingCertificate)) EnrollmentCertificate?.Dispose();
+        ServingCertificate?.Dispose();
+    }
+
+    private X509Certificate2 LoadServerCertificate(ServingCertificate material)
+    {
+        var certificate = X509CertificateLoader.LoadPkcs12(material.Pfx.Span, material.PfxPassword, X509KeyStorageFlags.EphemeralKeySet);
+        try
+        {
+            if (!certificate.HasPrivateKey || !ValidateLeaf(certificate, client: false))
+                throw new InvalidDataException("Gateway server certificate identity or lifetime is invalid.");
+            return certificate;
+        }
+        catch { certificate.Dispose(); throw; }
+    }
+
+    private X509Certificate2 ReadEnrollmentCertificate(PresentationPlan plan, GatewayBootstrap bootstrap)
+    {
+        // Legacy material can be recovered while Application migrates it to distinct keys at a new generation.
+        if (plan.Certificates.Count == 1) return ServingCertificate;
+        var material = plan.Certificates[1];
+        var domain = plan.Certificates[0].HostNames[0][2..];
+        if (!string.Equals(material.CertificateId, "enrollment", StringComparison.Ordinal) || material.HostNames.Count != 2 ||
+            !string.Equals(material.HostNames[0], "register." + domain, StringComparison.Ordinal) ||
+            !string.Equals(material.HostNames[1], "admin." + domain, StringComparison.Ordinal))
+            throw new InvalidDataException("Gateway private listener certificate has an invalid scope.");
+        var certificate = LoadServerCertificate(material);
+        try
+        {
+            if (!certificate.MatchesHostname(material.HostNames[0], allowWildcards: false, allowCommonName: false) ||
+                !certificate.MatchesHostname(material.HostNames[1], allowWildcards: false, allowCommonName: false) ||
+                certificate.MatchesHostname("probe." + domain, allowWildcards: true, allowCommonName: false) ||
+                material.NotAfterUnixSeconds != new DateTimeOffset(certificate.NotAfter.ToUniversalTime()).ToUnixTimeSeconds() ||
+                plan.ValidUntilUnixSeconds > material.NotAfterUnixSeconds ||
+                certificate.PublicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(ServingCertificate.PublicKey.ExportSubjectPublicKeyInfo()))
+                throw new InvalidDataException("Gateway private listener names, expiry or key separation are invalid.");
+            EnrollmentCertificateScope.Require(certificate, material.HostNames, bootstrap.BindAddress);
+            return certificate;
+        }
+        catch { certificate.Dispose(); throw; }
     }
 
     private bool ValidateLeaf(X509Certificate2 certificate, bool client)

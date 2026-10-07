@@ -82,7 +82,11 @@ internal sealed class GatewayMaterialState : IDisposable
 
     public bool HasCurrent => Read() is { } plan && plan.ValidUntilUnixSeconds > DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-    public static X509Certificate2? SelectCertificate(ConnectionContext? connection) => connection?.Features.Get<MaterialLease>()?.Certificate;
+    public static X509Certificate2? SelectCertificate(ConnectionContext? connection, bool enrollment)
+    {
+        var lease = connection?.Features.Get<MaterialLease>();
+        return enrollment ? lease?.EnrollmentCertificate : lease?.Certificate;
+    }
 
     private void Release(Entry entry)
     {
@@ -115,6 +119,7 @@ internal sealed class GatewayMaterialState : IDisposable
     {
         private Entry? _entry = entry;
         public X509Certificate2? Certificate => _entry?.Material.ServingCertificate;
+        public X509Certificate2? EnrollmentCertificate => _entry?.Material.EnrollmentCertificate;
         public void Dispose() { var owned = Interlocked.Exchange(ref _entry, null); if (owned is not null) owner.Release(owned); }
     }
 }

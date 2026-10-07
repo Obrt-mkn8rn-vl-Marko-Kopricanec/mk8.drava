@@ -9,6 +9,7 @@ public sealed class GatewayServingMaterial : IDisposable
 {
     private readonly ValidatedServingPlan _material;
     public X509Certificate2 ServingCertificate => _material.ServingCertificate;
+    public X509Certificate2 EnrollmentCertificate => _material.EnrollmentCertificate;
     public PresentationPlan Plan => _material.Plan;
     public GatewayServingMaterial(PresentationPlan plan, GatewayBootstrap bootstrap) : this(plan, bootstrap, requireCurrent: true) { }
     private GatewayServingMaterial(PresentationPlan plan, GatewayBootstrap bootstrap, bool requireCurrent) => _material = new ValidatedServingPlan(plan, bootstrap, TimeProvider.System, requireCurrent);

@@ -37,7 +37,7 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
             if (!string.Equals(prior.Certificates[0].HostNames[0], "*." + bootstrap.Controller!.Domain, StringComparison.Ordinal))
                 throw new InvalidDataException("Stored plan belongs to another site domain.");
         }
-        var policyChanged = prior is not null && (prior.AcknowledgmentLeaseSeconds != settings.AcknowledgmentLeaseSeconds || prior.LeafLifetimeDays != settings.LeafLifetimeDays);
+        var policyChanged = prior is not null && (prior.Certificates.Count != 2 || prior.AcknowledgmentLeaseSeconds != settings.AcknowledgmentLeaseSeconds || prior.LeafLifetimeDays != settings.LeafLifetimeDays);
         using var issuer = authority.PublicCertificate;
         var issuerUntil = new DateTimeOffset(issuer.NotAfter.ToUniversalTime()).AddMinutes(-5).ToUnixTimeSeconds();
         var plan = prior is null || policyChanged || (prior.ValidUntilUnixSeconds < issuerUntil && prior.ValidUntilUnixSeconds <= clock.GetUtcNow().AddDays(settings.RenewalLeadDays).ToUnixTimeSeconds())
@@ -118,15 +118,18 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
     {
         var controller = bootstrap.Controller ?? throw new InvalidOperationException("Controller configuration is missing.");
         using var certificate = authority.IssueGateway(controller.Domain, [bootstrap.IngressAddress], controller.ServingPlan.LeafLifetimeDays);
+        using var enrollment = authority.IssueEnrollmentGateway(controller.Domain, [bootstrap.IngressAddress], controller.ServingPlan.LeafLifetimeDays);
         using var root = authority.PublicCertificate;
         var plan = new PresentationPlan
         {
             Version = 1, SiteId = bootstrap.SiteId, GatewayId = bootstrap.GatewayId, Generation = generation,
             AcknowledgmentLeaseSeconds = checked((uint)controller.ServingPlan.AcknowledgmentLeaseSeconds), LeafLifetimeDays = checked((uint)controller.ServingPlan.LeafLifetimeDays),
-            EnrollmentCaDer = ByteString.CopyFrom(root.RawData), ValidUntilUnixSeconds = new DateTimeOffset(certificate.NotAfter.ToUniversalTime()).ToUnixTimeSeconds(),
+            EnrollmentCaDer = ByteString.CopyFrom(root.RawData), ValidUntilUnixSeconds = Math.Min(new DateTimeOffset(certificate.NotAfter.ToUniversalTime()).ToUnixTimeSeconds(), new DateTimeOffset(enrollment.NotAfter.ToUniversalTime()).ToUnixTimeSeconds()),
         };
         plan.Certificates.Add(new ServingCertificate { CertificateId = "site", Pfx = ByteString.CopyFrom(certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12)),
-            NotAfterUnixSeconds = plan.ValidUntilUnixSeconds, HostNames = { "*." + controller.Domain, "register." + controller.Domain } });
+            NotAfterUnixSeconds = new DateTimeOffset(certificate.NotAfter.ToUniversalTime()).ToUnixTimeSeconds(), HostNames = { "*." + controller.Domain, "register." + controller.Domain } });
+        plan.Certificates.Add(new ServingCertificate { CertificateId = "enrollment", Pfx = ByteString.CopyFrom(enrollment.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12)),
+            NotAfterUnixSeconds = new DateTimeOffset(enrollment.NotAfter.ToUniversalTime()).ToUnixTimeSeconds(), HostNames = { "register." + controller.Domain, "admin." + controller.Domain } });
         if (bootstrap.HttpPort > 0) plan.Listeners.Add(Listener("http", bootstrap.IngressAddress, bootstrap.HttpPort, tls: false, registration: false));
         if (bootstrap.HttpsPort > 0) plan.Listeners.Add(Listener("https", bootstrap.IngressAddress, bootstrap.HttpsPort, tls: true, registration: false));
         plan.Listeners.Add(Listener("registration", bootstrap.IngressAddress, controller.RegistrationPort, tls: true, registration: true));
