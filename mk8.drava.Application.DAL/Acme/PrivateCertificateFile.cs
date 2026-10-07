@@ -7,11 +7,15 @@ public static class PrivateCertificateFile
     internal static byte[] ReadProtected(string path, int minimumBytes, int maximumBytes)
     {
         ValidatePath(path);
-        var file = new FileInfo(path);
-        if (!file.Exists || file.Length < minimumBytes || file.Length > maximumBytes) throw new InvalidDataException("Private material is absent or invalid.");
+        if (!File.Exists(path)) throw new InvalidDataException("Private material is absent or invalid.");
         if (!OperatingSystem.IsWindows() && (File.GetUnixFileMode(path) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None)
             throw new InvalidDataException("Private certificate material must be restricted to its owner.");
-        return File.ReadAllBytes(path);
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (file.Length < minimumBytes || file.Length > maximumBytes) throw new InvalidDataException("Private material is absent or invalid.");
+        var bytes = new byte[checked((int)file.Length)];
+        file.ReadExactly(bytes);
+        if (file.ReadByte() != -1) throw new InvalidDataException("Private material changed while reading.");
+        return bytes;
     }
 
     public static ValueTask WriteNewAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken) =>
