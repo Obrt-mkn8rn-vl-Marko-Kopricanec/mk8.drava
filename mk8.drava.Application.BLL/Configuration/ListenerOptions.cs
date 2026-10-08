@@ -11,7 +11,7 @@ public sealed class ListenerOptions
     public bool Http3AltSvcEnabled { get; init; }
     public int Http3AltSvcMaxAgeSeconds { get; init; } = 86400;
     public string? DefaultCertificateId { get; init; }
-    public System.Collections.ObjectModel.Collection<SniCertificateOptions> SniCertificates { get; init; } = [];
+    public IList<SniCertificateOptions> SniCertificates { get; init; } = [];
     public int Backlog { get; init; } = 512;
     public int MaxRequestHeadBytes { get; init; } = 32 * 1024;
     public int MaxResponseHeadBytes { get; init; } = 32 * 1024;

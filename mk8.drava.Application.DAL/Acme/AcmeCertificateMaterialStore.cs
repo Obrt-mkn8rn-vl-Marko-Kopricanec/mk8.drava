@@ -38,7 +38,7 @@ public static class AcmeCertificateMaterialStore
                     continue;
                 }
 
-                certificates[certificateOptions.Id] = RuntimeCertificateFactory.Acme(certificateOptions.Id, certificate, certificateOptions.Domains);
+                certificates[certificateOptions.Id] = RuntimeCertificateFactory.Acme(certificateOptions.Id, certificate, certificateOptions.Domains.ToArray());
             }
             catch (CryptographicException exception)
             {

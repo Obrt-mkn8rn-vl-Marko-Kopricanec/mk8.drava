@@ -6,5 +6,5 @@ public sealed class ProxyCircuitBreakerOptions
     public int SamplingWindowSeconds { get; init; } = 60;
     public int OpenDurationSeconds { get; init; } = 30;
     public int HalfOpenMaxAttempts { get; init; } = 1;
-    public System.Collections.ObjectModel.Collection<int> FailureStatusCodes { get; init; } = [];
+    public IList<int> FailureStatusCodes { get; init; } = [];
 }

@@ -27,7 +27,7 @@ public static class ProxyAdminSecurityTokenPolicy
         return string.IsNullOrWhiteSpace(tokenEnvironmentVariable) ? DefaultTokenEnvironmentVariable : tokenEnvironmentVariable.Trim();
     }
 
-    public static IReadOnlyList<string> NormalizeUrls(IReadOnlyList<string> urls)
+    public static IReadOnlyList<string> NormalizeUrls(IEnumerable<string> urls)
     {
         return urls.Where(static url => !string.IsNullOrWhiteSpace(url)).Select(static url => url.Trim()).ToArray();
     }

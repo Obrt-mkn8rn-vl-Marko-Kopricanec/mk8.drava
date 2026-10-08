@@ -9,5 +9,5 @@ public sealed class ProxyOperationalOptions
     public ProxyObservabilityOptions Observability { get; init; } = new();
     public ProxyLimitsOptions Limits { get; init; } = new();
     public ProxyForwardedHeadersOptions ForwardedHeaders { get; init; } = new();
-    public System.Collections.ObjectModel.Collection<CertificateOptions> Certificates { get; init; } = [];
+    public IList<CertificateOptions> Certificates { get; init; } = [];
 }

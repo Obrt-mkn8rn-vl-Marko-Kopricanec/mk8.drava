@@ -3,6 +3,6 @@ public sealed class AcmeManagedCertificateOptions
 {
     public string Id { get; init; } = "";
     public bool Enabled { get; init; } = true;
-    public System.Collections.ObjectModel.Collection<string> Domains { get; init; } = [];
+    public IList<string> Domains { get; init; } = [];
     public int? RenewBeforeDays { get; init; }
 }

@@ -6,7 +6,7 @@ public sealed class ProxyRetryPolicyOptions
     public int? PerAttemptTimeoutMs { get; init; }
     public bool RetryOnConnectFailure { get; init; }
     public bool RetryOnUpstreamResponseHeadTimeout { get; init; }
-    public System.Collections.ObjectModel.Collection<int> RetryOnStatusCodes { get; init; } = [];
-    public System.Collections.ObjectModel.Collection<string> RetryMethods { get; init; } = ["GET", "HEAD"];
+    public IList<int> RetryOnStatusCodes { get; init; } = [];
+    public IList<string> RetryMethods { get; init; } = ["GET", "HEAD"];
     public int RetryBackoffMilliseconds { get; init; }
 }

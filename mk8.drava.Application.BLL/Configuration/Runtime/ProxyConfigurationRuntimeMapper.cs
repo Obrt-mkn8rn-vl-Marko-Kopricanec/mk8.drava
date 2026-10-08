@@ -19,7 +19,7 @@ public static partial class ProxyConfigurationRuntimeMapper
         return new ProxyConfigurationSnapshot(version, loadedAtUtc, sourceDirectory, sourceFiles, discovery, adminSecurity, acme, timeouts, connectionLimits, observability, limits, forwardedHeaders, certificates, listeners, routes, metrics);
     }
 
-    public static IReadOnlyList<RuntimeListener> ToRuntimeListeners(IReadOnlyList<ListenerOptions> listeners)
+    public static IReadOnlyList<RuntimeListener> ToRuntimeListeners(IEnumerable<ListenerOptions> listeners)
     {
         ArgumentNullException.ThrowIfNull(listeners);
         return listeners.Select(static listener =>
@@ -29,7 +29,7 @@ public static partial class ProxyConfigurationRuntimeMapper
         }).ToArray();
     }
 
-    public static IReadOnlyList<RuntimeRoute> ToRuntimeRoutes(IReadOnlyList<ProxyRouteOptions> routes, ProxyOperationalOptions operationalOptions)
+    public static IReadOnlyList<RuntimeRoute> ToRuntimeRoutes(IEnumerable<ProxyRouteOptions> routes, ProxyOperationalOptions operationalOptions)
     {
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(operationalOptions);

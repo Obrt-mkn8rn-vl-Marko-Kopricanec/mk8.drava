@@ -114,7 +114,7 @@ public static partial class ProxyOperationalOptionsValidationRules
         }
     }
 
-    private static void ValidateAcme(List<string> failures, ProxyAcmeOptions options, IReadOnlyList<CertificateOptions> manualCertificates, IProxyRelativeStoragePathPolicy relativeStoragePathPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy)
+    private static void ValidateAcme(List<string> failures, ProxyAcmeOptions options, IEnumerable<CertificateOptions> manualCertificates, IProxyRelativeStoragePathPolicy relativeStoragePathPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy)
     {
         if (options.RenewBeforeDays is < 1 or > 365)
         {
@@ -270,7 +270,7 @@ public static partial class ProxyOperationalOptionsValidationRules
         return value.Any(char.IsControl);
     }
 
-    private static void ValidateCertificates(List<string> failures, System.Collections.ObjectModel.Collection<CertificateOptions> certificates)
+    private static void ValidateCertificates(List<string> failures, IList<CertificateOptions> certificates)
     {
         HashSet<string> ids = new(StringComparer.OrdinalIgnoreCase);
         for (var index = 0; index < certificates.Count; index++)

@@ -8,7 +8,7 @@ public sealed class ProxyRouteOptions
     public string Action { get; init; } = "proxy";
     public string LoadBalancingPolicy { get; init; } = "round-robin";
     public HealthCheckOptions HealthCheck { get; init; } = new();
-    public System.Collections.ObjectModel.Collection<UpstreamOptions> Upstreams { get; init; } = [];
+    public IList<UpstreamOptions> Upstreams { get; init; } = [];
     public ProxyHttpsRedirectOptions HttpsRedirect { get; init; } = new();
     public ProxyCanonicalHostOptions CanonicalHost { get; init; } = new();
     public ProxyHeaderPolicyOptions HeaderPolicy { get; init; } = new();
