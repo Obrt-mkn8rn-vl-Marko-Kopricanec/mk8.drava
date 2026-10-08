@@ -15,7 +15,7 @@ internal sealed class DevelopmentAsyncAcmeLifecycle : IAcmeRenewalConfigurationS
     private X509Certificate2? _material;
     public bool BlockWriter { get; init; }
     public bool BlockActivation { get; init; }
-    public bool FailActivation { get; init; }
+    public bool FailActivation { get; set; }
     public TaskCompletionSource WriterEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource WriterExited { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource ActivationEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -17,12 +17,17 @@ internal static class AcmeHosting
         services.RemoveAll<IAcmeRenewalScheduleInputSource>();
         services.RemoveAll<IAcmeCertificateMaterialWriter>();
         services.RemoveAll<IAcmeCertificateActivator>();
+        services.RemoveAll<IProxyAcmeStatusConfigurationSource>();
+        services.RemoveAll<IProxyAcmeCertificateLifecycleStatusSource>();
         services.AddSingleton(new AcmeServingLifecycle(bootstrap, plans));
         services.AddSingleton<IAcmeCertificateIssuer>(_ => new OwnedDns01CertificateIssuer(bootstrap.Controller, bootstrap.SiteId));
         services.AddSingleton<IAcmeRenewalConfigurationSource>(static provider => provider.GetRequiredService<AcmeServingLifecycle>());
         services.AddSingleton<IAcmeRenewalScheduleInputSource>(static provider => provider.GetRequiredService<AcmeServingLifecycle>());
         services.AddSingleton<IAcmeCertificateMaterialWriter>(static provider => provider.GetRequiredService<AcmeServingLifecycle>());
         services.AddSingleton<IAcmeCertificateActivator>(static provider => provider.GetRequiredService<AcmeServingLifecycle>());
+        services.AddSingleton(static provider => new AcmeOwnerStatusSource(provider.GetRequiredService<AcmeServingLifecycle>(), provider.GetRequiredService<AcmeCertificateStatusStore>()));
+        services.AddSingleton<IProxyAcmeStatusConfigurationSource>(static provider => provider.GetRequiredService<AcmeOwnerStatusSource>());
+        services.AddSingleton<IProxyAcmeCertificateLifecycleStatusSource>(static provider => provider.GetRequiredService<AcmeOwnerStatusSource>());
         services.AddHostedService<AcmeRenewalService>();
     }
 }

@@ -145,7 +145,7 @@ public sealed class AcmeHostedPipelineTests
         new(repository, bootstrap.Controller!.Domain, bootstrap.Controller.Acme.DirectoryUrl);
     private static AcmeCertificateManager Manager(ApplicationBootstrap bootstrap, AcmeServingLifecycle lifecycle, IAcmeCertificateIssuer issuer, AcmeCertificateStatusStore status, LifecycleCounters counters) =>
         new(lifecycle, lifecycle, new ApplicationDataDirectoryProvider(bootstrap.StateDirectory), issuer, lifecycle, new AcmeChallengeStore(), status, TimeProvider.System, counters, counters);
-    private static ServiceCollection Services(ApplicationBootstrap bootstrap)
+    internal static ServiceCollection Services(ApplicationBootstrap bootstrap)
     {
         var services = new ServiceCollection(); services.AddLogging();
         services.AddProxyApplication(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { ["Mdrava:DataDirectory"] = bootstrap.StateDirectory }).Build());
