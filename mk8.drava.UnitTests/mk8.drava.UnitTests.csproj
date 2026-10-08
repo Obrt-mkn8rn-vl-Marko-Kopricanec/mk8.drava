@@ -4,6 +4,7 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../mk8.drava.CompatibilityTests/TestPortAllocator.cs" Link="TestPortAllocator.cs" />
     <ProjectReference Include="../mk8.drava.Registration/mk8.drava.Registration.csproj" />
     <ProjectReference Include="../mk8.drava.Application.INF/mk8.drava.Application.INF.csproj" />
     <ProjectReference Include="../mk8.drava.Transport/mk8.drava.Transport.csproj" />

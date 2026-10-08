@@ -22,9 +22,16 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
     private readonly TimeProvider _timeProvider;
     private readonly CancellationTokenSource _controlMonitorStop = new();
     private readonly Task _controlMonitor;
+    private readonly Func<QuicStream, CancellationToken, Task> _processPeerStream;
+    private Task? _disposeTask;
     private Http3UpstreamPooledConnectionState _state = Http3UpstreamPooledConnectionState.Active;
     private int _activeStreams;
     public Http3UpstreamPooledConnection(string key, Http3UpstreamTransport transport, ProxyMetrics metrics, TimeProvider timeProvider, int maxConcurrentStreams)
+        : this(key, transport, metrics, timeProvider, maxConcurrentStreams, processPeerStream: null)
+    {
+    }
+
+    internal Http3UpstreamPooledConnection(string key, Http3UpstreamTransport transport, ProxyMetrics metrics, TimeProvider timeProvider, int maxConcurrentStreams, Func<QuicStream, CancellationToken, Task>? processPeerStream)
     {
         Key = key;
         Connection = transport.Connection;
@@ -33,7 +40,8 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
         _timeProvider = timeProvider;
         MaxConcurrentStreams = Math.Clamp(maxConcurrentStreams, 1, 64);
         LastUsedUtc = _timeProvider.GetUtcNow();
-        _controlMonitor = Task.Run(MonitorPeerStreamsAsync);
+        _processPeerStream = processPeerStream ?? ProcessInboundStreamAsync;
+        _controlMonitor = MonitorPeerStreamsAsync();
     }
 
     public string Key { get; }
@@ -111,7 +119,7 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
                 _activeStreams--;
             }
 
-            if (!connectionUsable)
+            if (!connectionUsable && _state is not Http3UpstreamPooledConnectionState.ShutdownDisposing and not Http3UpstreamPooledConnectionState.Closed)
             {
                 _state = Http3UpstreamPooledConnectionState.Failed;
             }
@@ -134,44 +142,66 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         lock (_gate)
         {
-            if (_state is Http3UpstreamPooledConnectionState.Closed or Http3UpstreamPooledConnectionState.ShutdownDisposing)
-            {
-                return;
-            }
-
-            _state = Http3UpstreamPooledConnectionState.ShutdownDisposing;
+            _disposeTask ??= DisposeOwnedAsync();
+            return new ValueTask(_disposeTask);
         }
+    }
 
-        await _controlMonitorStop.CancelAsync().ConfigureAwait(false);
+    private async Task DisposeOwnedAsync()
+    {
+        _state = Http3UpstreamPooledConnectionState.ShutdownDisposing;
+        try
+        {
+            try
+            {
+                await _controlMonitorStop.CancelAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                // This owner started the monitor; its production I/O awaits never require a caller's main thread.
+#pragma warning disable VSTHRD003
+                await _controlMonitor.ConfigureAwait(false);
+#pragma warning restore VSTHRD003
+            }
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or QuicException or IOException or ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            await CloseTransportAsync().ConfigureAwait(false);
+        }
+    }
+
+    private async Task CloseTransportAsync()
+    {
         try
         {
             await ControlStream.DisposeAsync().ConfigureAwait(false);
             await Connection.CloseAsync(0, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception exception)when (exception is QuicException or IOException or ObjectDisposedException)
+        catch (Exception exception) when (exception is QuicException or IOException or ObjectDisposedException)
         {
         }
         finally
         {
-            await Connection.DisposeAsync().ConfigureAwait(false);
             try
             {
-                await _controlMonitor.WaitAsync(TimeSpan.FromMilliseconds(250)).ConfigureAwait(false);
+                await Connection.DisposeAsync().ConfigureAwait(false);
             }
-            catch (Exception exception)when (exception is OperationCanceledException or TimeoutException or QuicException or IOException)
+            finally
             {
-            }
-
-            _controlMonitorStop.Dispose();
-            _metrics.UpstreamHttp3ConnectionClosed();
-            _metrics.UpstreamHttp3PoolConnectionClosed();
-            lock (_gate)
-            {
-                _state = Http3UpstreamPooledConnectionState.Closed;
+                _controlMonitorStop.Dispose();
+                _metrics.UpstreamHttp3ConnectionClosed();
+                _metrics.UpstreamHttp3PoolConnectionClosed();
+                lock (_gate)
+                {
+                    _state = Http3UpstreamPooledConnectionState.Closed;
+                }
             }
         }
     }
@@ -179,12 +209,18 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
     private async Task MonitorPeerStreamsAsync()
     {
         var cancellationToken = _controlMonitorStop.Token;
+        List<Task> children = [];
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
+                children.RemoveAll(static task => task.IsCompletedSuccessfully);
+                if (children.Any(static task => task.IsFaulted || task.IsCanceled))
+                {
+                    await Task.WhenAll(children.Where(static task => task.IsCompleted)).ConfigureAwait(false);
+                }
                 var stream = await Connection.AcceptInboundStreamAsync(cancellationToken).ConfigureAwait(false);
-                _ = Task.Run(async () => await ProcessInboundStreamAsync(stream, cancellationToken).ConfigureAwait(false), CancellationToken.None);
+                children.Add(_processPeerStream(stream, cancellationToken));
             }
         }
         catch (Exception exception)when (exception is OperationCanceledException or ObjectDisposedException)
@@ -193,6 +229,17 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
         catch (Exception exception)when (exception is QuicException or IOException)
         {
             MarkUnusableUnlessDisposing();
+        }
+        finally
+        {
+            try
+            {
+                await _controlMonitorStop.CancelAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                await Task.WhenAll(children).ConfigureAwait(false);
+            }
         }
     }
 
@@ -207,7 +254,7 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
                 return;
             }
 
-            var streamType = await ReadControlVarIntAsync(stream, cancellationToken, allowEnd: true).ConfigureAwait(false);
+            var streamType = await ReadControlVarIntAsync(stream, allowEnd: true, cancellationToken).ConfigureAwait(false);
             if (!streamType.Success)
             {
                 return;
@@ -221,13 +268,13 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var frameType = await ReadControlVarIntAsync(stream, cancellationToken, allowEnd: true).ConfigureAwait(false);
+                var frameType = await ReadControlVarIntAsync(stream, allowEnd: true, cancellationToken).ConfigureAwait(false);
                 if (!frameType.Success)
                 {
                     return;
                 }
 
-                var length = await ReadControlVarIntAsync(stream, cancellationToken, allowEnd: false).ConfigureAwait(false);
+                var length = await ReadControlVarIntAsync(stream, allowEnd: false, cancellationToken).ConfigureAwait(false);
                 if (!length.Success || length.Value < 0 || length.Value > MaxControlFramePayloadBytes)
                 {
                     MarkUnusable();
@@ -300,7 +347,7 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
         }
     }
 
-    private static async ValueTask<Http3ControlVarIntReadResult> ReadControlVarIntAsync(QuicStream stream, CancellationToken cancellationToken, bool allowEnd)
+    private static async ValueTask<Http3ControlVarIntReadResult> ReadControlVarIntAsync(QuicStream stream, bool allowEnd, CancellationToken cancellationToken)
     {
         var first = await ReadExactControlAsync(stream, 1, cancellationToken, allowEnd).ConfigureAwait(false);
         if (first.Length == 0)
