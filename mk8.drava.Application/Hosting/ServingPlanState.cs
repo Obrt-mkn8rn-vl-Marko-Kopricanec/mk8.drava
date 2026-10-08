@@ -31,6 +31,7 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
         ArgumentNullException.ThrowIfNull(bootstrap); ArgumentNullException.ThrowIfNull(authority); ArgumentNullException.ThrowIfNull(clock);
         bootstrap.Controller!.ServingPlan.Validate();
         bootstrap.Controller.ServingTrust.Validate();
+        bootstrap.Controller.Acme.Validate(bootstrap.Controller.ServingTrust, bootstrap.Controller.DnsPublication);
         var settings = bootstrap.Controller.ServingPlan;
         var stored = GatewayMaterialStore.Read(bootstrap.StateDirectory);
         var prior = stored is null ? null : PresentationPlan.Parser.ParseFrom(stored);
@@ -42,11 +43,13 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
                 throw new InvalidDataException("Stored plan belongs to another site domain.");
         }
         var policyChanged = prior is not null && (prior.Certificates.Count != 2 || prior.AcknowledgmentLeaseSeconds != settings.AcknowledgmentLeaseSeconds || prior.LeafLifetimeDays != settings.LeafLifetimeDays ||
+            prior.ServingPending && !bootstrap.Controller.Acme.Enabled ||
             !TrustMatches(prior, bootstrap.Controller.ServingTrust) || PublicMaterialChanged(prior, bootstrap.Controller));
         using var issuer = authority.PublicCertificate;
         var issuerUntil = new DateTimeOffset(issuer.NotAfter.ToUniversalTime()).AddMinutes(-5).ToUnixTimeSeconds();
+        var retainPublic = prior is { ServingPending: false } && bootstrap.Controller.Acme.Enabled && PrivateCertificateFile.IsAbsent(bootstrap.Controller.ServingCertificatePath) && prior.ValidUntilUnixSeconds > clock.GetUtcNow().ToUnixTimeSeconds();
         var plan = prior is null || policyChanged || (prior.ValidUntilUnixSeconds < issuerUntil && prior.ValidUntilUnixSeconds <= clock.GetUtcNow().AddDays(settings.RenewalLeadDays).ToUnixTimeSeconds())
-            ? BuildPlan(bootstrap, authority, prior is null ? 1 : checked(prior.Generation + 1)) : prior;
+            && !retainPublic ? BuildPlan(bootstrap, authority, prior is null ? 1 : checked(prior.Generation + 1)) : prior;
         if (prior is not null && !policyChanged && plan.ValidUntilUnixSeconds <= prior.ValidUntilUnixSeconds) plan = prior;
         if (!ReferenceEquals(plan, prior))
         {
@@ -74,7 +77,7 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
             var elapsed = _clock.GetElapsedTime(_acknowledgedAt);
             var now = _clock.GetUtcNow();
             var acknowledgmentLease = TimeSpan.FromSeconds(_plan.AcknowledgmentLeaseSeconds);
-            if (!_acknowledged || elapsed < TimeSpan.Zero || elapsed >= acknowledgmentLease || _plan.ValidUntilUnixSeconds <= now.ToUnixTimeSeconds()) return null;
+            if (_plan.ServingPending || !_acknowledged || elapsed < TimeSpan.Zero || elapsed >= acknowledgmentLease || _plan.ValidUntilUnixSeconds <= now.ToUnixTimeSeconds()) return null;
             var valid = DateTimeOffset.FromUnixTimeSeconds(_plan.ValidUntilUnixSeconds);
             var heartbeatUntil = now.Add(acknowledgmentLease - elapsed);
             return new(checked((long)_plan.Generation), valid < heartbeatUntil ? valid : heartbeatUntil, _bootstrap.Controller!.Domain, _bootstrap.HttpPort, _bootstrap.HttpsPort);
@@ -100,6 +103,7 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
         try
         {
             var prior = Read(_bootstrap.GatewayId);
+            if (!prior.ServingPending && _bootstrap.Controller!.Acme.Enabled && PrivateCertificateFile.IsAbsent(_bootstrap.Controller.ServingCertificatePath) && prior.ValidUntilUnixSeconds > _clock.GetUtcNow().ToUnixTimeSeconds()) return;
             var publicMaterialChanged = PublicMaterialChanged(prior, _bootstrap.Controller!);
             if (!publicMaterialChanged && prior.ValidUntilUnixSeconds > _clock.GetUtcNow().AddDays(_bootstrap.Controller!.ServingPlan.RenewalLeadDays).ToUnixTimeSeconds()) return;
             using var issuer = _authority.PublicCertificate;
@@ -129,22 +133,27 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
         string.Equals(plan.ServingTrustMode.Length == 0 ? "site-ca" : plan.ServingTrustMode, trust.Mode, StringComparison.Ordinal) &&
         string.Equals(plan.ServingRootFingerprint, trust.RootFingerprint, StringComparison.Ordinal);
 
-    private static bool PublicMaterialChanged(PresentationPlan plan, ControllerBootstrap controller) =>
-        !string.Equals(controller.ServingTrust.Mode, "site-ca", StringComparison.Ordinal) &&
-        !plan.Certificates[0].Pfx.Span.SequenceEqual(PrivateCertificateFile.Read(controller.ServingCertificatePath));
+    private static bool PublicMaterialChanged(PresentationPlan plan, ControllerBootstrap controller)
+    {
+        if (string.Equals(controller.ServingTrust.Mode, "site-ca", StringComparison.Ordinal)) return false;
+        if (controller.Acme.Enabled && PrivateCertificateFile.IsAbsent(controller.ServingCertificatePath)) return false;
+        return plan.ServingPending || !plan.Certificates[0].Pfx.Span.SequenceEqual(PrivateCertificateFile.Read(controller.ServingCertificatePath));
+    }
 
     private static PresentationPlan BuildPlan(ApplicationBootstrap bootstrap, LocalSiteCertificateAuthority authority, ulong generation)
     {
         var controller = bootstrap.Controller ?? throw new InvalidOperationException("Controller configuration is missing.");
-        var serving = ReadServingCertificate(bootstrap, authority);
+        var pending = controller.Acme.Enabled && PrivateCertificateFile.IsAbsent(controller.ServingCertificatePath);
+        var serving = pending ? new ServingCertificate { CertificateId = "site", HostNames = { "*." + controller.Domain, "register." + controller.Domain } } : ReadServingCertificate(bootstrap, authority);
         using var enrollment = authority.IssueEnrollmentGateway(controller.Domain, [bootstrap.IngressAddress], controller.ServingPlan.LeafLifetimeDays);
         using var root = authority.PublicCertificate;
         var plan = new PresentationPlan
         {
             Version = 1, SiteId = bootstrap.SiteId, GatewayId = bootstrap.GatewayId, Generation = generation,
             AcknowledgmentLeaseSeconds = checked((uint)controller.ServingPlan.AcknowledgmentLeaseSeconds), LeafLifetimeDays = checked((uint)controller.ServingPlan.LeafLifetimeDays),
-            EnrollmentCaDer = ByteString.CopyFrom(root.RawData), ValidUntilUnixSeconds = Math.Min(serving.NotAfterUnixSeconds, new DateTimeOffset(enrollment.NotAfter.ToUniversalTime()).ToUnixTimeSeconds()),
+            EnrollmentCaDer = ByteString.CopyFrom(root.RawData), ValidUntilUnixSeconds = pending ? new DateTimeOffset(enrollment.NotAfter.ToUniversalTime()).ToUnixTimeSeconds() : Math.Min(serving.NotAfterUnixSeconds, new DateTimeOffset(enrollment.NotAfter.ToUniversalTime()).ToUnixTimeSeconds()),
             ServingTrustMode = controller.ServingTrust.Mode, ServingRootFingerprint = controller.ServingTrust.RootFingerprint,
+            ServingPending = pending,
         };
         plan.Certificates.Add(serving);
         plan.Certificates.Add(new ServingCertificate { CertificateId = "enrollment", Pfx = ByteString.CopyFrom(enrollment.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12)),

@@ -383,3 +383,41 @@ Mk8.Drava.Configuration.ControllerBootstrap.ServingTrust.get -> Mk8.Drava.Config
 Mk8.Drava.Configuration.ControllerBootstrap.ServingTrust.init -> void
 Mk8.Drava.Configuration.ControllerBootstrap.ServingCertificatePath.get -> string!
 Mk8.Drava.Configuration.ControllerBootstrap.ServingCertificatePath.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings
+Mk8.Drava.Configuration.AcmeIssuanceSettings.AcmeIssuanceSettings() -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.<Clone>$() -> Mk8.Drava.Configuration.AcmeIssuanceSettings!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.Equals(Mk8.Drava.Configuration.AcmeIssuanceSettings? other) -> bool
+Mk8.Drava.Configuration.AcmeIssuanceSettings.Validate(Mk8.Drava.Configuration.ServingTrustSettings! servingTrust, Mk8.Drava.Configuration.DnsPublicationSettings! dns) -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.Enabled.get -> bool
+Mk8.Drava.Configuration.AcmeIssuanceSettings.Enabled.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.DirectoryUrl.get -> System.Uri!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.DirectoryUrl.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.AccountKeyPath.get -> string!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.AccountKeyPath.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.CleanupJournalPath.get -> string!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.CleanupJournalPath.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.ContactEmails.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.ContactEmails.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.TermsAccepted.get -> bool
+Mk8.Drava.Configuration.AcmeIssuanceSettings.TermsAccepted.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.PinnedServingRootPath.get -> string!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.PinnedServingRootPath.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.RequestTimeoutSeconds.get -> int
+Mk8.Drava.Configuration.AcmeIssuanceSettings.RequestTimeoutSeconds.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.OperationTimeoutSeconds.get -> int
+Mk8.Drava.Configuration.AcmeIssuanceSettings.OperationTimeoutSeconds.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.PollIntervalSeconds.get -> int
+Mk8.Drava.Configuration.AcmeIssuanceSettings.PollIntervalSeconds.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.CleanupTimeoutSeconds.get -> int
+Mk8.Drava.Configuration.AcmeIssuanceSettings.CleanupTimeoutSeconds.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.CheckIntervalSeconds.get -> int
+Mk8.Drava.Configuration.AcmeIssuanceSettings.CheckIntervalSeconds.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.RetryAfterSeconds.get -> int
+Mk8.Drava.Configuration.AcmeIssuanceSettings.RetryAfterSeconds.init -> void
+override Mk8.Drava.Configuration.AcmeIssuanceSettings.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.AcmeIssuanceSettings.GetHashCode() -> int
+override Mk8.Drava.Configuration.AcmeIssuanceSettings.ToString() -> string!
+static Mk8.Drava.Configuration.AcmeIssuanceSettings.operator !=(Mk8.Drava.Configuration.AcmeIssuanceSettings? left, Mk8.Drava.Configuration.AcmeIssuanceSettings? right) -> bool
+static Mk8.Drava.Configuration.AcmeIssuanceSettings.operator ==(Mk8.Drava.Configuration.AcmeIssuanceSettings? left, Mk8.Drava.Configuration.AcmeIssuanceSettings? right) -> bool
+Mk8.Drava.Configuration.ControllerBootstrap.Acme.get -> Mk8.Drava.Configuration.AcmeIssuanceSettings!
+Mk8.Drava.Configuration.ControllerBootstrap.Acme.init -> void

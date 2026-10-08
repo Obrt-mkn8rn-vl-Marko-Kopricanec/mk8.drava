@@ -130,9 +130,9 @@ internal sealed class GatewayMaterialState : IDisposable
     internal sealed class MaterialLease(GatewayMaterialState owner, Entry? entry) : IDisposable
     {
         private Entry? _entry = entry;
-        public X509Certificate2? Certificate => _entry?.Material.ServingCertificate;
+        public X509Certificate2? Certificate => _entry?.Material is { HasServingCertificate: true } material ? material.ServingCertificate : null;
         public X509Certificate2? EnrollmentCertificate => _entry?.Material.EnrollmentCertificate;
-        public SslStreamCertificateContext? ServingContext => _entry?.Material.ServingContext;
+        public SslStreamCertificateContext? ServingContext => _entry?.Material is { HasServingCertificate: true } material ? material.ServingContext : null;
         public SslStreamCertificateContext? EnrollmentContext => _entry?.Material.EnrollmentContext;
         public void Dispose() { var owned = Interlocked.Exchange(ref _entry, null); if (owned is not null) owner.Release(owned); }
     }

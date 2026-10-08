@@ -163,6 +163,7 @@ message PresentationPlan {
   uint32 leaf_lifetime_days = 11;
   string serving_trust_mode = 12;
   string serving_root_fingerprint = 13;
+  bool serving_pending = 14;
 }
 message PlanAcknowledgment {
   uint32 version = 1;

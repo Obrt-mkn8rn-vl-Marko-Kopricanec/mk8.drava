@@ -9,6 +9,7 @@ namespace Mk8.Drava.Presentation.Certificates;
 public sealed class GatewayServingMaterial : IDisposable
 {
     private readonly ValidatedServingPlan _material;
+    public bool HasServingCertificate => _material.HasServingCertificate;
     public X509Certificate2 ServingCertificate => _material.ServingCertificate;
     public X509Certificate2 EnrollmentCertificate => _material.EnrollmentCertificate;
     public SslStreamCertificateContext ServingContext => _material.ServingContext;

@@ -4,6 +4,13 @@ public static class PrivateCertificateFile
 {
     public static byte[] Read(string path) => ReadProtected(path, 128, 65536);
 
+    public static bool IsAbsent(string path)
+    {
+        ValidatePath(path);
+        if (Directory.Exists(path)) throw new InvalidDataException("Private material requires a file path.");
+        return !File.Exists(path);
+    }
+
     internal static byte[] ReadProtected(string path, int minimumBytes, int maximumBytes)
     {
         ValidatePath(path);

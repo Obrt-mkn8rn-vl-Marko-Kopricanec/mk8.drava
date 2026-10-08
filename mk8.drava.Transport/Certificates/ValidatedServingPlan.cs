@@ -11,11 +11,12 @@ namespace Mk8.Drava.Transport.Certificates;
 public sealed class ValidatedServingPlan : IDisposable
 {
     private readonly X509Certificate2 _root;
-    private readonly ServerCertificateBundle _serving;
+    private readonly ServerCertificateBundle? _serving;
     private readonly ServerCertificateBundle _enrollment;
-    public X509Certificate2 ServingCertificate => _serving.Certificate;
+    public bool HasServingCertificate => _serving is not null;
+    public X509Certificate2 ServingCertificate => (_serving ?? throw new InvalidOperationException("Serving certificate issuance is pending.")).Certificate;
     public X509Certificate2 EnrollmentCertificate => _enrollment.Certificate;
-    public SslStreamCertificateContext ServingContext => _serving.Context;
+    public SslStreamCertificateContext ServingContext => (_serving ?? throw new InvalidOperationException("Serving certificate issuance is pending.")).Context;
     public SslStreamCertificateContext EnrollmentContext => _enrollment.Context;
     private readonly PresentationPlan _plan;
     private readonly TimeProvider _clock;
@@ -34,6 +35,8 @@ public sealed class ValidatedServingPlan : IDisposable
             !string.Equals(plan.ServingRootFingerprint, bootstrap.ServingTrust.RootFingerprint, StringComparison.Ordinal) ||
             plan.Certificates.Count == 1 && !string.Equals(recordedMode, "site-ca", StringComparison.Ordinal))
             throw new InvalidDataException("Gateway plan changes its approved serving trust or lacks separate private listener material.");
+        if (plan.ServingPending && (string.Equals(recordedMode, "site-ca", StringComparison.Ordinal) || plan.Certificates.Count != 2))
+            throw new InvalidDataException("Pending public serving requires a separate private listener certificate.");
         if (plan.Version != 1 || plan.Generation is < 1 or > long.MaxValue || !PresentationPlanDigest.Verify(plan) || (requireCurrent && plan.ValidUntilUnixSeconds <= clock.GetUtcNow().ToUnixTimeSeconds()) || plan.CalculateSize() > 128 * 1024 ||
             !string.Equals(plan.SiteId, bootstrap.SiteId, StringComparison.Ordinal) || !string.Equals(plan.GatewayId, bootstrap.GatewayId, StringComparison.Ordinal) ||
             plan.Certificates.Count is < 1 or > 2 || plan.EnrollmentCaDer.Length is < 128 or > 16384)
@@ -41,17 +44,28 @@ public sealed class ValidatedServingPlan : IDisposable
         if (plan.AcknowledgmentLeaseSeconds != 0 && plan.AcknowledgmentLeaseSeconds is < 5 or > 300 ||
             plan.LeafLifetimeDays != 0 && plan.LeafLifetimeDays is < 2 or > 90)
             throw new InvalidDataException("Gateway plan contains invalid acknowledgment or certificate policy.");
-        foreach (var certificate in plan.Certificates)
+        for (var index = 0; index < plan.Certificates.Count; index++)
+        {
+            var certificate = plan.Certificates[index];
+            if (plan.ServingPending && index == 0)
+            {
+                RequirePendingDescriptor(certificate);
+                continue;
+            }
             if (certificate.Pfx.Length is < 128 or > 65536 || certificate.PfxPassword.Length > 256)
                 throw new InvalidDataException("Gateway certificate material exceeds its bound.");
+        }
         ValidateListeners(plan, bootstrap);
         _root = X509CertificateLoader.LoadCertificate(plan.EnrollmentCaDer.Span);
         try
         {
             if (!string.Equals(_root.GetCertHashString(HashAlgorithmName.SHA256), bootstrap.EnrollmentRootFingerprint, StringComparison.Ordinal))
                 throw new InvalidDataException("Gateway plan enrollment root differs from its bootstrap trust.");
-            _serving = ServerCertificateBundle.Load(plan.Certificates[0], bootstrap.ServingTrust, _root, clock, requireCurrent);
-            ValidateNamesAndLifetime(plan, ServingCertificate);
+            if (!plan.ServingPending)
+            {
+                _serving = ServerCertificateBundle.Load(plan.Certificates[0], bootstrap.ServingTrust, _root, clock, requireCurrent);
+                ValidateNamesAndLifetime(plan, ServingCertificate);
+            }
             _enrollment = ReadEnrollmentCertificate(plan, bootstrap);
             _plan = plan.Clone();
         }
@@ -79,7 +93,7 @@ public sealed class ValidatedServingPlan : IDisposable
     private ServerCertificateBundle ReadEnrollmentCertificate(PresentationPlan plan, GatewayBootstrap bootstrap)
     {
         // Legacy material can be recovered while Application migrates it to distinct keys at a new generation.
-        if (plan.Certificates.Count == 1) return _serving;
+        if (plan.Certificates.Count == 1) return _serving ?? throw new InvalidDataException("Legacy serving material is absent.");
         var material = plan.Certificates[1];
         var domain = plan.Certificates[0].HostNames[0][2..];
         if (!string.Equals(material.CertificateId, "enrollment", StringComparison.Ordinal) || material.HostNames.Count != 2 ||
@@ -95,7 +109,7 @@ public sealed class ValidatedServingPlan : IDisposable
                 certificate.MatchesHostname("probe." + domain, allowWildcards: true, allowCommonName: false) ||
                 material.NotAfterUnixSeconds != new DateTimeOffset(certificate.NotAfter.ToUniversalTime()).ToUnixTimeSeconds() ||
                 plan.ValidUntilUnixSeconds > material.NotAfterUnixSeconds ||
-                certificate.PublicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(ServingCertificate.PublicKey.ExportSubjectPublicKeyInfo()))
+                _serving is not null && certificate.PublicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(_serving.Certificate.PublicKey.ExportSubjectPublicKeyInfo()))
                 throw new InvalidDataException("Gateway private listener names, expiry or key separation are invalid.");
             EnrollmentCertificateScope.Require(certificate, material.HostNames, bootstrap.BindAddress);
             return bundle;
@@ -140,6 +154,15 @@ public sealed class ValidatedServingPlan : IDisposable
             serving.NotAfterUnixSeconds != new DateTimeOffset(certificate.NotAfter.ToUniversalTime()).ToUnixTimeSeconds() ||
             plan.ValidUntilUnixSeconds > serving.NotAfterUnixSeconds)
             throw new InvalidDataException("Gateway serving names or expiry differ from its certificate.");
+    }
+
+    private static void RequirePendingDescriptor(ServingCertificate descriptor)
+    {
+        if (!string.Equals(descriptor.CertificateId, "site", StringComparison.Ordinal) || descriptor.Pfx.Length != 0 || descriptor.PfxPassword.Length != 0 ||
+            descriptor.NotAfterUnixSeconds != 0 || descriptor.HostNames.Count != 2 || !descriptor.HostNames[0].StartsWith("*.", StringComparison.Ordinal) ||
+            !string.Equals(descriptor.HostNames[1], "register." + descriptor.HostNames[0][2..], StringComparison.Ordinal))
+            throw new InvalidDataException("Pending serving descriptor has material or an invalid site scope.");
+        new DnsPublicationSettings().Validate(descriptor.HostNames[0][2..]);
     }
 
     private static void ValidateListeners(PresentationPlan plan, GatewayBootstrap bootstrap)

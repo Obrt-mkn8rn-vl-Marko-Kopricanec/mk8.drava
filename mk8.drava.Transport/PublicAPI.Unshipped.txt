@@ -1048,6 +1048,10 @@ const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.AcknowledgmentLeaseSecond
 const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.LeafLifetimeDaysFieldNumber = 11 -> int
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.ServingContext.get -> System.Net.Security.SslStreamCertificateContext!
 Mk8.Drava.Transport.Certificates.ValidatedServingPlan.EnrollmentContext.get -> System.Net.Security.SslStreamCertificateContext!
+Mk8.Drava.Transport.Certificates.ValidatedServingPlan.HasServingCertificate.get -> bool
+const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingPendingFieldNumber = 14 -> int
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingPending.get -> bool
+Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingPending.set -> void
 Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingTrustMode.get -> string!
 Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingTrustMode.set -> void
 const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingTrustModeFieldNumber = 12 -> int

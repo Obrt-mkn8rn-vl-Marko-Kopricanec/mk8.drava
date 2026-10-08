@@ -15,6 +15,7 @@ public sealed record ControllerBootstrap
     public ServingPlanSettings ServingPlan { get; init; } = new();
     public ServingTrustSettings ServingTrust { get; init; } = new();
     public string ServingCertificatePath { get; init; } = "";
+    public AcmeIssuanceSettings Acme { get; init; } = new();
 
     public void Validate()
     {
@@ -29,6 +30,14 @@ public sealed record ControllerBootstrap
                 if (character is not (>= 'a' and <= 'z') and not (>= '0' and <= '9') and not '-') throw new InvalidDataException("Site domain requires canonical ASCII labels.");
         }
         DnsPublication.Validate(Domain);
+        Acme.Validate(ServingTrust, DnsPublication);
+        if (Acme.Enabled)
+        {
+            var paths = new[] { CertificateAuthorityPath, ServingCertificatePath, Acme.AccountKeyPath, Acme.CleanupJournalPath, Acme.PinnedServingRootPath };
+            var unique = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            foreach (var path in paths)
+                if (path.Length != 0 && !unique.Add(Path.GetFullPath(path))) throw new InvalidDataException("Automatic issuance material and private enrollment require distinct files.");
+        }
         if (!Path.IsPathFullyQualified(CertificateAuthorityPath)) throw new InvalidDataException("Site issuer path must be absolute.");
         if (EnrollmentRootFingerprint.Length != 64) throw new InvalidDataException("Site issuer requires its enrolled SHA-256 fingerprint.");
         foreach (var character in EnrollmentRootFingerprint)
