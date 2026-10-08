@@ -178,13 +178,13 @@ public static class Http3RequestTranslator
 
         if (authority[0] == '[')
         {
-            var bracket = authority.IndexOf(']');
+            var bracket = authority.IndexOf(']', StringComparison.Ordinal);
             if (bracket <= 1 || bracket + 1 != portSeparator)
             {
                 return false;
             }
         }
-        else if (authority.IndexOf(':') != portSeparator)
+        else if (authority.IndexOf(':', StringComparison.Ordinal) != portSeparator)
         {
             return false;
         }

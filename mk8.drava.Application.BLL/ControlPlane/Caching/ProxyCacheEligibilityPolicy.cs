@@ -206,7 +206,7 @@ public static partial class ProxyCacheEligibilityPolicy
 
             foreach (var part in header.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {
-                var equals = part.IndexOf('=');
+                var equals = part.IndexOf('=', StringComparison.Ordinal);
                 if (equals < 0)
                 {
                     directives[part] = null;

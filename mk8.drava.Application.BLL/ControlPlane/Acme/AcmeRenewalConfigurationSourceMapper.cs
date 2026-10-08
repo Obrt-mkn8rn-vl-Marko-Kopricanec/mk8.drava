@@ -30,6 +30,6 @@ public static class AcmeRenewalConfigurationSourceMapper
             return null;
         }
 
-        return new AcmeRenewalActiveCertificate(certificate.Certificate.NotBefore.ToUniversalTime(), certificate.Certificate.NotAfter.ToUniversalTime());
+        return new AcmeRenewalActiveCertificate(new DateTimeOffset(certificate.Certificate.NotBefore.ToUniversalTime()), new DateTimeOffset(certificate.Certificate.NotAfter.ToUniversalTime()));
     }
 }

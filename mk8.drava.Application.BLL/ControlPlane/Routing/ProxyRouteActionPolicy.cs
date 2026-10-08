@@ -39,7 +39,7 @@ public sealed class ProxyRouteActionPolicy
         if (redirect.PreserveQuery)
         {
             var query = ExtractQuery(requestTarget);
-            if (!string.IsNullOrEmpty(query) && !location.Contains('?'))
+            if (!string.IsNullOrEmpty(query) && !location.Contains('?', StringComparison.Ordinal))
             {
                 location += query;
             }
@@ -55,7 +55,7 @@ public sealed class ProxyRouteActionPolicy
 
     private static string ExtractQuery(string target)
     {
-        var queryIndex = target.IndexOf('?');
+        var queryIndex = target.IndexOf('?', StringComparison.Ordinal);
         return queryIndex < 0 ? "" : target[queryIndex..];
     }
 

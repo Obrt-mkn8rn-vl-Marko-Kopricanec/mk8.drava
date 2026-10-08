@@ -21,7 +21,7 @@ public sealed class PathRewritePolicy
 
     private static string RewriteTarget(string target, string oldPrefix, string newPrefix)
     {
-        var queryIndex = target.IndexOf('?');
+        var queryIndex = target.IndexOf('?', StringComparison.Ordinal);
         var path = queryIndex < 0 ? target : target[..queryIndex];
         var query = queryIndex < 0 ? "" : target[queryIndex..];
         var remainder = path[oldPrefix.Length..];

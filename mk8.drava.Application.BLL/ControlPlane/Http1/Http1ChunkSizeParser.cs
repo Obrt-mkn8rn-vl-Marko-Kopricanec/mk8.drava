@@ -17,7 +17,7 @@ public static class Http1ChunkSizeParser
             return false;
         }
 
-        foreach (var value in sizeBytes)
+        foreach (ref readonly var value in sizeBytes)
         {
             var digit = HexValue(value);
             if (digit < 0)

@@ -60,7 +60,7 @@ public static class ProxyAdminAuthenticationPolicy
 
     private static string? ReadApiKey(IReadOnlyList<string> values)
     {
-        var value = values.FirstOrDefault();
+        var value = values.Count == 0 ? null : values[0];
         if (string.IsNullOrWhiteSpace(value))
         {
             return null;

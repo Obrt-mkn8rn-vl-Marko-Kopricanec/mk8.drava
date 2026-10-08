@@ -102,7 +102,7 @@ public sealed class ForwardedHeadersPolicy
 
     private static string FormatForwardedFor(string value)
     {
-        return value.Contains(":", StringComparison.Ordinal) && !value.StartsWith('[') ? $"[{value}]" : value;
+        return value.Contains(':', StringComparison.Ordinal) && !value.StartsWith('[') ? $"[{value}]" : value;
     }
 
     private static string QuoteForwardedValue(string value)

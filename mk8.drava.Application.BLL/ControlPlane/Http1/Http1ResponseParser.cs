@@ -179,7 +179,7 @@ public static partial class Http1ResponseParser
             return false;
         }
 
-        foreach (var digit in bytes)
+        foreach (ref readonly var digit in bytes)
         {
             if (digit is < (byte)'0' or > (byte)'9')
             {

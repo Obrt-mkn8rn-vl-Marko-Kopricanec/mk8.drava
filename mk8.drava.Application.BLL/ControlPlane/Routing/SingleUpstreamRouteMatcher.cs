@@ -43,7 +43,7 @@ public sealed class SingleUpstreamRouteMatcher : IRouteMatcher
     private static string StripSimplePort(string host)
     {
         var colonIndex = host.LastIndexOf(':');
-        if (colonIndex <= 0 || host.Contains(']'))
+        if (colonIndex <= 0 || host.Contains(']', StringComparison.Ordinal))
         {
             return host;
         }

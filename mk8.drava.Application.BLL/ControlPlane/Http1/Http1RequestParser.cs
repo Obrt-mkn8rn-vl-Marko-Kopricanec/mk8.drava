@@ -238,7 +238,7 @@ public static partial class Http1RequestParser
 
     private static string ExtractPath(string target)
     {
-        var queryIndex = target.IndexOf('?');
+        var queryIndex = target.IndexOf('?', StringComparison.Ordinal);
         return queryIndex < 0 ? target : target[..queryIndex];
     }
 
@@ -314,7 +314,7 @@ public static partial class Http1RequestParser
             return false;
         }
 
-        foreach (var digit in bytes)
+        foreach (ref readonly var digit in bytes)
         {
             if (digit is < (byte)'0' or > (byte)'9')
             {
