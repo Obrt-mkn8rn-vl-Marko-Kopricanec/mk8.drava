@@ -757,61 +757,89 @@ public sealed partial class ProxyForwarder
         var responseStarted = false;
         var informationalCount = 0;
         Stream responseInput = upstreamStream;
-        while (true)
+        List<PrefixReadStream>? prefixes = null;
+        try
         {
-            var responseHeadRead = await Http1UpstreamResponseHeadReader.ReadAsync(responseInput, listener.MaxResponseHeadBytes, timeouts.UpstreamResponseHeadTimeout, _metrics, cancellationToken).ConfigureAwait(false);
-            if (!responseHeadRead.HasReadableHead)
+            while (true)
             {
-                throw new Http1UpstreamProtocolException("Upstream closed before a complete response head was received.");
-            }
-
-            if (!Http1ResponseParser.TryParse(responseHeadRead.HeadBytes.Span, requestHead.Method, out var responseHead, out var error))
-            {
-                throw new Http1UpstreamProtocolException($"Upstream response head was invalid: {error}.");
-            }
-
-            var upstreamWantsClose = HopByHopHeaderPolicy.HasConnectionToken(responseHead.Headers, "close");
-            var keepClientConnectionOpen = preferClientKeepAlive && responseHead.Framing.Kind != Http1BodyKind.CloseDelimited;
-            initialBodyBytes = responseHeadRead.InitialBodyBytes;
-            if (!Http1ResponseParser.IsInformational(responseHead))
-            {
-                finalResponseReceived?.Invoke(responseHead.StatusCode);
-                if (ProxyRetryPolicy.ShouldSuppressRetryableStatusResponse(ProxyRetryRuntimeMapper.ToOutcomeInput(route.Retry), responseHead.StatusCode, suppressRetryableStatusResponse))
+                var responseHeadRead = await Http1UpstreamResponseHeadReader.ReadAsync(responseInput, listener.MaxResponseHeadBytes, timeouts.UpstreamResponseHeadTimeout, _metrics, cancellationToken).ConfigureAwait(false);
+                var responseHead = ParseUpstreamResponseHead(responseHeadRead, requestHead.Method);
+                var upstreamWantsClose = HopByHopHeaderPolicy.HasConnectionToken(responseHead.Headers, "close");
+                var keepClientConnectionOpen = preferClientKeepAlive && responseHead.Framing.Kind != Http1BodyKind.CloseDelimited;
+                initialBodyBytes = responseHeadRead.InitialBodyBytes;
+                if (!Http1ResponseParser.IsInformational(responseHead))
                 {
-                    return CreateRetrySuppressedResult(responseHead.StatusCode);
-                }
-
-                var responseHeaders = BuildResponseHeaders(responseHead, route);
-                var bodyReader = new Http1BodyReader(responseInput, initialBodyBytes, _metrics, timeouts.UpstreamResponseBodyIdleTimeout, ProxyTimeoutKind.UpstreamResponseBodyIdle);
-                if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
-                {
-                    var body = await ReadCacheCandidateBodyAsync(bodyReader, responseHead, listener, cancellationToken).ConfigureAwait(false);
-                    await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body, keepClientConnectionOpen, requestId, () =>
+                    finalResponseReceived?.Invoke(responseHead.StatusCode);
+                    if (ProxyRetryPolicy.ShouldSuppressRetryableStatusResponse(ProxyRetryRuntimeMapper.ToOutcomeInput(route.Retry), responseHead.StatusCode, suppressRetryableStatusResponse))
                     {
+                        return CreateRetrySuppressedResult(responseHead.StatusCode);
+                    }
+
+                    var responseHeaders = BuildResponseHeaders(responseHead, route);
+                    var bodyReader = new Http1BodyReader(responseInput, initialBodyBytes, _metrics, timeouts.UpstreamResponseBodyIdleTimeout, ProxyTimeoutKind.UpstreamResponseBodyIdle);
+                    if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
+                    {
+                        var body = await ReadCacheCandidateBodyAsync(bodyReader, responseHead, listener, cancellationToken).ConfigureAwait(false);
+                        await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body, keepClientConnectionOpen, requestId, () =>
+                        {
+                            responseStarted = true;
+                            markResponseStarted();
+                        }, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        RecordUncacheableFraming(route.Cache, responseHead);
+                        await WriteResponseHeadAsync(clientStream, responseHead, responseHeaders, timeouts, keepClientConnectionOpen, requestId, listener, cancellationToken).ConfigureAwait(false);
                         responseStarted = true;
                         markResponseStarted();
-                    }, cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    RecordUncacheableFraming(route.Cache, responseHead);
-                    await WriteResponseHeadAsync(clientStream, responseHead, responseHeaders, timeouts, keepClientConnectionOpen, requestId, listener, cancellationToken).ConfigureAwait(false);
-                    responseStarted = true;
-                    markResponseStarted();
-                    await RelayResponseBodyAsync(bodyReader, clientStream, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
+                        await RelayResponseBodyAsync(bodyReader, clientStream, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    var canReuseUpstream = !upstreamWantsClose && responseHead.Framing.Kind != Http1BodyKind.CloseDelimited && !bodyReader.HasBufferedBytes;
+                    return new ResponseForwardingResult(responseStarted, keepClientConnectionOpen, canReuseUpstream, responseHead.StatusCode);
                 }
 
-                var canReuseUpstream = !upstreamWantsClose && responseHead.Framing.Kind != Http1BodyKind.CloseDelimited && !bodyReader.HasBufferedBytes;
-                return new ResponseForwardingResult(responseStarted, keepClientConnectionOpen, canReuseUpstream, responseHead.StatusCode);
+                if (++informationalCount > 8) throw new Http1UpstreamProtocolException("Too many informational responses.");
+                var informationalHeaders = BuildResponseHeaders(responseHead, route);
+                await WriteResponseHeadAsync(clientStream, responseHead, informationalHeaders, timeouts, keepClientConnectionOpen, requestId, listener, cancellationToken).ConfigureAwait(false);
+                responseStarted = true;
+                markResponseStarted();
+                if (!initialBodyBytes.IsEmpty) responseInput = PrependResponseBytes(responseInput, initialBodyBytes, ref prefixes);
             }
-
-            if (++informationalCount > 8) throw new Http1UpstreamProtocolException("Too many informational responses.");
-            var informationalHeaders = BuildResponseHeaders(responseHead, route);
-            await WriteResponseHeadAsync(clientStream, responseHead, informationalHeaders, timeouts, keepClientConnectionOpen, requestId, listener, cancellationToken).ConfigureAwait(false);
-            responseStarted = true;
-            markResponseStarted();
-            if (!initialBodyBytes.IsEmpty) responseInput = new PrefixReadStream(responseInput, initialBodyBytes);
         }
+        finally
+        {
+            await DisposeResponsePrefixesAsync(prefixes).ConfigureAwait(false);
+        }
+    }
+
+    private static Http1ResponseHead ParseUpstreamResponseHead(Http1HeadReadResult headRead, string requestMethod)
+    {
+        if (!headRead.HasReadableHead)
+        {
+            throw new Http1UpstreamProtocolException("Upstream closed before a complete response head was received.");
+        }
+
+        if (!Http1ResponseParser.TryParse(headRead.HeadBytes.Span, requestMethod, out var responseHead, out var error))
+        {
+            throw new Http1UpstreamProtocolException($"Upstream response head was invalid: {error}.");
+        }
+
+        return responseHead;
+    }
+
+    private static PrefixReadStream PrependResponseBytes(Stream input, ReadOnlyMemory<byte> bytes, ref List<PrefixReadStream>? prefixes)
+    {
+        var prefix = new PrefixReadStream(input, bytes);
+        (prefixes ??= []).Add(prefix);
+        return prefix;
+    }
+
+    private static async ValueTask DisposeResponsePrefixesAsync(List<PrefixReadStream>? prefixes)
+    {
+        if (prefixes is null) return;
+        for (var index = prefixes.Count - 1; index >= 0; index--)
+            await prefixes[index].DisposeAsync().ConfigureAwait(false);
     }
 
     private async ValueTask WriteResponseHeadAsync(Stream clientStream, Http1ResponseHead responseHead, IReadOnlyList<ProxyHeaderField> responseHeaders, RuntimeTimeouts timeouts, bool keepClientConnectionOpen, string requestId, RuntimeListener listener, CancellationToken cancellationToken)
