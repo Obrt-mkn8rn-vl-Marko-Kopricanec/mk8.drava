@@ -121,6 +121,26 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
 
     public void Dispose() { if (Interlocked.Exchange(ref _disposed, 1) == 0) _renewal.Dispose(); }
 
+    public async ValueTask PublishIssuedCertificateAsync(ReadOnlyMemory<byte> issued, CancellationToken cancellationToken)
+    {
+        var controller = _bootstrap.Controller!;
+        if (!controller.Acme.Enabled || string.Equals(controller.ServingTrust.Mode, "site-ca", StringComparison.Ordinal))
+            throw new InvalidOperationException("Public issuance requires the explicit owner ACME policy.");
+        await _renewal.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var prior = Read(_bootstrap.GatewayId);
+            var serving = AcmeServingCertificateCandidate.Prepare(issued, controller);
+            var plan = BuildPlan(_bootstrap, _authority, checked(prior.Generation + 1), serving);
+            using var validated = new ValidatedServingPlan(plan, GatewayScope(_bootstrap), _clock, requireCurrent: true);
+            await PrivateCertificateFile.ReplaceAsync(controller.ServingCertificatePath, serving.Pfx.Memory, cancellationToken).ConfigureAwait(false);
+            await GatewayMaterialStore.WriteAsync(_bootstrap.StateDirectory, plan.ToByteArray(), cancellationToken).ConfigureAwait(false);
+            lock (_gate) { _plan = plan; _acknowledged = false; }
+        }
+        finally { _renewal.Release(); }
+    }
+
     private static GatewayBootstrap GatewayScope(ApplicationBootstrap bootstrap) => new()
     {
         SiteId = bootstrap.SiteId, GatewayId = bootstrap.GatewayId, BindAddress = bootstrap.IngressAddress,
@@ -140,11 +160,11 @@ internal sealed class ServingPlanState : IGatewayPublicationSource, IDisposable
         return plan.ServingPending || !plan.Certificates[0].Pfx.Span.SequenceEqual(PrivateCertificateFile.Read(controller.ServingCertificatePath));
     }
 
-    private static PresentationPlan BuildPlan(ApplicationBootstrap bootstrap, LocalSiteCertificateAuthority authority, ulong generation)
+    private static PresentationPlan BuildPlan(ApplicationBootstrap bootstrap, LocalSiteCertificateAuthority authority, ulong generation, ServingCertificate? issued = null)
     {
         var controller = bootstrap.Controller ?? throw new InvalidOperationException("Controller configuration is missing.");
-        var pending = controller.Acme.Enabled && PrivateCertificateFile.IsAbsent(controller.ServingCertificatePath);
-        var serving = pending ? new ServingCertificate { CertificateId = "site", HostNames = { "*." + controller.Domain, "register." + controller.Domain } } : ReadServingCertificate(bootstrap, authority);
+        var pending = issued is null && controller.Acme.Enabled && PrivateCertificateFile.IsAbsent(controller.ServingCertificatePath);
+        var serving = issued ?? (pending ? new ServingCertificate { CertificateId = "site", HostNames = { "*." + controller.Domain, "register." + controller.Domain } } : ReadServingCertificate(bootstrap, authority));
         using var enrollment = authority.IssueEnrollmentGateway(controller.Domain, [bootstrap.IngressAddress], controller.ServingPlan.LeafLifetimeDays);
         using var root = authority.PublicCertificate;
         var plan = new PresentationPlan

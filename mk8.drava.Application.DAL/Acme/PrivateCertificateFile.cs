@@ -28,6 +28,9 @@ public static class PrivateCertificateFile
     public static ValueTask WriteNewAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken) =>
         WriteProtectedAsync(path, bytes, overwrite: false, 128, 65536, cancellationToken);
 
+    public static ValueTask ReplaceAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken) =>
+        WriteProtectedAsync(path, bytes, overwrite: true, 128, 65536, cancellationToken);
+
     internal static async ValueTask WriteProtectedAsync(string path, ReadOnlyMemory<byte> bytes, bool overwrite, int minimumBytes, int maximumBytes, CancellationToken cancellationToken)
     {
         ValidatePath(path);
