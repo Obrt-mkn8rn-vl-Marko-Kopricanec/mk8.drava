@@ -95,7 +95,7 @@ public sealed class AcmeCertificateManager
         RuntimeCertificate renewedCertificate;
         try
         {
-            renewedCertificate = _materialWriter.WriteAndLoad(new AcmeCertificateMaterialWriteRequest(input.StoragePath, certificate.Id, certificate.Domains, _dataDirectoryProvider.GetDataDirectory(), attemptStartedAtUtc, issued.PfxBytes));
+            renewedCertificate = await _materialWriter.WriteAndLoadAsync(new AcmeCertificateMaterialWriteRequest(input.StoragePath, certificate.Id, certificate.Domains, _dataDirectoryProvider.GetDataDirectory(), attemptStartedAtUtc, issued.PfxBytes), cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)when (exception is not OperationCanceledException)
         {
@@ -105,13 +105,27 @@ public sealed class AcmeCertificateManager
             return;
         }
 
-        _certificateActivator.Activate(renewedCertificate);
-        _metrics.AcmeRenewalSucceeded();
+        await CompleteActivationAsync(input, certificate, activeCertificate, renewedCertificate, nowUtc, attemptStartedAtUtc, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask CompleteActivationAsync(AcmeRenewalConfigurationInput input, AcmeRenewalCertificateInput certificate, AcmeRenewalActiveCertificate? activeCertificate, RuntimeCertificate renewedCertificate, DateTimeOffset nowUtc, DateTimeOffset attemptStartedAtUtc, CancellationToken cancellationToken)
+    {
         var renewedActiveCertificate = ToActiveCertificate(renewedCertificate);
+        try { await _certificateActivator.ActivateAsync(renewedCertificate, cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) { renewedCertificate.Certificate.Dispose(); throw; }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or System.Security.Cryptography.CryptographicException or InvalidOperationException or ArgumentException)
+        {
+            renewedCertificate.Certificate.Dispose();
+            _metrics.AcmeRenewalFailed();
+            var nextAttempt = attemptStartedAtUtc.AddMinutes(input.RetryAfterMinutes);
+            _statusStore.Upsert(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(exception.Message), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc));
+            return;
+        }
+        _metrics.AcmeRenewalSucceeded();
         _statusStore.Upsert(CreateStatus(certificate, renewedActiveCertificate, nowUtc, "succeeded", null, CalculateRenewalDueAt(renewedActiveCertificate, certificate.RenewBeforeDays), LastAttemptAtUtc: attemptStartedAtUtc, LastSucceededAtUtc: attemptStartedAtUtc));
     }
 
-    private AcmeCertificateLifecycleStatus CreateStatus(AcmeRenewalCertificateInput certificate, AcmeRenewalActiveCertificate? activeCertificate, DateTimeOffset nowUtc, string result, string? errorSummary, DateTimeOffset? nextAttemptNotBeforeUtc, DateTimeOffset? LastAttemptAtUtc = null, DateTimeOffset? LastSucceededAtUtc = null, DateTimeOffset? LastFailedAtUtc = null)
+    private static AcmeCertificateLifecycleStatus CreateStatus(AcmeRenewalCertificateInput certificate, AcmeRenewalActiveCertificate? activeCertificate, DateTimeOffset nowUtc, string result, string? errorSummary, DateTimeOffset? nextAttemptNotBeforeUtc, DateTimeOffset? LastAttemptAtUtc = null, DateTimeOffset? LastSucceededAtUtc = null, DateTimeOffset? LastFailedAtUtc = null)
     {
         var active = activeCertificate is not null;
         var renewalDueAtUtc = CalculateRenewalDueAt(activeCertificate, certificate.RenewBeforeDays);
@@ -130,7 +144,7 @@ public sealed class AcmeCertificateManager
 
     private static AcmeRenewalActiveCertificate ToActiveCertificate(RuntimeCertificate certificate)
     {
-        return new AcmeRenewalActiveCertificate(certificate.Certificate.NotBefore.ToUniversalTime(), certificate.Certificate.NotAfter.ToUniversalTime());
+        return new AcmeRenewalActiveCertificate(new DateTimeOffset(certificate.Certificate.NotBefore.ToUniversalTime()), new DateTimeOffset(certificate.Certificate.NotAfter.ToUniversalTime()));
     }
 
     private static string? SafeError(string? error)
