@@ -54,7 +54,7 @@ public sealed class AcmeCertificateManager
         }
 
         var activeCertificate = certificate.ActiveCertificate;
-        var renewalDueAtUtc = CalculateRenewalDueAt(activeCertificate, certificate.RenewBeforeDays);
+        var renewalDueAtUtc = CalculateRenewalDueAt(activeCertificate, certificate.RenewBeforeDays, certificate.LifetimeAwareRenewal);
         var existingStatus = _statusStore.Get(certificate.Id);
         if (existingStatus?.NextAttemptNotBeforeUtc is not null && existingStatus.NextAttemptNotBeforeUtc > nowUtc && (activeCertificate is null || renewalDueAtUtc <= nowUtc))
         {
@@ -85,7 +85,7 @@ public sealed class AcmeCertificateManager
         if (result is AcmeCertificateIssueResult.FailedResult failed)
         {
             _metrics.AcmeRenewalFailed();
-            var nextAttempt = attemptStartedAtUtc.AddMinutes(input.RetryAfterMinutes);
+            var nextAttempt = attemptStartedAtUtc.Add(input.RetryAfter ?? TimeSpan.FromMinutes(input.RetryAfterMinutes));
             _events.RenewalFailed(certificate.Id, failed.ErrorSummary);
             _statusStore.Upsert(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(failed.ErrorSummary), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc));
             return;
@@ -100,7 +100,7 @@ public sealed class AcmeCertificateManager
         catch (Exception exception)when (exception is not OperationCanceledException)
         {
             _metrics.AcmeRenewalFailed();
-            var nextAttempt = attemptStartedAtUtc.AddMinutes(input.RetryAfterMinutes);
+            var nextAttempt = attemptStartedAtUtc.Add(input.RetryAfter ?? TimeSpan.FromMinutes(input.RetryAfterMinutes));
             _statusStore.Upsert(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(exception.Message), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc));
             return;
         }
@@ -117,29 +117,33 @@ public sealed class AcmeCertificateManager
         {
             renewedCertificate.Certificate.Dispose();
             _metrics.AcmeRenewalFailed();
-            var nextAttempt = attemptStartedAtUtc.AddMinutes(input.RetryAfterMinutes);
+            var nextAttempt = attemptStartedAtUtc.Add(input.RetryAfter ?? TimeSpan.FromMinutes(input.RetryAfterMinutes));
             _statusStore.Upsert(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(exception.Message), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc));
             return;
         }
         _metrics.AcmeRenewalSucceeded();
-        _statusStore.Upsert(CreateStatus(certificate, renewedActiveCertificate, nowUtc, "succeeded", null, CalculateRenewalDueAt(renewedActiveCertificate, certificate.RenewBeforeDays), LastAttemptAtUtc: attemptStartedAtUtc, LastSucceededAtUtc: attemptStartedAtUtc));
+        _statusStore.Upsert(CreateStatus(certificate, renewedActiveCertificate, nowUtc, "succeeded", null, CalculateRenewalDueAt(renewedActiveCertificate, certificate.RenewBeforeDays, certificate.LifetimeAwareRenewal), LastAttemptAtUtc: attemptStartedAtUtc, LastSucceededAtUtc: attemptStartedAtUtc));
     }
 
     private static AcmeCertificateLifecycleStatus CreateStatus(AcmeRenewalCertificateInput certificate, AcmeRenewalActiveCertificate? activeCertificate, DateTimeOffset nowUtc, string result, string? errorSummary, DateTimeOffset? nextAttemptNotBeforeUtc, DateTimeOffset? LastAttemptAtUtc = null, DateTimeOffset? LastSucceededAtUtc = null, DateTimeOffset? LastFailedAtUtc = null)
     {
         var active = activeCertificate is not null;
-        var renewalDueAtUtc = CalculateRenewalDueAt(activeCertificate, certificate.RenewBeforeDays);
+        var renewalDueAtUtc = CalculateRenewalDueAt(activeCertificate, certificate.RenewBeforeDays, certificate.LifetimeAwareRenewal);
         return new AcmeCertificateLifecycleStatus(certificate.Id, certificate.Enabled, certificate.Domains, active, active ? "acme" : "none", active ? activeCertificate!.NotBeforeUtc : null, active ? activeCertificate!.NotAfterUtc : null, active ? renewalDueAtUtc : nowUtc, LastAttemptAtUtc, LastSucceededAtUtc, LastFailedAtUtc, nextAttemptNotBeforeUtc, result, errorSummary);
     }
 
-    private static DateTimeOffset CalculateRenewalDueAt(AcmeRenewalActiveCertificate? certificate, int renewBeforeDays)
+    private static DateTimeOffset CalculateRenewalDueAt(AcmeRenewalActiveCertificate? certificate, int renewBeforeDays, bool lifetimeAware)
     {
         if (certificate is null)
         {
             return DateTimeOffset.MinValue;
         }
 
-        return certificate.NotAfterUtc.AddDays(-renewBeforeDays);
+        if (!lifetimeAware) return certificate.NotAfterUtc.AddDays(-renewBeforeDays);
+        var lifetime = certificate.NotAfterUtc - certificate.NotBeforeUtc;
+        if (lifetime <= TimeSpan.Zero || renewBeforeDays < 1) throw new InvalidDataException("Adaptive renewal requires a positive certificate lifetime and lead time.");
+        var lead = TimeSpan.FromTicks(Math.Min(TimeSpan.FromDays(renewBeforeDays).Ticks, lifetime.Ticks / 3));
+        return certificate.NotAfterUtc.Subtract(lead);
     }
 
     private static AcmeRenewalActiveCertificate ToActiveCertificate(RuntimeCertificate certificate)

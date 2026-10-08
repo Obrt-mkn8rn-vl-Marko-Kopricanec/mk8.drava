@@ -27,6 +27,8 @@ internal sealed class DevelopmentAsyncAcmeLifecycle : IAcmeRenewalConfigurationS
     public AcmeCertificateStatusStore Status { get; } = new();
     public AcmeCertificateManager Manager { get; }
     public AcmeRenewalActiveCertificate? Previous { get; init; }
+    public bool LifetimeAwareRenewal { get; init; }
+    public TimeSpan? RetryAfter { get; init; }
 
     public DevelopmentAsyncAcmeLifecycle()
     {
@@ -38,7 +40,7 @@ internal sealed class DevelopmentAsyncAcmeLifecycle : IAcmeRenewalConfigurationS
     }
 
     public AcmeRenewalConfigurationInputReadResult ReadInput() => AcmeRenewalConfigurationInputReadResult.Available(new AcmeRenewalConfigurationInput(true, "acme", "https://development-ca.example/directory", ["ops@example.org"], true, 5,
-        [new AcmeRenewalCertificateInput("site", true, ["site.example"], 30, Previous)]));
+        [new AcmeRenewalCertificateInput("site", true, ["site.example"], 30, Previous, LifetimeAwareRenewal)], RetryAfter));
     public ValueTask<AcmeCertificateIssueResult> IssueAsync(AcmeCertificateIssueRequest request, AcmeChallengeStore challengeStore, CancellationToken cancellationToken)
     { cancellationToken.ThrowIfCancellationRequested(); Issued++; return ValueTask.FromResult(AcmeCertificateIssueResult.Issued(_pfx)); }
     public void EnsureLayout(string dataDirectory, string storagePath) { }

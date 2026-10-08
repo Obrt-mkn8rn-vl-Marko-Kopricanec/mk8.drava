@@ -3,7 +3,7 @@ using Mk8.Drava.Application.BLL.Configuration;
 namespace Mk8.Drava.Application.BLL.ControlPlane.Acme;
 public sealed record AcmeRenewalConfigurationInput
 {
-    public AcmeRenewalConfigurationInput(bool Enabled, string StoragePath, string DirectoryUrl, IEnumerable<string> ContactEmails, bool TermsAccepted, int RetryAfterMinutes, IEnumerable<AcmeRenewalCertificateInput> Certificates)
+    public AcmeRenewalConfigurationInput(bool Enabled, string StoragePath, string DirectoryUrl, IEnumerable<string> ContactEmails, bool TermsAccepted, int RetryAfterMinutes, IEnumerable<AcmeRenewalCertificateInput> Certificates, TimeSpan? RetryAfter = null)
     {
         ArgumentNullException.ThrowIfNull(Certificates);
         ArgumentException.ThrowIfNullOrWhiteSpace(StoragePath);
@@ -15,6 +15,8 @@ public sealed record AcmeRenewalConfigurationInput
         this.TermsAccepted = TermsAccepted;
         this.RetryAfterMinutes = RetryAfterMinutes;
         this.Certificates = AcmeList.Copy(Certificates.Select(RequireCertificate));
+        if (RetryAfter is { } delay && (delay < TimeSpan.FromSeconds(30) || delay > TimeSpan.FromDays(1))) throw new ArgumentOutOfRangeException(nameof(RetryAfter));
+        this.RetryAfter = RetryAfter;
     }
 
     public bool Enabled { get; }
@@ -24,6 +26,7 @@ public sealed record AcmeRenewalConfigurationInput
     public bool TermsAccepted { get; }
     public int RetryAfterMinutes { get; }
     public IReadOnlyList<AcmeRenewalCertificateInput> Certificates { get; }
+    public TimeSpan? RetryAfter { get; }
 
     private static AcmeRenewalCertificateInput RequireCertificate(AcmeRenewalCertificateInput certificate)
     {
