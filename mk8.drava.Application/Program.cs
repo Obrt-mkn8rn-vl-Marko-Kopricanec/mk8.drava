@@ -41,9 +41,13 @@ internal static class Program
         }
         if (args.Length != 2 || !string.Equals(args[0], "--bootstrap", StringComparison.Ordinal) || !Path.IsPathFullyQualified(args[1]))
             throw new ArgumentException("Use --bootstrap with an absolute Application bootstrap file.", nameof(args));
+        using var startup = new ApplicationStartupProgress();
+        startup.Enter(ApplicationStartupPhase.BootstrapRead);
         var bootstrap = await BootstrapFile.LoadAsync<ApplicationBootstrap>(args[1], CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
+        startup.Enter(ApplicationStartupPhase.PrivateStateOpen);
         using var privateState = await PrivateApplicationState.OpenAsync(bootstrap, CancellationToken.None).ConfigureAwait(false);
+        startup.Enter(ApplicationStartupPhase.ServiceConfiguration);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.Configuration["Mdrava:DataDirectory"] = bootstrap.StateDirectory;
         builder.Services.AddSingleton(bootstrap);
@@ -51,12 +55,13 @@ internal static class Program
         var availability = new DestinationAvailabilityStore(TimeProvider.System);
         builder.Services.RemoveAll<DestinationAvailabilityStore>();
         builder.Services.AddSingleton(availability);
+        startup.Enter(ApplicationStartupPhase.RegistrationStateOpen);
         var registration = bootstrap.Controller is null ? null : await RegistrationRuntime.OpenAsync(bootstrap, availability, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
         try
         {
             ConfigureServices(builder, bootstrap, registration);
             ConfigurePrivateListener(builder, bootstrap);
-            await RunHostAsync(builder, registration).ConfigureAwait(false);
+            await RunHostAsync(builder, registration, startup).ConfigureAwait(false);
         }
         finally
         {
@@ -93,19 +98,26 @@ internal static class Program
         builder.Services.AddGrpc().AddServiceOptions<RegistrationService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
     }
 
-    private static async Task RunHostAsync(WebApplicationBuilder builder, RegistrationRuntime? registration)
+    private static async Task RunHostAsync(WebApplicationBuilder builder, RegistrationRuntime? registration, ApplicationStartupProgress startup)
     {
+        startup.Enter(ApplicationStartupPhase.ServiceProviderBuild);
         var app = builder.Build();
         await using var appLifetime = app.ConfigureAwait(false);
+        startup.Enter(ApplicationStartupPhase.RuntimeConfigurationLoad);
         await RuntimeInitializer.InitializeAsync(app.Services, CancellationToken.None).ConfigureAwait(false);
         if (registration is not null)
+        {
+            startup.Enter(ApplicationStartupPhase.AutomaticRoutesInitialize);
             await app.Services.GetRequiredService<NoConfReconciler>().InitializeAsync(app.Lifetime.ApplicationStopping).ConfigureAwait(false);
+        }
         app.MapGrpcService<ProxyExchangeService>();
         app.MapGrpcService<ControlService>();
         if (registration is not null)
         {
             app.MapGrpcService<RegistrationService>();
         }
+        using var started = app.Lifetime.ApplicationStarted.Register(static state => ((ApplicationStartupProgress)state!).Complete(), startup);
+        startup.Enter(ApplicationStartupPhase.ListenerStart);
         await app.RunAsync().ConfigureAwait(false);
     }
 
