@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Grpc.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,7 +13,9 @@ using Mk8.Drava.Application.DAL.Registry;
 using Mk8.Drava.Application.Hosting;
 using Mk8.Drava.Application.INF.Acme;
 using Mk8.Drava.Configuration;
+using Mk8.Drava.Gateway.Hosting;
 using Mk8.Drava.Transport.Certificates;
+using Mk8.Drava.Transport.Clients;
 using Mk8.Drava.Transport.Protocol.V1;
 using Mk8.Drava.UnitTests;
 using Xunit;
@@ -21,6 +24,149 @@ namespace Mk8.Drava.IntegrationTests;
 
 public sealed class AcmeHostedPipelineTests
 {
+    [Fact]
+    public async Task ActualGatewayFetchesAcknowledgesAndServesSignedIssuedMaterialOverPrivateIpcAsync()
+    {
+        using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
+        var dns = new DevelopmentAcmeDnsProvider();
+        using var server = new DevelopmentAcmeServer(dns, Path.Combine(fixture.Application.StateDirectory, "account.pem"));
+        using var publicRoot = X509CertificateLoader.LoadCertificate(server.RootCertificate);
+        var directory = fixture.Application.StateDirectory;
+        var (bootstrap, gateway) = await PreparePublicationGatewayAsync(fixture, server, publicRoot).ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, TimeProvider.System, CancellationToken.None).ConfigureAwait(true);
+        var pending = plans.Read("local"); Assert.True(pending.ServingPending);
+        var gatewayPath = await PreparePendingGatewayAsync(gateway, pending, directory).ConfigureAwait(true);
+        var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), gatewayPath);
+        await using var processLifetime = process.ConfigureAwait(true);
+        var host = DevelopmentControlPlanHost.Build(bootstrap, plans);
+        await using var hostLifetime = host.ConfigureAwait(true);
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await PublicServingChainProcessTests.WaitForListenerAsync(process, gateway.HttpsPort, deadline.Token).ConfigureAwait(true);
+            using var privateRoot = fixture.Authority.PublicCertificate;
+            using var node = fixture.Authority.IssueNode("node", ["127.0.0.1"]);
+            await AssertPendingTlsAsync(bootstrap, gateway, privateRoot, node, deadline.Token).ConfigureAwait(true);
+            var current = await IssueServingMaterialAsync(bootstrap, plans, dns, server, pending, deadline.Token).ConfigureAwait(true);
+            await host.StartAsync(deadline.Token).ConfigureAwait(true);
+            await AssertControlRejectionsAsync(bootstrap.Listen, pending, deadline.Token).ConfigureAwait(true);
+            while (plans.ReadPublicationProof() is null)
+            {
+                process.ThrowIfExited();
+                await Task.Delay(50, deadline.Token).ConfigureAwait(true);
+            }
+            Assert.Equal(checked((long)current.Generation), plans.ReadPublicationProof()!.Generation);
+            var cached = PresentationPlan.Parser.ParseFrom(await File.ReadAllBytesAsync(Path.Combine(gateway.StateDirectory, "serving.plan"), deadline.Token).ConfigureAwait(true));
+            Assert.Equal(current.Generation, cached.Generation); Assert.Equal(current.ContentSha256, cached.ContentSha256);
+            await AssertIssuedTlsAsync(gateway, current, publicRoot, privateRoot, node, deadline.Token).ConfigureAwait(true);
+        }
+        finally
+        {
+            await process.DisposeAsync().ConfigureAwait(true);
+            using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await host.StopAsync(shutdown.Token).ConfigureAwait(true);
+            var evidence = Path.Combine(TwoProcessProxy.FindRoot(), "artifacts", "acme-gateway-publication-tests", Path.GetFileName(directory));
+            Directory.CreateDirectory(evidence);
+            await File.WriteAllTextAsync(Path.Combine(evidence, "gateway.log"), process.CapturedLog).ConfigureAwait(true);
+        }
+    }
+
+    private static async Task<string> PreparePendingGatewayAsync(GatewayBootstrap gateway, PresentationPlan pending, string directory)
+    {
+        using (var cache = new GatewayPlanCache(gateway.StateDirectory))
+            await cache.WriteAsync(pending, CancellationToken.None).ConfigureAwait(true);
+        var gatewayPath = Path.Combine(directory, "gateway.json");
+        await File.WriteAllTextAsync(gatewayPath, BootstrapFile.Serialize(gateway)).ConfigureAwait(true);
+        return gatewayPath;
+    }
+
+    private static async Task AssertPendingTlsAsync(ApplicationBootstrap bootstrap, GatewayBootstrap gateway,
+        X509Certificate2 privateRoot, X509Certificate2 node, CancellationToken cancellationToken)
+    {
+        var privateBefore = await PublicServingChainProcessTests.ReadCertificateAsync(gateway.RegistrationPort, "register.site.test", privateRoot, node, requireIntermediate: false, cancellationToken).ConfigureAwait(true);
+        using var pendingClient = new DevelopmentSiteClient(bootstrap.Controller!.Acme.PinnedServingRootPath, gateway.HttpsPort, "svc.site.test");
+        await Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            using var response = await pendingClient.Client.GetAsync(new Uri("/_drava/live", UriKind.Relative), cancellationToken).ConfigureAwait(false);
+        }).ConfigureAwait(true);
+        Assert.False(string.IsNullOrEmpty(privateBefore));
+    }
+
+    private static async Task<PresentationPlan> IssueServingMaterialAsync(ApplicationBootstrap bootstrap, ServingPlanState plans,
+        DevelopmentAcmeDnsProvider dns, DevelopmentAcmeServer server, PresentationPlan pending, CancellationToken cancellationToken)
+    {
+        var directory = bootstrap.StateDirectory;
+        var repository = await SqliteRegistryRepository.OpenAsync(directory, "site", cancellationToken).ConfigureAwait(true);
+        await using var repositoryLifetime = repository.ConfigureAwait(true);
+        var lifecycle = new AcmeServingLifecycle(bootstrap, plans); var history = History(repository, bootstrap);
+        var counters = new LifecycleCounters(); using var issuer = Issuer(bootstrap, dns, server);
+        await Manager(bootstrap, lifecycle, issuer, new AcmeCertificateStatusStore(history), counters).CheckRenewalsAsync(cancellationToken).ConfigureAwait(true);
+        Assert.Equal(1, counters.Succeeded); Assert.Equal(0, counters.Failed); Assert.Equal(1, server.Finalizations);
+        Assert.Equal(2, dns.Published); Assert.Equal(2, dns.Removed); Assert.Empty(dns.Records);
+        var current = plans.Read("local"); Assert.False(current.ServingPending); Assert.Equal(pending.Generation + 1, current.Generation);
+        Assert.Null(plans.ReadPublicationProof());
+        Assert.Equal("succeeded", RequireOne(await history.ReadAsync(cancellationToken).ConfigureAwait(true)).LastResult);
+        return current;
+    }
+
+    private static async Task<(ApplicationBootstrap Application, GatewayBootstrap Gateway)> PreparePublicationGatewayAsync(
+        DevelopmentServingPlanFixture fixture, DevelopmentAcmeServer server, X509Certificate2 publicRoot)
+    {
+        var directory = fixture.Application.StateDirectory;
+        var tokenPath = Path.Combine(directory, "gateway.token");
+        await WriteProtectedAsync(tokenPath, System.Text.Encoding.ASCII.GetBytes(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)))).ConfigureAwait(true);
+        var ipc = OperatingSystem.IsWindows()
+            ? new IpcEndpoint { NamedPipeName = "drava_" + Guid.NewGuid().ToString("N"), IdentityTokenPath = tokenPath }
+            : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "app.sock"), IdentityTokenPath = tokenPath };
+        var gateway = fixture.Gateway with
+        {
+            StateDirectory = Path.Combine(directory, "gateway"), Application = ipc, DiscoveryEnabled = false,
+            ServingTrust = new ServingTrustSettings { Mode = "pinned", RootFingerprint = publicRoot.GetCertHashString(HashAlgorithmName.SHA256) },
+            HttpPort = TwoProcessProxy.UnusedPort(), HttpsPort = TwoProcessProxy.UnusedPort(),
+            RegistrationPort = TwoProcessProxy.UnusedPort(), ManagementPort = TwoProcessProxy.UnusedPort(),
+        };
+        var bootstrap = PublicBootstrap(fixture, server) with
+        {
+            Listen = ipc, HttpPort = gateway.HttpPort, HttpsPort = gateway.HttpsPort, ManagementPort = gateway.ManagementPort,
+        };
+        bootstrap = bootstrap with { Controller = bootstrap.Controller! with { RegistrationPort = gateway.RegistrationPort } };
+        await WriteProtectedAsync(bootstrap.Controller.Acme.PinnedServingRootPath, server.RootCertificate).ConfigureAwait(true);
+        return (bootstrap, gateway);
+    }
+
+    private static async Task AssertIssuedTlsAsync(GatewayBootstrap gateway, PresentationPlan current, X509Certificate2 publicRoot,
+        X509Certificate2 privateRoot, X509Certificate2 node, CancellationToken cancellationToken)
+    {
+        using var issued = X509CertificateLoader.LoadPkcs12(current.Certificates[0].Pfx.Span, null, X509KeyStorageFlags.EphemeralKeySet);
+        var serving = await PublicServingChainProcessTests.ReadCertificateAsync(gateway.HttpsPort, "svc.site.test", publicRoot, clientCertificate: null, requireIntermediate: true, cancellationToken).ConfigureAwait(true);
+        Assert.Equal(issued.GetCertHashString(HashAlgorithmName.SHA256), serving);
+        var privateAfter = await PublicServingChainProcessTests.ReadCertificateAsync(gateway.RegistrationPort, "register.site.test", privateRoot, node, requireIntermediate: false, cancellationToken).ConfigureAwait(true);
+        Assert.NotEqual(serving, privateAfter, StringComparer.Ordinal);
+        var management = await PublicServingChainProcessTests.ReadCertificateAsync(gateway.ManagementPort, "admin.site.test", privateRoot, node, requireIntermediate: false, cancellationToken).ConfigureAwait(true);
+        Assert.Equal(privateAfter, management);
+    }
+
+    private static async Task AssertControlRejectionsAsync(IpcEndpoint ipc, PresentationPlan pending, CancellationToken cancellationToken)
+    {
+        using var channel = new ApplicationChannel(ipc);
+        var control = new ApplicationControl.ApplicationControlClient(channel.Invoker);
+        var unauthorized = await Assert.ThrowsAsync<RpcException>(async () =>
+        {
+            using var call = control.GatewayPlanAsync(new GatewayIdentity { Version = 1, GatewayId = "local" }, cancellationToken: cancellationToken);
+            await call.ResponseAsync.ConfigureAwait(false);
+        }).ConfigureAwait(false);
+        Assert.Equal(StatusCode.Unauthenticated, unauthorized.StatusCode);
+        var stale = await Assert.ThrowsAsync<RpcException>(async () =>
+        {
+            using var call = control.AcknowledgePlanAsync(new PlanAcknowledgment
+            {
+                Version = 1, GatewayId = pending.GatewayId, Generation = pending.Generation, ContentSha256 = pending.ContentSha256, Applied = true,
+            }, channel.Credentials, cancellationToken: cancellationToken);
+            await call.ResponseAsync.ConfigureAwait(false);
+        }).ConfigureAwait(false);
+        Assert.Equal(StatusCode.InvalidArgument, stale.StatusCode);
+    }
+
     [Fact]
     public async Task SignedIssuerPublishesThroughImportedManagerAndRequiresExactGatewayAcknowledgmentAsync()
     {

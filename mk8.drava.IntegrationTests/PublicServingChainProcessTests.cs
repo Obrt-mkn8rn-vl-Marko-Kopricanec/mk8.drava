@@ -91,7 +91,7 @@ public sealed class PublicServingChainProcessTests
         return (gateway, bootstrapPath);
     }
 
-    private static async Task WaitForListenerAsync(DevelopmentProcess process, int port, CancellationToken cancellationToken)
+    internal static async Task WaitForListenerAsync(DevelopmentProcess process, int port, CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -103,7 +103,7 @@ public sealed class PublicServingChainProcessTests
         }
     }
 
-    private static async Task<string> ReadCertificateAsync(int port, string host, X509Certificate2 root, X509Certificate2? clientCertificate, bool requireIntermediate, CancellationToken cancellationToken)
+    internal static async Task<string> ReadCertificateAsync(int port, string host, X509Certificate2 root, X509Certificate2? clientCertificate, bool requireIntermediate, CancellationToken cancellationToken)
     {
         using var connection = new TcpClient();
         await connection.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
