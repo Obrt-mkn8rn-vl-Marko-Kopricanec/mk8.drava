@@ -9,7 +9,7 @@ namespace Mk8.Drava.Application.DAL.Acme;
 public static class AcmeCertificateMaterialStore
 {
     public const int MaximumPfxBytes = 1024 * 1024;
-    public static IReadOnlyDictionary<string, RuntimeCertificate> LoadRuntimeCertificates(ProxyAcmeOptions options, string dataDirectory, List<ProxyConfigurationFileError> errors)
+    public static IReadOnlyDictionary<string, RuntimeCertificate> LoadRuntimeCertificates(ProxyAcmeOptions options, string dataDirectory, ICollection<ProxyConfigurationFileError> errors)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(errors);

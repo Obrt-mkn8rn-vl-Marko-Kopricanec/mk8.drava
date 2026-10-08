@@ -3,7 +3,7 @@ using Mk8.Drava.Application.BLL.Configuration;
 namespace Mk8.Drava.Application.DAL.Configuration.Loading;
 public static class SiteConfigurationFileDiscovery
 {
-    public static IReadOnlyList<(string Path, SiteConfigurationFormat Format)> DiscoverLoadableSiteFiles(string sitesDirectory, List<ProxyConfigurationFileDiscovery> discoveries)
+    public static IReadOnlyList<(string Path, SiteConfigurationFormat Format)> DiscoverLoadableSiteFiles(string sitesDirectory, ICollection<ProxyConfigurationFileDiscovery> discoveries)
     {
         ArgumentNullException.ThrowIfNull(discoveries);
         if (!Directory.Exists(sitesDirectory))

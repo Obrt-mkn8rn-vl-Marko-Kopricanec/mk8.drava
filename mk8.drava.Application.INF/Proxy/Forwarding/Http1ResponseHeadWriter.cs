@@ -12,7 +12,7 @@ internal static class Http1ResponseHeadWriter
     {
         if (contentLength.HasValue && useChunkedTransferEncoding)
         {
-            throw new ArgumentException("HTTP/1 response head cannot advertise both Content-Length and chunked transfer coding.");
+            throw new ArgumentException("HTTP/1 response head cannot advertise both Content-Length and chunked transfer coding.", nameof(contentLength));
         }
 
         var builder = new StringBuilder();

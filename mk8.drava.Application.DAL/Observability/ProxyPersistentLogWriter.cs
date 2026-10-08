@@ -33,9 +33,9 @@ public sealed partial class ProxyPersistentLogWriter : IProxyLogPersistenceStore
         _timeProvider = timeProvider;
     }
 
-    public void WriteAccess(ProxyAccessLogEntry accessEntry)
+    public void WriteAccess(ProxyAccessLogEntry entry)
     {
-        ArgumentNullException.ThrowIfNull(accessEntry);
+        ArgumentNullException.ThrowIfNull(entry);
         var settingsResult = _settingsReader.ReadLogPersistenceSettings();
         if (settingsResult is not ProxyLogPersistenceSettingsReadResult.ActiveResult active || !active.Settings.AccessLogEnabled)
         {
@@ -43,32 +43,32 @@ public sealed partial class ProxyPersistentLogWriter : IProxyLogPersistenceStore
         }
 
         var settings = active.Settings;
-        var entry = new
+        var payload = new
         {
-            timestampUtc = accessEntry.TimestampUtc,
+            timestampUtc = entry.TimestampUtc,
             kind = "access",
-            requestId = SafeValue(accessEntry.RequestId),
-            configVersion = accessEntry.ConfigVersion,
-            listener = SafeValue(accessEntry.ListenerName),
-            transport = SafeValue(accessEntry.Transport?.ToLowerInvariant()),
-            protocol = SafeValue(accessEntry.Protocol),
-            method = SafeValue(accessEntry.Method),
-            host = SafeValue(accessEntry.Host),
-            targetPath = SafeTargetPath(accessEntry.Target),
-            site = SafeValue(accessEntry.SiteName),
-            route = SafeValue(accessEntry.RouteName),
-            action = SafeValue(accessEntry.RouteAction),
-            upstream = SafeValue(accessEntry.UpstreamName),
-            upstreamEndpoint = SafeValue(accessEntry.UpstreamEndpoint),
-            status = accessEntry.ResponseStatusCode,
-            durationMs = accessEntry.DurationMilliseconds,
-            failure = SafeValue(accessEntry.FailureKind),
-            responseStarted = accessEntry.ResponseStarted,
-            keepAlive = accessEntry.KeepClientConnectionOpen,
-            upgrade = accessEntry.IsUpgrade,
-            tunnel = accessEntry.TunnelEstablished
+            requestId = SafeValue(entry.RequestId),
+            configVersion = entry.ConfigVersion,
+            listener = SafeValue(entry.ListenerName),
+            transport = SafeValue(entry.Transport?.ToLowerInvariant()),
+            protocol = SafeValue(entry.Protocol),
+            method = SafeValue(entry.Method),
+            host = SafeValue(entry.Host),
+            targetPath = SafeTargetPath(entry.Target),
+            site = SafeValue(entry.SiteName),
+            route = SafeValue(entry.RouteName),
+            action = SafeValue(entry.RouteAction),
+            upstream = SafeValue(entry.UpstreamName),
+            upstreamEndpoint = SafeValue(entry.UpstreamEndpoint),
+            status = entry.ResponseStatusCode,
+            durationMs = entry.DurationMilliseconds,
+            failure = SafeValue(entry.FailureKind),
+            responseStarted = entry.ResponseStarted,
+            keepAlive = entry.KeepClientConnectionOpen,
+            upgrade = entry.IsUpgrade,
+            tunnel = entry.TunnelEstablished
         };
-        WriteLine("access", JsonSerializer.Serialize(entry, JsonOptions), settings, _accessGate);
+        WriteLine("access", JsonSerializer.Serialize(payload, JsonOptions), settings, _accessGate);
     }
 
     public void WriteAdminAudit(ProxyAdminAuditEvent auditEvent)
