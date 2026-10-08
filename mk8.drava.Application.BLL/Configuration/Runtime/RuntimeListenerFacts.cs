@@ -29,10 +29,7 @@ internal static class RuntimeListenerFacts
     public static void Validate(int port, int backlog, int maxRequestHeadBytes, int maxResponseHeadBytes, int maxChunkLineBytes, int forwardingBufferBytes)
     {
         ValidatePort(port);
-        if (backlog < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(backlog));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(backlog, 1);
 
         if (maxRequestHeadBytes is < 1024 or > 1024 * 1024)
         {

@@ -5,10 +5,7 @@ public sealed record ProxyCachePolicyFacts
     {
         ArgumentOutOfRangeException.ThrowIfNegative(MaxEntryBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(MaxTotalBytes);
-        if (DefaultTtl < TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(DefaultTtl));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(DefaultTtl, TimeSpan.Zero);
 
         ArgumentNullException.ThrowIfNull(VaryByHeaders);
         ArgumentNullException.ThrowIfNull(CacheableStatusCodes);

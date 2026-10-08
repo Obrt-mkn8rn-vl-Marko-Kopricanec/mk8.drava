@@ -3,10 +3,7 @@ internal static class RouteMatchFacts
 {
     public static void ValidateRouteIndex(int routeIndex)
     {
-        if (routeIndex < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(routeIndex));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(routeIndex, 0);
     }
 
     public static void ValidateCandidate(string host, string pathPrefix)

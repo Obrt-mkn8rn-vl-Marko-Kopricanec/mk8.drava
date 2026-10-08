@@ -4,7 +4,7 @@ public static class RuntimeListenerProtocolExtensions
     public static readonly IReadOnlyList<string> SupportedConfigValues = RuntimeHttp3Compatibility.SupportedProtocolConfigValues;
     public static bool HasTcpProtocols(this RuntimeListenerProtocols protocols)
     {
-        return (protocols & (RuntimeListenerProtocols.Http1 | RuntimeListenerProtocols.Http2)) != 0;
+        return (protocols & (RuntimeListenerProtocols.Http1 | RuntimeListenerProtocols.Http2)) != RuntimeListenerProtocols.None;
     }
 
     public static bool HasHttp3(this RuntimeListenerProtocols protocols)

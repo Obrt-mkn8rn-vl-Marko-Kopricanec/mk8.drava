@@ -5,10 +5,7 @@ public sealed record RuntimeCachePolicy
     {
         ArgumentOutOfRangeException.ThrowIfNegative(MaxEntryBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(MaxTotalBytes);
-        if (DefaultTtl < TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(DefaultTtl));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(DefaultTtl, TimeSpan.Zero);
 
         this.Enabled = Enabled;
         this.MaxEntryBytes = MaxEntryBytes;

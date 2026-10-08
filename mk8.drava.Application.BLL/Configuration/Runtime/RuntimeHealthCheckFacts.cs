@@ -23,10 +23,7 @@ internal static class RuntimeHealthCheckFacts
             throw new ArgumentOutOfRangeException(nameof(timeout));
         }
 
-        if (timeout > interval)
-        {
-            throw new ArgumentOutOfRangeException(nameof(timeout));
-        }
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(timeout, interval);
 
         if (healthyThreshold is < 1 or > 100)
         {

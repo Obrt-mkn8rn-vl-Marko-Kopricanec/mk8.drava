@@ -4,10 +4,7 @@ public sealed record ProxyRouteDryRunFailureSnapshot
     public ProxyRouteDryRunFailureSnapshot(string Reason, long Count)
     {
         ArgumentNullException.ThrowIfNull(Reason);
-        if (Count < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(Count));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(Count, 0);
 
         this.Reason = Reason;
         this.Count = Count;

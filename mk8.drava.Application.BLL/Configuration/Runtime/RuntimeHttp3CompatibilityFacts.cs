@@ -37,7 +37,7 @@ internal static class RuntimeHttp3CompatibilityFacts
 
     public static void ValidateProtocols(RuntimeListenerProtocols protocols, string parameterName)
     {
-        if (protocols == RuntimeListenerProtocols.None || (protocols & ~SupportedProtocols) != 0)
+        if (protocols == RuntimeListenerProtocols.None || (protocols & ~SupportedProtocols) != RuntimeListenerProtocols.None)
         {
             throw new ArgumentOutOfRangeException(parameterName);
         }

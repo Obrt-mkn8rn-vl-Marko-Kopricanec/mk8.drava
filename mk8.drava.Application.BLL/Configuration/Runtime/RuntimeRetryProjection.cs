@@ -9,10 +9,7 @@ public sealed record RuntimeRetryProjection
             throw new ArgumentOutOfRangeException(nameof(PerAttemptTimeout));
         }
 
-        if (RetryBackoff < TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(RetryBackoff));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(RetryBackoff, TimeSpan.Zero);
 
         this.Enabled = Enabled;
         this.MaxAttempts = MaxAttempts;

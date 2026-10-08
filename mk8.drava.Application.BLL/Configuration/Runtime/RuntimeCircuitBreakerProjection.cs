@@ -4,15 +4,9 @@ public sealed record RuntimeCircuitBreakerProjection
     public RuntimeCircuitBreakerProjection(bool Enabled, int FailureThreshold, TimeSpan SamplingWindow, TimeSpan OpenDuration, int HalfOpenMaxAttempts, IReadOnlyList<int> FailureStatusCodes)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(FailureThreshold);
-        if (SamplingWindow <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(SamplingWindow));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(SamplingWindow, TimeSpan.Zero);
 
-        if (OpenDuration <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(OpenDuration));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(OpenDuration, TimeSpan.Zero);
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(HalfOpenMaxAttempts);
         this.Enabled = Enabled;

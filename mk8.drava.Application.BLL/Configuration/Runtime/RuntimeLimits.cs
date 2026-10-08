@@ -12,10 +12,7 @@ public sealed record RuntimeLimits
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxHeaderLineBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(MaxRequestBodyBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MaxPathBytes);
-        if (ShutdownGracePeriod <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(ShutdownGracePeriod));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(ShutdownGracePeriod, TimeSpan.Zero);
 
         this.MaxActiveClientConnections = MaxActiveClientConnections;
         this.MaxConcurrentTlsHandshakes = MaxConcurrentTlsHandshakes;
