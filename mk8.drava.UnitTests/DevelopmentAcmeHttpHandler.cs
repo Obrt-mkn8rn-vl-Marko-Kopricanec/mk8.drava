@@ -5,7 +5,9 @@ namespace Mk8.Drava.UnitTests;
 internal sealed class DevelopmentAcmeHttpHandler : HttpMessageHandler
 {
     private int _requests;
+    private int _disposals;
     public int Requests => Volatile.Read(ref _requests);
+    public int Disposals => Volatile.Read(ref _disposals);
     public bool BlockHeaders { get; init; }
     public bool Oversize { get; init; }
     public Func<HttpContent>? Content { get; init; }
@@ -24,5 +26,11 @@ internal sealed class DevelopmentAcmeHttpHandler : HttpMessageHandler
             return new HttpResponseMessage(Status) { Content = Oversize ? new UnknownLengthProviderContent() : new StringContent("{}") };
         }
         finally { Exited.TrySetResult(); }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) Interlocked.Increment(ref _disposals);
+        base.Dispose(disposing);
     }
 }

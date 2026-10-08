@@ -7,7 +7,7 @@ internal sealed class AcmeOperationHttpClient : IDisposable
     private readonly CancellationTokenRegistration _cancellation;
     public HttpClient Client { get; }
 
-    public AcmeOperationHttpClient(Uri directory, TimeSpan requestTimeout, CancellationToken operationToken, HttpMessageHandler? handler = null)
+    public AcmeOperationHttpClient(Uri directory, TimeSpan requestTimeout, CancellationToken operationToken, Func<HttpMessageHandler>? handlerFactory = null)
     {
         ArgumentNullException.ThrowIfNull(directory);
         if (!directory.IsAbsoluteUri || !string.Equals(directory.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) ||
@@ -16,14 +16,33 @@ internal sealed class AcmeOperationHttpClient : IDisposable
         if (requestTimeout < TimeSpan.FromSeconds(1) || requestTimeout > TimeSpan.FromSeconds(30))
             throw new InvalidDataException("ACME request timeout exceeds its supported bounds.");
         operationToken.ThrowIfCancellationRequested();
-        _inner = handler ?? new SocketsHttpHandler { AllowAutoRedirect = false, MaxConnectionsPerServer = 1 };
+        HttpMessageHandler? inner = null;
         try
         {
+#pragma warning disable CA2000 // Failure finally disposes inner; completed construction transfers it to _inner, disposed by this owner.
+            inner = handlerFactory?.Invoke() ?? CreateDefaultHandler();
+#pragma warning restore CA2000
+            operationToken.ThrowIfCancellationRequested();
+            _inner = inner;
             _handler = new OriginHandler(directory.GetLeftPart(UriPartial.Authority), _inner, operationToken);
             Client = new HttpClient(_handler, disposeHandler: false) { Timeout = requestTimeout, MaxResponseContentBufferSize = 256 * 1024 };
             _cancellation = operationToken.Register(static state => ((HttpClient)state!).CancelPendingRequests(), Client);
+            inner = null;
         }
-        catch { Client?.Dispose(); _handler?.Dispose(); _inner.Dispose(); throw; }
+        catch { Client?.Dispose(); _handler?.Dispose(); throw; }
+        finally { inner?.Dispose(); }
+    }
+
+    private static SocketsHttpHandler CreateDefaultHandler()
+    {
+        var handler = new SocketsHttpHandler();
+        try
+        {
+            handler.AllowAutoRedirect = false;
+            handler.MaxConnectionsPerServer = 1;
+            return handler;
+        }
+        catch { handler.Dispose(); throw; }
     }
 
     public void Dispose()

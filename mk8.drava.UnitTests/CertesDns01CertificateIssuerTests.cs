@@ -9,6 +9,47 @@ namespace Mk8.Drava.UnitTests;
 public sealed class CertesDns01CertificateIssuerTests
 {
     [Fact]
+    public async Task FactoryCancellationClosesARealSocketsHandlerBeforeIssuanceReturnsAsync()
+    {
+        using var fixture = new IssuerFixture();
+        using var cancellation = new CancellationTokenSource();
+        using var handler = new SocketsHttpHandler();
+        using var issuer = new CertesDns01CertificateIssuer(fixture.Policy, fixture.Dns, () =>
+        {
+            cancellation.Cancel();
+            return handler;
+        });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await issuer.IssueAsync(fixture.Request(), new AcmeChallengeStore(), cancellation.Token).ConfigureAwait(false);
+        }).ConfigureAwait(true);
+        Assert.Throws<ObjectDisposedException>(() => handler.AllowAutoRedirect = false);
+        Assert.Equal(0, fixture.Dns.Published);
+        Assert.Empty(fixture.Dns.Records);
+    }
+
+    [Fact]
+    public async Task CancellationInsideHandlerFactoryDisposesCreatedHandlerBeforeReturningAsync()
+    {
+        using var fixture = new IssuerFixture();
+        using var cancellation = new CancellationTokenSource();
+        using var handler = new DevelopmentAcmeHttpHandler();
+        using var issuer = new CertesDns01CertificateIssuer(fixture.Policy, fixture.Dns, () =>
+        {
+            cancellation.Cancel();
+            return handler;
+        });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await issuer.IssueAsync(fixture.Request(), new AcmeChallengeStore(), cancellation.Token).ConfigureAwait(false);
+        }).ConfigureAwait(true);
+        Assert.Equal(1, handler.Disposals);
+        Assert.Equal(0, handler.Requests);
+        Assert.Equal(0, fixture.Dns.Published);
+        Assert.Empty(fixture.Dns.Records);
+    }
+
+    [Fact]
     public async Task SignedOrderUsesApprovedCsrAndReturnsThePrivateLeafAndIssuerChainAsync()
     {
         using var fixture = new IssuerFixture();

@@ -62,7 +62,7 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
         await _dns.RecoverAsync(cancellationToken).ConfigureAwait(false);
         var accountKey = await AcmeAccountKeyStore.OpenAsync(_policy.AccountKeyPath, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        using var operation = new AcmeOperationHttpClient(_policy.Directory, _policy.RequestTimeout, cancellationToken, _handler?.Invoke());
+        using var operation = new AcmeOperationHttpClient(_policy.Directory, _policy.RequestTimeout, cancellationToken, _handler);
         var context = new AcmeContext(_policy.Directory, accountKey, new AcmeHttpClient(_policy.Directory, operation.Client), badNonceRetryCount: 1);
         var account = await context.NewAccount(_policy.ContactEmails.Select(static email => "mailto:" + email).ToList(), termsOfServiceAgreed: true).ConfigureAwait(false);
         if ((await account.Resource().ConfigureAwait(false)).Status != AccountStatus.Valid)

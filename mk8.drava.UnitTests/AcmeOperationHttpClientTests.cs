@@ -6,6 +6,26 @@ namespace Mk8.Drava.UnitTests;
 
 public sealed class AcmeOperationHttpClientTests
 {
+    [Fact]
+    public async Task PreCanceledOperationDoesNotInvokeOrTakeOwnershipOfTheHandlerFactoryAsync()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync().ConfigureAwait(true);
+        using var handler = new DevelopmentAcmeHttpHandler();
+        var created = 0;
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+        {
+            using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), cancellation.Token, () =>
+            {
+                created++;
+                return handler;
+            });
+        });
+        Assert.Equal(0, created);
+        Assert.Equal(0, handler.Requests);
+        Assert.Equal(0, handler.Disposals);
+    }
+
     [Theory]
     [InlineData("https://foreign.example/order")]
     [InlineData("http://ca.example/order")]
@@ -14,7 +34,7 @@ public sealed class AcmeOperationHttpClientTests
     public async Task UnapprovedEndpointsNeverReachTheHandlerAsync(string endpoint)
     {
         using var handler = new DevelopmentAcmeHttpHandler();
-        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), CancellationToken.None, handler);
+        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), CancellationToken.None, () => handler);
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
         {
             using var response = await operation.Client.GetAsync(new Uri(endpoint)).ConfigureAwait(false);
@@ -26,7 +46,7 @@ public sealed class AcmeOperationHttpClientTests
     public async Task RedirectResponsesCannotChangeTheApprovedOriginAsync()
     {
         using var handler = new DevelopmentAcmeHttpHandler { Status = HttpStatusCode.Redirect };
-        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), CancellationToken.None, handler);
+        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), CancellationToken.None, () => handler);
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
         {
             using var response = await operation.Client.GetAsync(new Uri("https://ca.example/order")).ConfigureAwait(false);
@@ -39,7 +59,7 @@ public sealed class AcmeOperationHttpClientTests
     {
         using var cancellation = new CancellationTokenSource();
         using var handler = new DevelopmentAcmeHttpHandler { BlockHeaders = true };
-        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), cancellation.Token, handler);
+        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), cancellation.Token, () => handler);
         var request = Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
             using var response = await operation.Client.GetAsync(new Uri("https://ca.example/order")).ConfigureAwait(false);
@@ -62,7 +82,7 @@ public sealed class AcmeOperationHttpClientTests
     public async Task BufferingRejectsAnUnknownLengthOversizedResponseAsync()
     {
         using var handler = new DevelopmentAcmeHttpHandler { Oversize = true };
-        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), CancellationToken.None, handler);
+        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), CancellationToken.None, () => handler);
         await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             using var response = await operation.Client.GetAsync(new Uri("https://ca.example/order")).ConfigureAwait(false);
@@ -76,7 +96,7 @@ public sealed class AcmeOperationHttpClientTests
         using var cancellation = new CancellationTokenSource();
         using var content = new DevelopmentBlockingAcmeContent();
         using var handler = new DevelopmentAcmeHttpHandler { Content = () => content };
-        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), cancellation.Token, handler);
+        using var operation = new AcmeOperationHttpClient(new Uri("https://ca.example/directory"), TimeSpan.FromSeconds(5), cancellation.Token, () => handler);
         var request = Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
             using var response = await operation.Client.GetAsync(new Uri("https://ca.example/order")).ConfigureAwait(false);
