@@ -25,8 +25,8 @@ public sealed record TlsCertificateSelectionInput
         var copy = new Dictionary<string, RuntimeCertificate>(StringComparer.OrdinalIgnoreCase);
         foreach (var certificate in certificates)
         {
-            ArgumentNullException.ThrowIfNull(certificate.Key);
-            ArgumentNullException.ThrowIfNull(certificate.Value);
+            ArgumentNullException.ThrowIfNull(certificate.Key, nameof(certificates));
+            ArgumentNullException.ThrowIfNull(certificate.Value, nameof(certificates));
             copy.Add(certificate.Key, certificate.Value);
         }
 

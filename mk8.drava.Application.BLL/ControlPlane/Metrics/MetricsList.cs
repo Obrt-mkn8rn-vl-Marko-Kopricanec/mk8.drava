@@ -23,7 +23,7 @@ internal static class MetricsList
         var copy = new Dictionary<TKey, long>(comparer);
         foreach (var item in values)
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(item.Value);
+            ArgumentOutOfRangeException.ThrowIfNegative(item.Value, nameof(values));
             copy.Add(item.Key, item.Value);
         }
 

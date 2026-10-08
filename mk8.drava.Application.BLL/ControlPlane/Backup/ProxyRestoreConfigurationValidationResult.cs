@@ -49,7 +49,7 @@ public abstract record ProxyRestoreConfigurationValidationResult
             var ownedFileErrors = BackupList.Copy(fileErrors);
             if (ownedErrors.Count == 0 && ownedFileErrors.Count == 0)
             {
-                throw new ArgumentException("Invalid restore configuration validation requires at least one error.");
+                throw new ArgumentException("Invalid restore configuration validation requires at least one error.", nameof(errors));
             }
 
             Errors = ownedErrors;

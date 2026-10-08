@@ -9,7 +9,7 @@ internal static class ProxyHeaderFieldList
         var copy = new List<ProxyHeaderField>();
         foreach (var header in headers)
         {
-            ArgumentNullException.ThrowIfNull(header);
+            ArgumentNullException.ThrowIfNull(header, nameof(headers));
             copy.Add(header);
         }
 

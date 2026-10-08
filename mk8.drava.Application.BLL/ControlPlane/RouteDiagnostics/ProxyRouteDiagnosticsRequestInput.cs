@@ -42,7 +42,7 @@ public sealed class ProxyRouteDiagnosticsRequestInput
         var copy = new List<RouteMatchDryRunFinding>(findings.Count);
         foreach (var finding in findings)
         {
-            ArgumentNullException.ThrowIfNull(finding);
+            ArgumentNullException.ThrowIfNull(finding, nameof(findings));
             copy.Add(finding);
         }
 

@@ -18,7 +18,7 @@ public static class ProxyAcmeStatusConfigurationSourceMapper
 
     private static ProxyAcmeRuntimeCertificateSource ToRuntimeCertificateSource(KeyValuePair<string, RuntimeCertificate> certificate)
     {
-        ArgumentNullException.ThrowIfNull(certificate.Value);
+        ArgumentNullException.ThrowIfNull(certificate.Value, nameof(certificate));
         return new ProxyAcmeRuntimeCertificateSource(certificate.Key, certificate.Value.Id, certificate.Value.Source, new DateTimeOffset(certificate.Value.Certificate.NotBefore.ToUniversalTime()), new DateTimeOffset(certificate.Value.Certificate.NotAfter.ToUniversalTime()));
     }
 }

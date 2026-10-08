@@ -26,7 +26,7 @@ public sealed record ProxyRetryAdmissionInput
         var copy = new List<string>();
         foreach (var method in methods)
         {
-            ArgumentNullException.ThrowIfNull(method);
+            ArgumentNullException.ThrowIfNull(method, nameof(methods));
             copy.Add(method);
         }
 

@@ -22,7 +22,7 @@ public sealed record RuntimeHeaderPolicyProjection
         var copy = new List<RuntimeHeaderFieldProjection>();
         foreach (var header in headers)
         {
-            ArgumentNullException.ThrowIfNull(header);
+            ArgumentNullException.ThrowIfNull(header, nameof(headers));
             copy.Add(header);
         }
 

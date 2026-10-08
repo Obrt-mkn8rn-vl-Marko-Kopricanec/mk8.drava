@@ -12,7 +12,7 @@ public static class ProxyCertificateSummarySourceMapper
         List<string> referenced = [];
         foreach (var listener in listeners)
         {
-            ArgumentNullException.ThrowIfNull(listener);
+            ArgumentNullException.ThrowIfNull(listener, nameof(listeners));
             if (!string.IsNullOrWhiteSpace(listener.DefaultCertificateId))
             {
                 referenced.Add(listener.DefaultCertificateId);
@@ -20,7 +20,7 @@ public static class ProxyCertificateSummarySourceMapper
 
             foreach (var binding in listener.SniCertificates)
             {
-                ArgumentNullException.ThrowIfNull(binding);
+                ArgumentNullException.ThrowIfNull(binding, nameof(listeners));
                 referenced.Add(binding.CertificateId);
             }
         }

@@ -24,7 +24,7 @@ public sealed record RuntimeHeaderPolicy
         var copy = new List<ProxyHeaderField>();
         foreach (var header in headers)
         {
-            ArgumentNullException.ThrowIfNull(header);
+            ArgumentNullException.ThrowIfNull(header, nameof(headers));
             ProxyHeaderPolicyFacts.ValidateSetHeader(header.Name, header.Value);
             copy.Add(header);
         }

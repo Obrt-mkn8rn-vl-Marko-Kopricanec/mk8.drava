@@ -9,7 +9,7 @@ internal static class RuntimeList
         var copy = new List<T>();
         foreach (var value in values)
         {
-            ArgumentNullException.ThrowIfNull(value);
+            ArgumentNullException.ThrowIfNull(value, nameof(values));
             copy.Add(value);
         }
 

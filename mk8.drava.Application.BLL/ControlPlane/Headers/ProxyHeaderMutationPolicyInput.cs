@@ -26,7 +26,7 @@ public sealed record ProxyHeaderMutationPolicyInput
         var copy = new List<string>();
         foreach (var name in names)
         {
-            ArgumentNullException.ThrowIfNull(name);
+            ArgumentNullException.ThrowIfNull(name, nameof(names));
             copy.Add(name);
         }
 
