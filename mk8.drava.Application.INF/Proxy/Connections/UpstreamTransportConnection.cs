@@ -17,7 +17,7 @@ public sealed class UpstreamTransportConnection : IDisposable
 
     public void Dispose()
     {
-        Stream.Dispose();
-        Socket?.Dispose();
+        try { Stream.Dispose(); }
+        finally { Socket?.Dispose(); }
     }
 }

@@ -34,20 +34,21 @@ public sealed class UpstreamConnectionFactory
         Exception? lastException = null;
         foreach (var address in addresses)
         {
-            var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
-            {
-                NoDelay = true
-            };
-            var transferred = false;
+            Socket? socket = null;
             try
             {
+#pragma warning disable CA2000 // Failure finally closes socket; success transfers it to returned UpstreamTransportConnection.
+                socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+#pragma warning restore CA2000
+                socket.NoDelay = true;
+                var connectingSocket = socket;
                 await ProxyTimeoutPolicy.RunAsync(async timeoutToken =>
                 {
-                    await socket.ConnectAsync(new IPEndPoint(address, endpoint.Port), timeoutToken).ConfigureAwait(false);
+                    await connectingSocket.ConnectAsync(new IPEndPoint(address, endpoint.Port), timeoutToken).ConfigureAwait(false);
                 }, connectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
                 var stream = await CreateStreamAsync(socket, endpoint, connectTimeout, cancellationToken).ConfigureAwait(false);
                 var connection = new UpstreamTransportConnection(endpoint, socket, stream);
-                transferred = true;
+                socket = null;
                 return connection;
             }
             catch (Exception exception)when (exception is SocketException or IOException or AuthenticationException)
@@ -56,7 +57,7 @@ public sealed class UpstreamConnectionFactory
             }
             finally
             {
-                if (!transferred) socket.Dispose();
+                socket?.Dispose();
             }
         }
 
@@ -70,15 +71,19 @@ public sealed class UpstreamConnectionFactory
 
     private static async ValueTask<Stream> CreateStreamAsync(Socket socket, UpstreamTransportEndpoint endpoint, TimeSpan connectTimeout, CancellationToken cancellationToken)
     {
-        var networkStream = new NetworkStream(socket, ownsSocket: false);
+        NetworkStream? networkStream = null;
         try
         {
-            return await CreateStreamAsync(networkStream, endpoint, connectTimeout, cancellationToken).ConfigureAwait(false);
+#pragma warning disable CA2000 // Failure finally closes wrapper; success returns it or its owning TLS wrapper to the transport owner.
+            networkStream = new NetworkStream(socket, ownsSocket: false);
+#pragma warning restore CA2000
+            var stream = await CreateStreamAsync(networkStream, endpoint, connectTimeout, cancellationToken).ConfigureAwait(false);
+            networkStream = null;
+            return stream;
         }
-        catch
+        finally
         {
-            await networkStream.DisposeAsync().ConfigureAwait(false);
-            throw;
+            if (networkStream is not null) await networkStream.DisposeAsync().ConfigureAwait(false);
         }
     }
 
