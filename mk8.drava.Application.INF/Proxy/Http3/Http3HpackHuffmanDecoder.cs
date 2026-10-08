@@ -11,7 +11,7 @@ internal static class Http3HpackHuffmanDecoder
         var node = Root;
         var bitsSinceSymbol = 0;
         var paddingAllOnes = true;
-        foreach (var octet in encoded)
+        foreach (ref readonly var octet in encoded)
         {
             for (var bitIndex = 7; bitIndex >= 0; bitIndex--)
             {

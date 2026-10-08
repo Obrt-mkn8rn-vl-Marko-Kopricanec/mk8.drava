@@ -64,7 +64,7 @@ public sealed class ProxyForwardedHeadersAddressPolicy : IProxyTrustedProxyPolic
         }
 
         var trimmed = entry.Trim();
-        var slashIndex = trimmed.IndexOf('/');
+        var slashIndex = trimmed.IndexOf('/', StringComparison.Ordinal);
         var addressText = slashIndex < 0 ? trimmed : trimmed[..slashIndex];
         if (!TryParseAddress(addressText, out var address))
         {

@@ -238,7 +238,7 @@ public sealed partial class ResponseCacheStore : IProxyCacheControl
         }
     }
 
-    private CacheKeyCreation CreateKey(ProxyCacheRequestScope scope, Http1RequestHead requestHead, string upstreamTarget)
+    private static CacheKeyCreation CreateKey(ProxyCacheRequestScope scope, Http1RequestHead requestHead, string upstreamTarget)
     {
         var requestEligibility = ProxyCacheEligibilityPolicy.EvaluateRequest(scope.Policy, requestHead);
         if (requestEligibility is ProxyCacheEligibilityResult.RejectedResult rejected)

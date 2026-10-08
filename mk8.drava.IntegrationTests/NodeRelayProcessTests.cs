@@ -159,7 +159,8 @@ public sealed class NodeRelayProcessTests
         }
         catch (Grpc.Core.RpcException exception)
         {
-            Assert.True(exception.StatusCode is Grpc.Core.StatusCode.Unavailable or Grpc.Core.StatusCode.Unauthenticated or Grpc.Core.StatusCode.PermissionDenied, exception.Status.ToString());
+            Assert.True(exception.StatusCode is Grpc.Core.StatusCode.Unavailable or Grpc.Core.StatusCode.Unauthenticated or Grpc.Core.StatusCode.PermissionDenied,
+                $"{exception.Status}; transport error: {(exception.Status.DebugException as HttpRequestException)?.HttpRequestError}; debug: {exception.Status.DebugException}");
             rejected = exception;
         }
         catch (HttpIOException exception)

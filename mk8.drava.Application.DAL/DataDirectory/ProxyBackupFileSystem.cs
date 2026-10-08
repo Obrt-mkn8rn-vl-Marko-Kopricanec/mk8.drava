@@ -79,7 +79,7 @@ public sealed class ProxyBackupFileSystem : IProxyBackupFileSystem
                 continue;
             }
 
-            files.Add(new ProxyBackupFileSystemEntry(safeRelativePath.RelativePath, file.Length, file.LastWriteTimeUtc));
+            files.Add(new ProxyBackupFileSystemEntry(safeRelativePath.RelativePath, file.Length, new DateTimeOffset(file.LastWriteTimeUtc)));
         }
 
         DirectoryInfo[] children;

@@ -30,6 +30,9 @@ internal sealed class DevelopmentAsyncAcmeLifecycle : IAcmeRenewalConfigurationS
     public bool LifetimeAwareRenewal { get; init; }
     public TimeSpan? RetryAfter { get; init; }
     public bool IncludeWildcard { get; init; }
+    public Action? BeforeIssue { get; init; }
+    public Action? BeforeWrite { get; init; }
+    public Action? BeforeActivation { get; init; }
 
     public DevelopmentAsyncAcmeLifecycle(IAcmeCertificateStatusPersistence? persistence = null, TimeProvider? clock = null)
     {
@@ -44,7 +47,7 @@ internal sealed class DevelopmentAsyncAcmeLifecycle : IAcmeRenewalConfigurationS
     public AcmeRenewalConfigurationInputReadResult ReadInput() => AcmeRenewalConfigurationInputReadResult.Available(new AcmeRenewalConfigurationInput(true, "acme", "https://development-ca.example/directory", ["ops@example.org"], true, 5,
         [new AcmeRenewalCertificateInput("site", true, IncludeWildcard ? ["site.example", "*.site.example"] : ["site.example"], 30, Previous, LifetimeAwareRenewal)], RetryAfter));
     public ValueTask<AcmeCertificateIssueResult> IssueAsync(AcmeCertificateIssueRequest request, AcmeChallengeStore challengeStore, CancellationToken cancellationToken)
-    { cancellationToken.ThrowIfCancellationRequested(); Issued++; return ValueTask.FromResult(AcmeCertificateIssueResult.Issued(_pfx)); }
+    { cancellationToken.ThrowIfCancellationRequested(); Issued++; BeforeIssue?.Invoke(); return ValueTask.FromResult(AcmeCertificateIssueResult.Issued(_pfx)); }
     public void EnsureLayout(string dataDirectory, string storagePath) { }
     public RuntimeCertificate WriteAndLoad(AcmeCertificateMaterialWriteRequest request) => throw new InvalidOperationException("Manager must use the owned async writer.");
 
@@ -55,6 +58,7 @@ internal sealed class DevelopmentAsyncAcmeLifecycle : IAcmeRenewalConfigurationS
         {
             if (BlockWriter) await _writerRelease.WaitAsync(cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            BeforeWrite?.Invoke();
             _material?.Dispose(); _material = X509CertificateLoader.LoadPkcs12(request.PfxBytes, null, X509KeyStorageFlags.EphemeralKeySet);
             return RuntimeCertificateFactory.Acme(request.CertificateId, _material, request.Domains);
         }
@@ -69,6 +73,7 @@ internal sealed class DevelopmentAsyncAcmeLifecycle : IAcmeRenewalConfigurationS
         {
             if (BlockActivation) await _activationRelease.WaitAsync(cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            BeforeActivation?.Invoke();
             if (FailActivation) throw new IOException("Development activation failed before publication.");
             Activated++;
         }

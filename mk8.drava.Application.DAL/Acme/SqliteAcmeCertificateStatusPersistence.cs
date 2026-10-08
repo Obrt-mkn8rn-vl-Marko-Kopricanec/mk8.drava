@@ -53,11 +53,12 @@ public sealed class SqliteAcmeCertificateStatusPersistence : IAcmeCertificateSta
         foreach (var date in new[] { status.NotBeforeUtc, status.NotAfterUtc, status.RenewalDueAtUtc, status.LastAttemptAtUtc,
                      status.LastSucceededAtUtc, status.LastFailedAtUtc, status.NextAttemptNotBeforeUtc })
             if (date is { Offset: var offset } && offset != TimeSpan.Zero) throw new InvalidDataException("ACME history requires UTC dates.");
+        var retryBase = string.Equals(status.LastResult, "failed", StringComparison.Ordinal) ? status.LastFailedAtUtc : status.LastAttemptAtUtc;
         if (status.RenewalDueAtUtc is null || status.NextAttemptNotBeforeUtc is null ||
             status.LastResult is "attempting" or "failed" or "succeeded" && status.LastAttemptAtUtc is null ||
             string.Equals(status.LastResult, "succeeded", StringComparison.Ordinal) && (!status.Active || status.LastSucceededAtUtc is null) ||
             string.Equals(status.LastResult, "failed", StringComparison.Ordinal) && status.LastFailedAtUtc is null ||
-            status.LastResult is "attempting" or "failed" && (status.NextAttemptNotBeforeUtc <= status.LastAttemptAtUtc || status.NextAttemptNotBeforeUtc > status.LastAttemptAtUtc!.Value.AddDays(1)))
+            status.LastResult is "attempting" or "failed" && (status.NextAttemptNotBeforeUtc <= retryBase || status.NextAttemptNotBeforeUtc > retryBase!.Value.AddDays(1)))
             throw new InvalidDataException("ACME history lacks its durable admission or renewal time.");
     }
 }
