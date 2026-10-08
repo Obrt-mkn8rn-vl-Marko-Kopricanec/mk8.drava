@@ -107,11 +107,13 @@ internal static class UpstreamTlsTests
         using var certificate = CreateServerCertificate("upstream.test");
         using var temp = TemporaryDirectory.Create();
         WriteHttpsUpstreamSite(temp.Path, "secure.json", proxyPort, upstreamPort, "\"upstreamTls\": { \"validateCertificate\": false, \"sniHost\": \"upstream.test\" }");
-        var upstreamTask = RunSingleTlsResponseUpstreamAsync(upstreamPort, certificate, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecure", timeout.Token);
         using var host = BuildProxyHost(temp.Path);
-        await host.StartAsync(timeout.Token).ConfigureAwait(false);
+#pragma warning disable CA2025 // The finally block cancels and directly joins this owned task before the certificate using scope exits.
+        var upstreamTask = RunSingleTlsResponseUpstreamAsync(upstreamPort, certificate, "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsecure", timeout.Token);
+#pragma warning restore CA2025
         try
         {
+            await host.StartAsync(timeout.Token).ConfigureAwait(false);
             var response = await SendSingleRequestAsync(proxyPort, "GET /secure HTTP/1.1\r\nHost: secure.test\r\nConnection: close\r\n\r\n", timeout.Token).ConfigureAwait(false);
             var observation = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
             AssertEx.True(response.Contains("200 OK", StringComparison.Ordinal), response);
@@ -121,6 +123,9 @@ internal static class UpstreamTlsTests
         }
         finally
         {
+            await timeout.CancelAsync().ConfigureAwait(false);
+            try { await upstreamTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
             await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
     }
@@ -132,12 +137,23 @@ internal static class UpstreamTlsTests
         using var certificate = CreateServerCertificate("upstream.test");
         var upstream = Upstream(upstreamPort, "https", new RuntimeUpstreamTlsOptions(false, "upstream.test"));
         var route = Route([upstream]);
+#pragma warning disable CA2025 // The finally block cancels and directly joins this owned task before the certificate using scope exits.
         var upstreamTask = RunSingleTlsResponseUpstreamAsync(upstreamPort, certificate, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", timeout.Token);
-        var sample = await new UpstreamHealthCheckClient(new UpstreamConnectionFactory(), new ProxyMetrics()).CheckAsync(Target(route, upstream), timeout.Token).ConfigureAwait(false);
-        var observation = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
-        AssertEx.True(sample.Healthy, sample.Result);
-        AssertEx.True(observation.HandshakeSucceeded, observation.Error);
-        AssertEx.True(observation.Request.StartsWith("GET /health HTTP/1.1", StringComparison.Ordinal), observation.Request);
+#pragma warning restore CA2025
+        try
+        {
+            var sample = await new UpstreamHealthCheckClient(new UpstreamConnectionFactory(), new ProxyMetrics()).CheckAsync(Target(route, upstream), timeout.Token).ConfigureAwait(false);
+            var observation = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
+            AssertEx.True(sample.Healthy, sample.Result);
+            AssertEx.True(observation.HandshakeSucceeded, observation.Error);
+            AssertEx.True(observation.Request.StartsWith("GET /health HTTP/1.1", StringComparison.Ordinal), observation.Request);
+        }
+        finally
+        {
+            await timeout.CancelAsync().ConfigureAwait(false);
+            try { await upstreamTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
+        }
     }
 
     public static async Task CertificateValidationIsEnabledByDefaultAsync()
@@ -171,13 +187,24 @@ internal static class UpstreamTlsTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var certificate = CreateServerCertificate("upstream.test");
         var upstream = Upstream(upstreamPort, "https", new RuntimeUpstreamTlsOptions(true, "upstream.test"));
+#pragma warning disable CA2025 // The finally block cancels and directly joins this owned task before the certificate using scope exits.
         var upstreamTask = RunSingleTlsResponseUpstreamAsync(upstreamPort, certificate, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", timeout.Token);
-        await AssertEx.ThrowsAsync<UpstreamTlsException>(async () =>
+#pragma warning restore CA2025
+        try
         {
-            using var _ = await new UpstreamConnectionFactory().ConnectAsync(UpstreamTransportEndpointMapper.FromUpstream(upstream), Timeouts().UpstreamConnectTimeout, timeout.Token).ConfigureAwait(false);
-        }).ConfigureAwait(false);
-        var observation = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
-        AssertEx.False(observation.Request.StartsWith("GET ", StringComparison.Ordinal), observation.Request);
+            await AssertEx.ThrowsAsync<UpstreamTlsException>(async () =>
+            {
+                using var _ = await new UpstreamConnectionFactory().ConnectAsync(UpstreamTransportEndpointMapper.FromUpstream(upstream), Timeouts().UpstreamConnectTimeout, timeout.Token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+            var observation = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
+            AssertEx.False(observation.Request.StartsWith("GET ", StringComparison.Ordinal), observation.Request);
+        }
+        finally
+        {
+            await timeout.CancelAsync().ConfigureAwait(false);
+            try { await upstreamTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
+        }
     }
 
     public static async Task UpstreamSniOverrideValidationRejectsUrlPortAndWildcardAsync()

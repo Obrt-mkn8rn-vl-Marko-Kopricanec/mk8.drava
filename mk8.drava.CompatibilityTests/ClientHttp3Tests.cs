@@ -62,7 +62,7 @@ internal static class ClientHttp3Tests
         var port = GetFreeTcpUdpPort();
         WriteCertificateConfig(temp.Path);
         WriteHttp3Site(temp.Path, port, "http1AndHttp3", staticBody: "unused");
-        using var host = BuildProxyHost(temp.Path, services => services.AddSingleton<IHttp3QuicListenerFactory, FailingQuicListenerFactory>());
+        using var host = BuildProxyHost(temp.Path, services => services.AddSingleton<IHttp3QuicListenerFactory>(static _ => new FailingQuicListenerFactory()));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         try
@@ -421,7 +421,7 @@ internal static class ClientHttp3Tests
         var port = GetFreeTcpUdpPort();
         WriteCertificateConfig(temp.Path);
         WriteHttp3Site(temp.Path, port, "http1AndHttp3", staticBody: "alt-failed", altSvcEnabled: true);
-        using var host = BuildProxyHost(temp.Path, services => services.AddSingleton<IHttp3QuicListenerFactory, FailingQuicListenerFactory>());
+        using var host = BuildProxyHost(temp.Path, services => services.AddSingleton<IHttp3QuicListenerFactory>(static _ => new FailingQuicListenerFactory()));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         try
