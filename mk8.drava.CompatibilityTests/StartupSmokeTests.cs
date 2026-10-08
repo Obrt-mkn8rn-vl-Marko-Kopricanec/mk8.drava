@@ -43,7 +43,7 @@ internal static class StartupSmokeTests
     {
         using var temp = TemporaryDirectory.Create();
         var sites = Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites")).FullName;
-        File.WriteAllText(Path.Combine(sites, "broken.json"), "{ nope");
+        await File.WriteAllTextAsync(Path.Combine(sites, "broken.json"), "{ nope").ConfigureAwait(false);
         using var host = BuildProxyHost(temp.Path);
         try
         {

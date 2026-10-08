@@ -359,7 +359,7 @@ internal static class BackupRestoreTests
     {
         using var temp = TemporaryDirectory.Create();
         Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites"));
-        File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope");
+        await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
         var result = await CreateService(temp.Path).ValidateAsync(CancellationToken.None).ConfigureAwait(false);
         AssertRejected(result);
         AssertEx.True(result.Errors.Any(static error => string.Equals(error.Code, "config_parse_failed", StringComparison.Ordinal)), string.Join(",", result.Errors.Select(static error => error.Code)));
@@ -387,7 +387,7 @@ internal static class BackupRestoreTests
         var load = await loader.LoadAsync(CancellationToken.None).ConfigureAwait(false);
         store.Replace(ProxyConfigurationLoadResultAssertions.AssertLoadedSnapshot(load));
         var loadedAt = store.Snapshot.LoadedAtUtc;
-        File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope");
+        await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
         var result = await CreateService(temp.Path, store, loader).ValidateAsync(CancellationToken.None).ConfigureAwait(false);
         AssertRejected(result);
         AssertEx.Equal(1, result.ActiveConfigVersion);

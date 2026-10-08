@@ -261,7 +261,7 @@ internal static class AcmeTests
         AssertEx.True(File.Exists(AcmeCertificateMaterialStore.GetCertificatePemPath(layout, "home-acme")));
         var metadataPath = AcmeCertificateMaterialStore.GetMetadataPath(layout, "home-acme");
         AssertEx.True(File.Exists(metadataPath));
-        var metadata = AssertEx.NotNull(JsonSerializer.Deserialize<AcmeCertificateMetadata>(File.ReadAllText(metadataPath), SiteConfigurationParser.ReadJsonOptions));
+        var metadata = AssertEx.NotNull(JsonSerializer.Deserialize<AcmeCertificateMetadata>((await File.ReadAllTextAsync(metadataPath).ConfigureAwait(false)), SiteConfigurationParser.ReadJsonOptions));
         AssertEx.Equal(attemptStartedAtUtc, metadata.WrittenAtUtc);
         AssertEx.Equal("acme", store.Snapshot.Certificates["home-acme"].Source);
         AssertEx.True(statusStore.Get("home-acme")?.Active == true);
@@ -286,7 +286,7 @@ internal static class AcmeTests
         var runtimeCertificateOptions = runtimeAcme.Certificates[0];
         AcmeCertificateMaterialStore.WriteAndLoad(new AcmeCertificateMaterialWriteRequest(runtimeAcme.StoragePath, runtimeCertificateOptions.Id, runtimeCertificateOptions.Domains, temp.Path, DateTimeOffset.UnixEpoch.AddHours(10), TestCertificates.CreateSelfSignedPfxBytes("home.example.test")));
         var config = Directory.CreateDirectory(Path.Combine(temp.Path, "config")).FullName;
-        File.WriteAllText(Path.Combine(config, "proxy.json"), """
+        await File.WriteAllTextAsync(Path.Combine(config, "proxy.json"), """
             {
               "acme": {
                 "enabled": true,
@@ -299,7 +299,7 @@ internal static class AcmeTests
                 ]
               }
             }
-            """);
+            """).ConfigureAwait(false);
         var result = await CreateLoader(temp.Path).LoadAsync(CancellationToken.None).ConfigureAwait(false);
         AssertEx.Equal("acme", ProxyConfigurationLoadResultAssertions.AssertLoadedSnapshot(result).Certificates["home-acme"].Source);
     }

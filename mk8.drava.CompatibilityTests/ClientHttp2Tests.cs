@@ -222,7 +222,7 @@ internal static class ClientHttp2Tests
                 await using var beforeClientDisposal = beforeClient.ConfigureAwait(false);
                 var beforeSubject = beforeClient.RemoteCertificateSubject;
                 TestCertificates.WriteSelfSignedPfx(Path.Combine(dataDirectory, "certs", "home.pfx"), "home-reloaded.test");
-                File.WriteAllText(Path.Combine(dataDirectory, "config", "sites", "broken.json"), "{ nope");
+                await File.WriteAllTextAsync(Path.Combine(dataDirectory, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
                 var reload = await host.Services.GetRequiredService<IProxyConfigurationReloadOperations<ProxyConfigurationProjection>>().ReloadAsync(timeout.Token).ConfigureAwait(false);
                 var afterClient = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
                 await using var afterClientDisposal = afterClient.ConfigureAwait(false);
@@ -895,7 +895,7 @@ internal static class ClientHttp2Tests
                 break;
             }
 
-            bytes.Write(buffer, 0, read);
+            await bytes.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             var data = bytes.ToArray();
             var headEnd = IndexOfHeaderEnd(data);
             if (headEnd < 0)
@@ -914,7 +914,7 @@ internal static class ClientHttp2Tests
                     break;
                 }
 
-                bytes.Write(buffer, 0, read);
+                await bytes.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
                 bodyBytes += read;
             }
 

@@ -16,8 +16,8 @@ try
 }
 catch (ArgumentException exception)
 {
-    Console.Error.WriteLine(exception.Message);
-    Console.Error.WriteLine("Use --list-categories to see supported categories.");
+    await Console.Error.WriteLineAsync(exception.Message).ConfigureAwait(false);
+    await Console.Error.WriteLineAsync("Use --list-categories to see supported categories.").ConfigureAwait(false);
     Environment.ExitCode = 2;
     return;
 }
@@ -38,10 +38,10 @@ if (options.CheckMetadata)
     var metadataErrors = TestMetadataIntegrity.Validate(tests);
     if (metadataErrors.Count > 0)
     {
-        Console.Error.WriteLine("Test metadata integrity check failed.");
+        await Console.Error.WriteLineAsync("Test metadata integrity check failed.").ConfigureAwait(false);
         foreach (var error in metadataErrors)
         {
-            Console.Error.WriteLine(error);
+            await Console.Error.WriteLineAsync(error).ConfigureAwait(false);
         }
 
         Environment.ExitCode = 1;
@@ -61,7 +61,7 @@ if (options.CheckMetadata)
 var selectedTests = options.Categories.Count == 0 ? tests : tests.Where(test => test.Categories.Any(options.Categories.Contains)).ToArray();
 if (selectedTests.Length == 0)
 {
-    Console.Error.WriteLine($"No tests matched categories: {string.Join(", ", options.Categories)}");
+    await Console.Error.WriteLineAsync($"No tests matched categories: {string.Join(", ", options.Categories)}").ConfigureAwait(false);
     Environment.ExitCode = 2;
     return;
 }
@@ -84,8 +84,8 @@ foreach (var test in selectedTests)
     {
         failures++;
         failureNames.Add(test.Name);
-        Console.Error.WriteLine($"FAIL {test.Name}");
-        Console.Error.WriteLine(exception);
+        await Console.Error.WriteLineAsync($"FAIL {test.Name}").ConfigureAwait(false);
+        await Console.Error.WriteLineAsync(exception.ToString()).ConfigureAwait(false);
     }
 }
 

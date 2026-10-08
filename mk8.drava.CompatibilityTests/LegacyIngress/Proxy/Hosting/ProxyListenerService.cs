@@ -331,7 +331,7 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _serviceStopping.Cancel();
+        await _serviceStopping.CancelAsync().ConfigureAwait(false);
         var snapshot = _configurationStore.Snapshot;
         var shutdownToken = _shutdown.BeginShutdown(snapshot.Limits.ShutdownGracePeriod);
         if (_shutdown.StartedAtUtc is not null && _shutdown.DeadlineUtc is not null)

@@ -946,7 +946,7 @@ internal static class UpstreamHttp3Tests
                 break;
             }
 
-            buffer.Write(chunk, 0, bytesRead);
+            await buffer.WriteAsync(chunk.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
         }
 
         return Encoding.ASCII.GetString(buffer.ToArray());

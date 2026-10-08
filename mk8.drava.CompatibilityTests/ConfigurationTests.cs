@@ -1460,7 +1460,7 @@ internal static class ConfigurationTests
         using var temp = TemporaryDirectory.Create();
         var sites = Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites")).FullName;
         var yamlPath = Path.Combine(sites, "broken.yaml");
-        File.WriteAllText(yamlPath, "name: broken\nlisteners:\n  - name: main\n    port: [not-closed\n");
+        await File.WriteAllTextAsync(yamlPath, "name: broken\nlisteners:\n  - name: main\n    port: [not-closed\n").ConfigureAwait(false);
         var attemptedAtUtc = new DateTimeOffset(2026, 6, 10, 11, 20, 0, TimeSpan.Zero);
         var loader = CreateLoader(temp.Path, new FixedTimeProvider(attemptedAtUtc));
         var result = await loader.LoadAsync(CancellationToken.None).ConfigureAwait(false);
@@ -1513,13 +1513,13 @@ internal static class ConfigurationTests
         var sites = Directory.CreateDirectory(Path.Combine(config, "sites")).FullName;
         var proxyPath = Path.Combine(config, "proxy.json");
         var examplePath = Path.Combine(sites, "example.site.yaml");
-        File.WriteAllText(proxyPath, "{ \"observability\": { \"accessLogEnabled\": false } }");
-        File.WriteAllText(examplePath, "# custom example");
+        await File.WriteAllTextAsync(proxyPath, "{ \"observability\": { \"accessLogEnabled\": false } }").ConfigureAwait(false);
+        await File.WriteAllTextAsync(examplePath, "# custom example").ConfigureAwait(false);
         var loader = CreateLoader(temp.Path);
         var result = await loader.LoadAsync(CancellationToken.None).ConfigureAwait(false);
         var snapshot = ProxyConfigurationLoadResultAssertions.AssertLoadedSnapshot(result);
-        AssertEx.Equal("{ \"observability\": { \"accessLogEnabled\": false } }", File.ReadAllText(proxyPath));
-        AssertEx.Equal("# custom example", File.ReadAllText(examplePath));
+        AssertEx.Equal("{ \"observability\": { \"accessLogEnabled\": false } }", (await File.ReadAllTextAsync(proxyPath).ConfigureAwait(false)));
+        AssertEx.Equal("# custom example", (await File.ReadAllTextAsync(examplePath).ConfigureAwait(false)));
         AssertEx.False(snapshot.Observability.AccessLogEnabled);
     }
 
@@ -1741,7 +1741,7 @@ internal static class ConfigurationTests
     {
         using var temp = TemporaryDirectory.Create();
         var sites = Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites")).FullName;
-        File.WriteAllText(Path.Combine(sites, "broken.json"), "{ nope");
+        await File.WriteAllTextAsync(Path.Combine(sites, "broken.json"), "{ nope").ConfigureAwait(false);
         var loader = CreateLoader(temp.Path);
         var result = await loader.LoadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationLoadResultAssertions.AssertFailed(result);
@@ -1757,7 +1757,7 @@ internal static class ConfigurationTests
         var first = await service.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationReloadResultAssertions.Reloaded(first);
         AssertEx.Equal(1, store.Snapshot.Version);
-        File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope");
+        await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
         var second = await service.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationReloadResultAssertions.Failed(second);
         AssertEx.Equal(1, store.Snapshot.Version);
@@ -1771,7 +1771,7 @@ internal static class ConfigurationTests
         var service = CreateReloadService(temp.Path, store);
         var first = await service.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationReloadResultAssertions.Reloaded(first);
-        File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "home.json"), SiteJson("home", 18081, 15001));
+        await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "home.json"), SiteJson("home", 18081, 15001)).ConfigureAwait(false);
         var second = await service.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationReloadResultAssertions.Reloaded(second, string.Join("; ", second.Errors));
         AssertEx.Equal(2, store.Snapshot.Version);
@@ -2613,7 +2613,7 @@ internal static class ConfigurationTests
         using var temp = TemporaryDirectory.Create();
         TestCertificates.WriteSelfSignedPfx(Path.Combine(temp.Path, "certs", "home.pfx"), "home.test");
         TestCertificates.WriteSelfSignedPfx(Path.Combine(temp.Path, "certs", "alt.pfx"), "alt.test");
-        File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(temp.Path, "config")).FullName, "proxy.json"), """
+        await File.WriteAllTextAsync(Path.Combine(Directory.CreateDirectory(Path.Combine(temp.Path, "config")).FullName, "proxy.json"), """
             {
               "certificates": [
                 {
@@ -2628,7 +2628,7 @@ internal static class ConfigurationTests
                 }
               ]
             }
-            """);
+            """).ConfigureAwait(false);
         WriteHttpsSite(temp.Path, "home-a.json", port: 18443, upstreamPort: 15000, certificateId: "home-cert");
         WriteHttpsSite(temp.Path, "home-b.json", port: 18443, upstreamPort: 15001, certificateId: "alt-cert");
         var first = await CreateLoader(temp.Path).LoadAsync(CancellationToken.None).ConfigureAwait(false);
@@ -2647,7 +2647,7 @@ internal static class ConfigurationTests
         var service = CreateReloadService(temp.Path, store);
         var first = await service.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationReloadResultAssertions.Reloaded(first);
-        File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "home.json"), SiteJson("home", 18081, 15001));
+        await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "home.json"), SiteJson("home", 18081, 15001)).ConfigureAwait(false);
         var validation = await service.ValidateAsync(CancellationToken.None).ConfigureAwait(false);
         AssertEx.True(validation is ProxyConfigurationValidationResult.ValidResult, string.Join("; ", validation.Errors));
         AssertEx.Equal(1, store.Snapshot.Version);
@@ -2669,7 +2669,7 @@ internal static class ConfigurationTests
         var service = CreateReloadService(temp.Path, store);
         var first = await service.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationReloadResultAssertions.Reloaded(first);
-        File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope");
+        await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
         var validation = await service.ValidateAsync(CancellationToken.None).ConfigureAwait(false);
         AssertEx.True(validation is ProxyConfigurationValidationResult.InvalidResult);
         AssertEx.Equal(1, store.Snapshot.Version);
@@ -2780,7 +2780,7 @@ internal static class ConfigurationTests
         var notAfter = DateTimeOffset.UtcNow.AddDays(-1);
         var certificatePath = Path.Combine(temp.Path, "certs", "expired.pfx");
         Directory.CreateDirectory(Path.GetDirectoryName(certificatePath)!);
-        File.WriteAllBytes(certificatePath, TestCertificates.CreateSelfSignedPfxBytesForValidity("expired.test", null, notBefore, notAfter));
+        await File.WriteAllBytesAsync(certificatePath, TestCertificates.CreateSelfSignedPfxBytesForValidity("expired.test", null, notBefore, notAfter)).ConfigureAwait(false);
         WriteHttpsSite(temp.Path, "expired.json", port: 18443, upstreamPort: 15000, certificateId: "expired-cert");
         WriteOperationalConfig(temp.Path, certificateId: "expired-cert", certificatePath: "certs/expired.pfx");
         var result = await CreateLoader(temp.Path).LoadAsync(CancellationToken.None).ConfigureAwait(false);
@@ -2797,7 +2797,7 @@ internal static class ConfigurationTests
         var notAfter = DateTimeOffset.UtcNow.AddDays(30);
         var certificatePath = Path.Combine(temp.Path, "certs", "future.pfx");
         Directory.CreateDirectory(Path.GetDirectoryName(certificatePath)!);
-        File.WriteAllBytes(certificatePath, TestCertificates.CreateSelfSignedPfxBytesForValidity("future.test", null, notBefore, notAfter));
+        await File.WriteAllBytesAsync(certificatePath, TestCertificates.CreateSelfSignedPfxBytesForValidity("future.test", null, notBefore, notAfter)).ConfigureAwait(false);
         WriteHttpsSite(temp.Path, "future.json", port: 18443, upstreamPort: 15000, certificateId: "future-cert");
         WriteOperationalConfig(temp.Path, certificateId: "future-cert", certificatePath: "certs/future.pfx");
         var result = await CreateLoader(temp.Path).LoadAsync(CancellationToken.None).ConfigureAwait(false);
@@ -2816,7 +2816,7 @@ internal static class ConfigurationTests
         var first = await service.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationReloadResultAssertions.Reloaded(first);
         var loadedAt = store.Snapshot.LoadedAtUtc;
-        File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope");
+        await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
         var second = await service.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationReloadResultAssertions.Failed(second);
         AssertEx.Equal(1, store.Snapshot.Version);

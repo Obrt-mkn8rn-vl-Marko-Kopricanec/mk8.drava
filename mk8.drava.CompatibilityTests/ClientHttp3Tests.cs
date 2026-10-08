@@ -172,7 +172,7 @@ internal static class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             var before = await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope");
+            await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
             var reload = await host.Services.GetRequiredService<IProxyConfigurationReloadOperations<ProxyConfigurationProjection>>().ReloadAsync(timeout.Token).ConfigureAwait(false);
             var after = await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
             ProxyConfigurationReloadResultAssertions.Failed(reload);
@@ -263,7 +263,7 @@ internal static class ClientHttp3Tests
             var beforeSubject = "";
             var beforeResponse = await SendHttp3RequestAsync(port, "GET", "/before-failed-cert", timeout.Token, certificateSubjectObserver: subject => beforeSubject = subject).ConfigureAwait(false);
             TestCertificates.WriteSelfSignedPfx(Path.Combine(temp.Path, "certs", "home.pfx"), "localhost-reloaded", "secret");
-            File.WriteAllText(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope");
+            await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
             var reload = await host.Services.GetRequiredService<IProxyConfigurationReloadOperations<ProxyConfigurationProjection>>().ReloadAsync(timeout.Token).ConfigureAwait(false);
             var after = await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
             var afterSubject = "";
@@ -1799,7 +1799,7 @@ internal static class ClientHttp3Tests
                 return "";
             }
 
-            memory.Write(buffer, 0, read);
+            await memory.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             var bytes = memory.ToArray();
             var offset = 0;
             while (offset < bytes.Length)
@@ -1925,7 +1925,7 @@ internal static class ClientHttp3Tests
                 return Encoding.ASCII.GetString(memory.ToArray());
             }
 
-            memory.Write(buffer, 0, read);
+            await memory.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             var bytes = memory.ToArray();
             headerEnd = headerEnd < 0 ? IndexOfHeaderEnd(bytes) : headerEnd;
             if (headerEnd >= 0)
@@ -1981,7 +1981,7 @@ internal static class ClientHttp3Tests
                 return memory.ToArray();
             }
 
-            memory.Write(buffer, 0, read);
+            await memory.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
     }
 

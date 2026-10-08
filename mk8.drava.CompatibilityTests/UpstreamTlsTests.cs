@@ -58,12 +58,12 @@ internal static class UpstreamTlsTests
         using var temp = TemporaryDirectory.Create();
         WriteUpstreamSite(temp.Path, "bad-address.json", 18080, 15000, "https", "");
         var path = Path.Combine(temp.Path, "config", "sites", "bad-address.json");
-        var text = File.ReadAllText(path);
+        var text = (await File.ReadAllTextAsync(path).ConfigureAwait(false));
         const string addressProperty = "\"address\": \"127.0.0.1\"";
         var firstAddress = text.IndexOf(addressProperty, StringComparison.Ordinal);
         var upstreamAddress = text.IndexOf(addressProperty, firstAddress + addressProperty.Length, StringComparison.Ordinal);
         text = text.Remove(upstreamAddress, addressProperty.Length).Insert(upstreamAddress, "\"address\": \"https://127.0.0.1:15000/api\"");
-        File.WriteAllText(path, text);
+        await File.WriteAllTextAsync(path, text).ConfigureAwait(false);
         var result = await CreateLoader(temp.Path).LoadAsync(CancellationToken.None).ConfigureAwait(false);
         ProxyConfigurationLoadResultAssertions.AssertFailed(result);
         AssertEx.True(result.Errors.Any(static error => error.Contains("Address", StringComparison.Ordinal)));
@@ -353,7 +353,7 @@ internal static class UpstreamTlsTests
                 break;
             }
 
-            buffer.Write(chunk, 0, bytesRead);
+            await buffer.WriteAsync(chunk.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
         }
 
         return Encoding.ASCII.GetString(buffer.ToArray());

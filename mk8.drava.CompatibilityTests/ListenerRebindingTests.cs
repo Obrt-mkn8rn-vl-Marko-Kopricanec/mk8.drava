@@ -456,7 +456,7 @@ internal static class ListenerRebindingTests
                 break;
             }
 
-            memory.Write(buffer, 0, read);
+            await memory.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
 
         return Encoding.ASCII.GetString(memory.ToArray());

@@ -40,8 +40,8 @@ internal static class PerformanceSmokeRunner
         }
         catch (ArgumentException exception)
         {
-            Console.Error.WriteLine(exception.Message);
-            Console.Error.WriteLine("Use --list-performance-domains to see supported performance domains.");
+            await Console.Error.WriteLineAsync(exception.Message).ConfigureAwait(false);
+            await Console.Error.WriteLineAsync("Use --list-performance-domains to see supported performance domains.").ConfigureAwait(false);
             return 2;
         }
 
@@ -58,7 +58,7 @@ internal static class PerformanceSmokeRunner
         var selectedDomains = options.Domains.Count == 0 ? Domains : Domains.Where(options.Domains.Contains).ToArray();
         if (selectedDomains.Length == 0)
         {
-            Console.Error.WriteLine($"No performance domains matched: {string.Join(", ", options.Domains)}");
+            await Console.Error.WriteLineAsync($"No performance domains matched: {string.Join(", ", options.Domains)}").ConfigureAwait(false);
             return 2;
         }
 
@@ -83,8 +83,8 @@ internal static class PerformanceSmokeRunner
             {
                 failures++;
                 failureDomains.Add(domain);
-                Console.Error.WriteLine($"FAIL Performance {domain}: correctness failure before threshold evaluation.");
-                Console.Error.WriteLine(exception);
+                await Console.Error.WriteLineAsync($"FAIL Performance {domain}: correctness failure before threshold evaluation.").ConfigureAwait(false);
+                await Console.Error.WriteLineAsync(exception.ToString()).ConfigureAwait(false);
             }
         }
 
@@ -405,7 +405,7 @@ internal static class PerformanceSmokeRunner
                 break;
             }
 
-            memory.Write(buffer, 0, read);
+            await memory.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
 
         return Encoding.ASCII.GetString(memory.ToArray());

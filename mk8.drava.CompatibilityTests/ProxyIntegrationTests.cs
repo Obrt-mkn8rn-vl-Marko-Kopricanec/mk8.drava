@@ -430,7 +430,7 @@ internal static class ProxyIntegrationTests
         {
             ConfigurationTests.WriteSite(dataDirectory, "specific.json", proxyPort, upstreamPort);
             var sitePath = Path.Combine(dataDirectory, "config", "sites", "specific.json");
-            File.WriteAllText(sitePath, File.ReadAllText(sitePath).Replace("\"host\": \"*\"", "\"host\": \"expected.test\"", StringComparison.Ordinal));
+            await File.WriteAllTextAsync(sitePath, (await File.ReadAllTextAsync(sitePath).ConfigureAwait(false)).Replace("\"host\": \"*\"", "\"host\": \"expected.test\"", StringComparison.Ordinal)).ConfigureAwait(false);
             using var host = BuildProxyHost(dataDirectory);
             await host.StartAsync(timeout.Token).ConfigureAwait(false);
             await WaitForProxyRuntimeAsync(host, timeout.Token).ConfigureAwait(false);
