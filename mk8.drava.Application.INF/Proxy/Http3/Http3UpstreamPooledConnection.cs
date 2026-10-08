@@ -146,7 +146,7 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
             _state = Http3UpstreamPooledConnectionState.ShutdownDisposing;
         }
 
-        _controlMonitorStop.Cancel();
+        await _controlMonitorStop.CancelAsync().ConfigureAwait(false);
         try
         {
             await ControlStream.DisposeAsync().ConfigureAwait(false);

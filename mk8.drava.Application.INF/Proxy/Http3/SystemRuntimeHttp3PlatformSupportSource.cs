@@ -11,7 +11,7 @@ public sealed class SystemRuntimeHttp3PlatformSupportSource : IRuntimeHttp3Platf
         {
             return RuntimeHttp3PlatformSupport.FromFlags(QuicListener.IsSupported, QuicConnection.IsSupported);
         }
-        catch
+        catch (Exception exception) when (exception is PlatformNotSupportedException or DllNotFoundException or EntryPointNotFoundException or TypeInitializationException or System.ComponentModel.Win32Exception)
         {
             return RuntimeHttp3PlatformSupport.Unknown;
         }

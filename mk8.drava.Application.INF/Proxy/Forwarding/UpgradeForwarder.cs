@@ -273,7 +273,7 @@ public sealed partial class UpgradeForwarder
         }
     }
 
-    private bool IsValidSwitchingProtocolsResponse(Http1ResponseHead responseHead, UpgradeRequestInfo upgrade)
+    private static bool IsValidSwitchingProtocolsResponse(Http1ResponseHead responseHead, UpgradeRequestInfo upgrade)
     {
         if (!HopByHopHeaderPolicy.HasConnectionToken(responseHead.Headers, "upgrade"))
         {

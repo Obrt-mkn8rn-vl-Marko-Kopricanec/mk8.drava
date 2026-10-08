@@ -300,7 +300,7 @@ public sealed partial class ProxyForwarder
             var result = await response.ConfigureAwait(false);
             if (clientStream is ExchangeClientStream exchange) await exchange.StopUploadAsync(cancellationToken).ConfigureAwait(false);
             finalResponseReceived = true;
-            uploadCancellation.Cancel();
+            await uploadCancellation.CancelAsync().ConfigureAwait(false);
             var uploaded = await upload.ConfigureAwait(false);
             return result with { CanReuseUpstreamConnection = result.CanReuseUpstreamConnection && uploaded };
         }
@@ -878,7 +878,7 @@ public sealed partial class ProxyForwarder
                     throw new IOException("Source closed before the declared Content-Length body was complete.");
                 }
 
-                body.Write(buffer, 0, bytesRead);
+                await body.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
                 remaining -= bytesRead;
             }
 

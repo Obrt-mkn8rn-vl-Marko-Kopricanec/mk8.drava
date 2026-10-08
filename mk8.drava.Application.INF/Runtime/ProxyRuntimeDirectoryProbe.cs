@@ -41,7 +41,7 @@ public sealed class ProxyRuntimeDirectoryProbe : IProxyRuntimeDirectoryProbe
             entries.MoveNext();
             return true;
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return false;
         }
@@ -63,7 +63,7 @@ public sealed class ProxyRuntimeDirectoryProbe : IProxyRuntimeDirectoryProbe
 
             return true;
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             try
             {
@@ -72,7 +72,7 @@ public sealed class ProxyRuntimeDirectoryProbe : IProxyRuntimeDirectoryProbe
                     File.Delete(fileName);
                 }
             }
-            catch
+            catch (Exception cleanupException) when (cleanupException is IOException or UnauthorizedAccessException)
             {
             }
 
