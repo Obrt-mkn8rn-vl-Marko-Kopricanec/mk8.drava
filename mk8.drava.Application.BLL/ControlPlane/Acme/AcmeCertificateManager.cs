@@ -13,6 +13,7 @@ public sealed class AcmeCertificateManager
     private readonly TimeProvider _timeProvider;
     private readonly IProxyAcmeMetricsSink _metrics;
     private readonly IAcmeCertificateRenewalEventSink _events;
+    private int _checkInProgress;
     public AcmeCertificateManager(IAcmeRenewalConfigurationSource configurationSource, IAcmeCertificateActivator certificateActivator, IMdravaDataDirectoryProvider dataDirectoryProvider, IAcmeCertificateIssuer issuer, IAcmeCertificateMaterialWriter materialWriter, AcmeChallengeStore challengeStore, AcmeCertificateStatusStore statusStore, TimeProvider timeProvider, IProxyAcmeMetricsSink metrics, IAcmeCertificateRenewalEventSink events)
     {
         _configurationSource = configurationSource;
@@ -28,6 +29,20 @@ public sealed class AcmeCertificateManager
     }
 
     public async ValueTask CheckRenewalsAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (Interlocked.CompareExchange(ref _checkInProgress, 1, 0) != 0) return;
+        try
+        {
+            await CheckRenewalsCoreAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Volatile.Write(ref _checkInProgress, 0);
+        }
+    }
+
+    private async ValueTask CheckRenewalsCoreAsync(CancellationToken cancellationToken)
     {
         await _statusStore.InitializeAsync(cancellationToken).ConfigureAwait(false);
         var inputResult = _configurationSource.ReadInput();
@@ -62,6 +77,8 @@ public sealed class AcmeCertificateManager
             await _statusStore.UpsertAsync(CopyHistory(CreateStatus(certificate, activeCertificate, nowUtc, existingStatus.LastResult, existingStatus.ErrorSummary, existingStatus.NextAttemptNotBeforeUtc), existingStatus), cancellationToken).ConfigureAwait(false);
             return;
         }
+
+        if (await RecoverInterruptedAttemptAsync(input, certificate, activeCertificate, existingStatus, cancellationToken).ConfigureAwait(false)) return;
 
         if (activeCertificate is not null && renewalDueAtUtc > nowUtc)
         {
@@ -102,6 +119,16 @@ public sealed class AcmeCertificateManager
         }
 
         await CompleteActivationAsync(input, certificate, activeCertificate, renewedCertificate, attemptStartedAtUtc, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<bool> RecoverInterruptedAttemptAsync(AcmeRenewalConfigurationInput input, AcmeRenewalCertificateInput certificate, AcmeRenewalActiveCertificate? activeCertificate, AcmeCertificateLifecycleStatus? status, CancellationToken cancellationToken)
+    {
+        if (status is not { LastResult: "attempting" }) return false;
+        var startedAtUtc = status.LastAttemptAtUtc
+            ?? throw new InvalidDataException("Interrupted renewal lacks its durable admission time.");
+        await RecordFailureAsync(input, certificate, activeCertificate, startedAtUtc,
+            "Previous renewal attempt did not complete.", cancellationToken).ConfigureAwait(false);
+        return true;
     }
 
     private async ValueTask RecordFailureAsync(AcmeRenewalConfigurationInput input, AcmeRenewalCertificateInput certificate, AcmeRenewalActiveCertificate? activeCertificate, DateTimeOffset attemptStartedAtUtc, string? errorSummary, CancellationToken cancellationToken)
