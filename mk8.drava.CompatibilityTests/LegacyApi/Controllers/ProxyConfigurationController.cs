@@ -8,7 +8,9 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests.LegacyApi.Controllers;
 [ApiController]
 [Route("admin/proxy/config")]
+#pragma warning disable CA1515 // ASP.NET Core MVC discovery requires public controller types on this test-only reference ingress.
 public sealed class ProxyConfigurationController : ControllerBase
+#pragma warning restore CA1515
 {
     private readonly BusinessProxyConfigurationAdministrationService _configurationAdministration;
     private readonly BusinessProxyConfigurationReadAdministrationService _configurationReads;
