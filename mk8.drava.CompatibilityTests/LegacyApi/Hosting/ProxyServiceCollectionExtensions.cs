@@ -48,7 +48,7 @@ using Mk8.Drava.Application.INF.Proxy.RouteDiagnostics;
 using Mk8.Drava.Application.BLL.ControlPlane.Observability;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyApi.Hosting;
-public static partial class ProxyServiceCollectionExtensions
+internal static partial class ProxyServiceCollectionExtensions
 {
     private static void AddProxyForwardingServices(this IServiceCollection services)
     {
@@ -72,8 +72,47 @@ public static partial class ProxyServiceCollectionExtensions
         services.AddSingleton<TunnelRelay>();
         services.AddSingleton<ProxyForwarder>();
         services.AddSingleton<UpgradeForwarder>();
-        services.AddSingleton<TlsConnectionAuthenticator>();
-        services.AddSingleton<IHttp3QuicListenerFactory, SystemHttp3QuicListenerFactory>();
+        services.AddSingleton(static services => new TlsConnectionAuthenticator(
+            services.GetRequiredService<ProxyMetrics>(), services.GetRequiredService<ProxyAdmissionController>(),
+            services.GetRequiredService<ILogger<TlsConnectionAuthenticator>>()));
+        services.AddSingleton<IHttp3QuicListenerFactory>(static services => new SystemHttp3QuicListenerFactory(
+            services.GetRequiredService<IProxyActiveConfigurationSnapshotReader>(), services.GetRequiredService<ProxyMetrics>(),
+            services.GetRequiredService<ILogger<SystemHttp3QuicListenerFactory>>()));
+    }
+
+
+    private static ProxyListenerService CreateNativeListener(IServiceProvider services)
+    {
+        return new ProxyListenerService(
+            services.GetRequiredService<IProxyActiveConfigurationSnapshotReader>(),
+            services.GetRequiredService<IRouteMatcher>(),
+            services.GetRequiredService<IUpstreamSelector>(),
+            services.GetRequiredService<UpstreamHealthStore>(),
+            services.GetRequiredService<ProxyForwarder>(),
+            services.GetRequiredService<UpgradeForwarder>(),
+            services.GetRequiredService<UpgradeRequestPolicy>(),
+            services.GetRequiredService<ForwardedHeadersPolicy>(),
+            services.GetRequiredService<ProxyRouteActionPolicy>(),
+            services.GetRequiredService<PathRewritePolicy>(),
+            services.GetRequiredService<ResponseCacheStore>(),
+            services.GetRequiredService<Http3AltSvcPolicy>(),
+            services.GetRequiredService<CircuitBreakerStore>(),
+            services.GetRequiredService<AcmeHttp01ChallengeResponder>(),
+            services.GetRequiredService<TlsConnectionAuthenticator>(),
+            services.GetRequiredService<IHttp3QuicListenerFactory>(),
+            services.GetRequiredService<ProxyMetrics>(),
+            services.GetRequiredService<RequestIdGenerator>(),
+            services.GetRequiredService<AccessLogEmitter>(),
+            services.GetRequiredService<ProxyAdmissionController>(),
+            services.GetRequiredService<ProxyShutdownCoordinator>(),
+            services.GetRequiredService<UpstreamConnectionPool>(),
+            services.GetRequiredService<Http3UpstreamConnectionPool>(),
+            services.GetRequiredService<ClientRateLimiter>(),
+            services.GetRequiredService<ProxyRuntimeState>(),
+            services.GetRequiredService<ProxyListenerReloadPlanner>(),
+            services.GetRequiredService<TimeProvider>(),
+            services.GetRequiredService<ILogger<ProxyListenerService>>(),
+            services.GetRequiredService<ILogger<ClientConnection>>());
     }
 
     private static void AddProxyAcmeServices(this IServiceCollection services)
@@ -108,7 +147,7 @@ public static partial class ProxyServiceCollectionExtensions
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ProxyListenerReloadPlanner>();
         services.AddSingleton<IRuntimeHttp3PlatformSupportSource, SystemRuntimeHttp3PlatformSupportSource>();
-        services.AddSingleton<ProxyListenerService>();
+        services.AddSingleton(CreateNativeListener);
         services.AddSingleton<IProxyListenerReloadApplier>(static services => services.GetRequiredService<ProxyListenerService>());
         services.AddSingleton<ProxyAdmissionController>();
         services.AddSingleton<IProxyRuntimeDirectoryProbe, ProxyRuntimeDirectoryProbe>();

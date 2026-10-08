@@ -2,7 +2,7 @@ using System.Net.Security;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Tls;
-public sealed record TlsAuthenticationResult
+internal sealed record TlsAuthenticationResult
 {
     private TlsAuthenticationResult(SslStream stream, SslApplicationProtocol negotiatedProtocol)
     {

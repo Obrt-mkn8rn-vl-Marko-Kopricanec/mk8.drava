@@ -1,6 +1,6 @@
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Connections;
 
-public sealed partial class ClientConnection
+internal sealed partial class ClientConnection
 {
     [global::Microsoft.Extensions.Logging.LoggerMessage(EventId = 10035, Level = global::Microsoft.Extensions.Logging.LogLevel.Debug, Message = "Rejected malformed request head with parse error {ParseError}", SkipEnabledCheck = true)]
     private static partial void LogRejectedMalformedRequestHeadWith10035(global::Microsoft.Extensions.Logging.ILogger logger, global::Mk8.Drava.Application.BLL.ControlPlane.Http1.Http1ParseError parseError, global::System.Exception? exception);

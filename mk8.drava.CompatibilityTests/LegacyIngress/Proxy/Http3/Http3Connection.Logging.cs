@@ -1,6 +1,6 @@
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http3;
 
-public sealed partial class Http3Connection
+internal sealed partial class Http3Connection
 {
     [global::Microsoft.Extensions.Logging.LoggerMessage(EventId = 10055, Level = global::Microsoft.Extensions.Logging.LogLevel.Debug, Message = "HTTP/3 QUIC connection ended.", SkipEnabledCheck = true)]
     private static partial void LogHTTPQUICConnectionEnded10055(global::Microsoft.Extensions.Logging.ILogger logger, global::System.Exception? exception);

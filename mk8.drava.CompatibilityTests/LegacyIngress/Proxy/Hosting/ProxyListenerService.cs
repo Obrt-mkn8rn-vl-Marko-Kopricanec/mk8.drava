@@ -35,7 +35,7 @@ using Microsoft.Extensions.Logging;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Hosting;
-public sealed partial class ProxyListenerService : BackgroundService, IProxyListenerReloadApplier
+internal sealed partial class ProxyListenerService : BackgroundService, IProxyListenerReloadApplier
 {
     private readonly IProxyActiveConfigurationSnapshotReader _configurationStore;
     private readonly IRouteMatcher _routeMatcher;

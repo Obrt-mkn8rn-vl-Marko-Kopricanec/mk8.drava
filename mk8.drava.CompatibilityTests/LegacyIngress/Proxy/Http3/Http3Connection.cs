@@ -27,7 +27,7 @@ using Mk8.Drava.Application.INF.Observability;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http3;
-public sealed partial class Http3Connection
+internal sealed partial class Http3Connection
 {
     private const int MaxFramePayloadBytes = 1024 * 1024;
     private const int MaxProtocolErrorsPerConnection = 8;

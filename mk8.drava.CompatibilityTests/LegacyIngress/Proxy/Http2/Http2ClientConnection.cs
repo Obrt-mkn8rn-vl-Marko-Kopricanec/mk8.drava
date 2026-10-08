@@ -32,7 +32,7 @@ using Mk8.Drava.Application.INF.Observability;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http2;
-public sealed partial class Http2ClientConnection
+internal sealed partial class Http2ClientConnection
 {
     private static readonly byte[] ClientPreface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"u8.ToArray();
     private readonly Stream _stream;
@@ -519,7 +519,7 @@ public sealed partial class Http2ClientConnection
             return new Rejected(reason);
         }
 
-        public sealed record Accepted : Http2RequestBuildResult
+        internal sealed record Accepted : Http2RequestBuildResult
         {
             public Accepted(Http1RequestHead requestHead)
             {
@@ -530,7 +530,7 @@ public sealed partial class Http2ClientConnection
             public Http1RequestHead RequestHead { get; }
         }
 
-        public sealed record Rejected : Http2RequestBuildResult
+        internal sealed record Rejected : Http2RequestBuildResult
         {
             public Rejected(string reason)
             {

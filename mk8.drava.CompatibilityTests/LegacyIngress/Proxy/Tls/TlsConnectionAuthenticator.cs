@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Tls;
-public sealed partial class TlsConnectionAuthenticator
+internal sealed partial class TlsConnectionAuthenticator
 {
     private readonly ProxyMetrics _metrics;
     private readonly ProxyAdmissionController _admission;

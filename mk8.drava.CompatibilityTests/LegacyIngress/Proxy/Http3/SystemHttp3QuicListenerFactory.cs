@@ -13,7 +13,7 @@ using Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Tls;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http3;
-public sealed partial class SystemHttp3QuicListenerFactory : IHttp3QuicListenerFactory
+internal sealed partial class SystemHttp3QuicListenerFactory : IHttp3QuicListenerFactory
 {
     private readonly IProxyActiveConfigurationSnapshotReader _configurationStore;
     private readonly ProxyMetrics _metrics;

@@ -2,7 +2,7 @@ using Mk8.Drava.Application.BLL.ControlPlane.AdminAuthentication;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyApi.Security;
-public sealed class AdminAuthenticationMiddleware
+internal sealed class AdminAuthenticationMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ProxyAdminAuthenticationService _authentication;

@@ -6,7 +6,7 @@ using Mk8.Drava.Application.DAL.Configuration.Paths;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyApi.Security;
-public static class AdminBindWebHostConfigurator
+internal static class AdminBindWebHostConfigurator
 {
     public const string MdravaAdminUrlsConfigurationKey = "Mdrava:Admin:Urls";
     public const string AspNetCoreUrlsConfigurationKey = "urls";

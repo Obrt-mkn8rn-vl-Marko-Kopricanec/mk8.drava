@@ -1,6 +1,6 @@
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Hosting;
 
-public sealed partial class ProxyListenerService
+internal sealed partial class ProxyListenerService
 {
     [global::Microsoft.Extensions.Logging.LoggerMessage(EventId = 10041, Level = global::Microsoft.Extensions.Logging.LogLevel.Information, Message = "Proxy listener {ListenerName} prepared on {Address}:{Port}", SkipEnabledCheck = true)]
     private static partial void LogProxyListenerPreparedOn10041(global::Microsoft.Extensions.Logging.ILogger logger, string listenerName, string address, int port, global::System.Exception? exception);

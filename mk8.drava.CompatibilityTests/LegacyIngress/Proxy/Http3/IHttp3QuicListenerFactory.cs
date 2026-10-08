@@ -3,7 +3,7 @@ using System.Net.Quic;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http3;
-public interface IHttp3QuicListenerFactory
+internal interface IHttp3QuicListenerFactory
 {
     bool IsSupported { get; }
 

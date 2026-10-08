@@ -33,7 +33,7 @@ using System.Net;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Connections;
-public sealed partial class ClientConnection
+internal sealed partial class ClientConnection
 {
     private readonly Socket _socket;
     private readonly ProxyConfigurationSnapshot _configurationSnapshot;

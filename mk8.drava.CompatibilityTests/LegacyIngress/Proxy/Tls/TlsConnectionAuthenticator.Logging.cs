@@ -1,6 +1,6 @@
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Tls;
 
-public sealed partial class TlsConnectionAuthenticator
+internal sealed partial class TlsConnectionAuthenticator
 {
     [global::Microsoft.Extensions.Logging.LoggerMessage(EventId = 10061, Level = global::Microsoft.Extensions.Logging.LogLevel.Debug, Message = "Rejected TLS handshake for listener {ListenerName} because the concurrent handshake limit is exhausted.", SkipEnabledCheck = true)]
     private static partial void LogRejectedTLSHandshakeForListener10061(global::Microsoft.Extensions.Logging.ILogger logger, string listenerName, global::System.Exception? exception);
