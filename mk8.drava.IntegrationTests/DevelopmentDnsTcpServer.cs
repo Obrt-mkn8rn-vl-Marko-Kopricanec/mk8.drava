@@ -9,7 +9,8 @@ internal sealed class DevelopmentDnsTcpServer : IAsyncDisposable
     private readonly TcpListener _listener;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _run;
-    private readonly IReadOnlyList<string> _values;
+    private readonly IReadOnlyList<string>? _values;
+    private readonly IPAddress? _address;
     public bool BlockResponse { get; init; }
     public bool InvalidFrame { get; init; }
     public TaskCompletionSource QueryReceived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -20,23 +21,32 @@ internal sealed class DevelopmentDnsTcpServer : IAsyncDisposable
         _listener.Start(); _run = RunAsync();
     }
 
+    public DevelopmentDnsTcpServer(int port, IPAddress address)
+    {
+        _address = address; _listener = new TcpListener(IPAddress.Loopback, port);
+        _listener.Start(); _run = RunAsync();
+    }
+
     private async Task RunAsync()
     {
         try
         {
-            using var client = await _listener.AcceptTcpClientAsync(_stop.Token).ConfigureAwait(false);
-            var stream = client.GetStream();
-            await using var streamLifetime = stream.ConfigureAwait(false);
-            var prefix = new byte[2]; await stream.ReadExactlyAsync(prefix, _stop.Token).ConfigureAwait(false);
-            var length = BinaryPrimitives.ReadUInt16BigEndian(prefix);
-            if (length is < 17 or > 512) throw new InvalidDataException("Development DNS query exceeds its frame bound.");
-            var query = new byte[length]; await stream.ReadExactlyAsync(query, _stop.Token).ConfigureAwait(false);
-            QueryReceived.TrySetResult();
-            if (BlockResponse) { await Task.Delay(Timeout.InfiniteTimeSpan, _stop.Token).ConfigureAwait(false); return; }
-            var response = DevelopmentDnsServer.RespondTxt(query, query.Length, _values);
-            BinaryPrimitives.WriteUInt16BigEndian(prefix, InvalidFrame ? (ushort)1 : checked((ushort)response.Length));
-            await stream.WriteAsync(prefix, _stop.Token).ConfigureAwait(false);
-            if (!InvalidFrame) await stream.WriteAsync(response, _stop.Token).ConfigureAwait(false);
+            while (!_stop.IsCancellationRequested)
+            {
+                using var client = await _listener.AcceptTcpClientAsync(_stop.Token).ConfigureAwait(false);
+                var stream = client.GetStream();
+                await using var streamLifetime = stream.ConfigureAwait(false);
+                var prefix = new byte[2]; await stream.ReadExactlyAsync(prefix, _stop.Token).ConfigureAwait(false);
+                var length = BinaryPrimitives.ReadUInt16BigEndian(prefix);
+                if (length is < 17 or > 512) throw new InvalidDataException("Development DNS query exceeds its frame bound.");
+                var query = new byte[length]; await stream.ReadExactlyAsync(query, _stop.Token).ConfigureAwait(false);
+                QueryReceived.TrySetResult();
+                if (BlockResponse) { await Task.Delay(Timeout.InfiniteTimeSpan, _stop.Token).ConfigureAwait(false); return; }
+                var response = _values is null ? DevelopmentDnsServer.RespondAddress(query, query.Length, _address) : DevelopmentDnsServer.RespondTxt(query, query.Length, _values);
+                BinaryPrimitives.WriteUInt16BigEndian(prefix, InvalidFrame ? (ushort)1 : checked((ushort)response.Length));
+                await stream.WriteAsync(prefix, _stop.Token).ConfigureAwait(false);
+                if (!InvalidFrame) await stream.WriteAsync(response, _stop.Token).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
         catch (IOException) when (_stop.IsCancellationRequested) { }

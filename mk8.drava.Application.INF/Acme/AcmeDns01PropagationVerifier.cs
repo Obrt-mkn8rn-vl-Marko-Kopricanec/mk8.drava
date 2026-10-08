@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using DnsClient;
+using Mk8.Drava.Application.INF.Dns;
 
 namespace Mk8.Drava.Application.INF.Acme;
 
@@ -31,7 +32,7 @@ internal sealed class AcmeDns01PropagationVerifier : IAcmeDns01PropagationVerifi
         deadline.CancelAfter(TimeSpan.FromSeconds(3));
         try
         {
-            var response = await AcmeDns01OwnedQuery.QueryAsync(resolver, query, transactionId, deadline.Token).ConfigureAwait(false);
+            var response = await OwnedDnsQuery.QueryAsync(resolver, query, transactionId, deadline.Token).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             return AcmeDns01WireResponse.HasProof(response, transactionId, host, value);
         }

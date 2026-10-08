@@ -17,8 +17,8 @@ internal sealed class DevelopmentDnsServer : IAsyncDisposable
     public TaskCompletionSource QueryReceived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public int Port => ((IPEndPoint)(_listener.Client.LocalEndPoint ?? throw new InvalidOperationException("DNS fixture is unbound."))).Port;
 
-    public DevelopmentDnsServer(IPAddress answer) : this(() => answer) { }
-    public DevelopmentDnsServer(Func<IPAddress?> answer) { ArgumentNullException.ThrowIfNull(answer); _answer = answer; _listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)); _run = RunAsync(); }
+    public DevelopmentDnsServer(IPAddress answer, int port = 0) : this(() => answer, port) { }
+    public DevelopmentDnsServer(Func<IPAddress?> answer, int port = 0) { ArgumentNullException.ThrowIfNull(answer); _answer = answer; _listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, port)); _run = RunAsync(); }
 
     public DevelopmentDnsServer(Func<IReadOnlyList<string>> txtAnswer, int port = 0)
     {
@@ -51,10 +51,16 @@ internal sealed class DevelopmentDnsServer : IAsyncDisposable
         end++;
         var type = BinaryPrimitives.ReadUInt16BigEndian(query.AsSpan(end));
         end += 4;
-        var address = _answer()?.GetAddressBytes() ?? [];
         if (type == 16 && _txtAnswer is not null) return RespondTxt(query, end, _txtAnswer());
-        var answer = type == 1 && address.Length == 4;
-        var response = new byte[end + (answer ? 16 : 0)];
+        return RespondAddress(query, end, _answer());
+    }
+
+    internal static byte[] RespondAddress(byte[] query, int end, IPAddress? answerAddress)
+    {
+        var type = BinaryPrimitives.ReadUInt16BigEndian(query.AsSpan(end - 4));
+        var address = answerAddress?.GetAddressBytes() ?? [];
+        var answer = type == 1 && address.Length == 4 || type == 28 && address.Length == 16;
+        var response = new byte[end + (answer ? 12 + address.Length : 0)];
         query.AsSpan(0, end).CopyTo(response);
         BinaryPrimitives.WriteUInt16BigEndian(response.AsSpan(2), 0x8180);
         BinaryPrimitives.WriteUInt16BigEndian(response.AsSpan(4), 1);
@@ -64,10 +70,10 @@ internal sealed class DevelopmentDnsServer : IAsyncDisposable
         if (answer)
         {
             BinaryPrimitives.WriteUInt16BigEndian(response.AsSpan(end), 0xc00c);
-            BinaryPrimitives.WriteUInt16BigEndian(response.AsSpan(end + 2), 1);
+            BinaryPrimitives.WriteUInt16BigEndian(response.AsSpan(end + 2), type);
             BinaryPrimitives.WriteUInt16BigEndian(response.AsSpan(end + 4), 1);
             BinaryPrimitives.WriteUInt32BigEndian(response.AsSpan(end + 6), 60);
-            BinaryPrimitives.WriteUInt16BigEndian(response.AsSpan(end + 10), 4);
+            BinaryPrimitives.WriteUInt16BigEndian(response.AsSpan(end + 10), checked((ushort)address.Length));
             address.CopyTo(response, end + 12);
         }
         return response;

@@ -419,7 +419,7 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
             return new IPEndPoint(address, endpoint.Port);
         }
 
-        var addresses = await Dns.GetHostAddressesAsync(endpoint.Address, cancellationToken).ConfigureAwait(false);
+        var addresses = await System.Net.Dns.GetHostAddressesAsync(endpoint.Address, cancellationToken).ConfigureAwait(false);
         if (addresses.Length == 0)
         {
             throw new IOException($"Unable to resolve upstream '{endpoint.Name}' at {endpoint.Address}.");

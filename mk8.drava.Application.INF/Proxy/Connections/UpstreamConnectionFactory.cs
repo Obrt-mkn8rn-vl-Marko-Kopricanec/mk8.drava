@@ -120,7 +120,7 @@ public sealed class UpstreamConnectionFactory
             return[address];
         }
 
-        return await Dns.GetHostAddressesAsync(endpoint.Address, cancellationToken).ConfigureAwait(false);
+        return await System.Net.Dns.GetHostAddressesAsync(endpoint.Address, cancellationToken).ConfigureAwait(false);
     }
 
     private static List<SslApplicationProtocol>? BuildApplicationProtocols(UpstreamTransportEndpoint endpoint)
