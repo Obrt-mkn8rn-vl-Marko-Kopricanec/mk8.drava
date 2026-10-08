@@ -24,23 +24,25 @@ internal sealed class DevelopmentAsyncAcmeLifecycle : IAcmeRenewalConfigurationS
     public int Issued { get; private set; }
     public int Succeeded { get; private set; }
     public int Failed { get; private set; }
-    public AcmeCertificateStatusStore Status { get; } = new();
+    public AcmeCertificateStatusStore Status { get; }
     public AcmeCertificateManager Manager { get; }
     public AcmeRenewalActiveCertificate? Previous { get; init; }
     public bool LifetimeAwareRenewal { get; init; }
     public TimeSpan? RetryAfter { get; init; }
+    public bool IncludeWildcard { get; init; }
 
-    public DevelopmentAsyncAcmeLifecycle()
+    public DevelopmentAsyncAcmeLifecycle(IAcmeCertificateStatusPersistence? persistence = null, TimeProvider? clock = null)
     {
+        Status = new AcmeCertificateStatusStore(persistence);
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var request = new CertificateRequest("CN=development-lifecycle", key, HashAlgorithmName.SHA256);
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(90));
         _pfx = certificate.Export(X509ContentType.Pkcs12);
-        Manager = new AcmeCertificateManager(this, this, new MdravaDataDirectoryProvider(new MdravaDataDirectoryOptions { DataDirectory = _directory.Path }), this, this, new AcmeChallengeStore(), Status, TimeProvider.System, this, this);
+        Manager = new AcmeCertificateManager(this, this, new MdravaDataDirectoryProvider(new MdravaDataDirectoryOptions { DataDirectory = _directory.Path }), this, this, new AcmeChallengeStore(), Status, clock ?? TimeProvider.System, this, this);
     }
 
     public AcmeRenewalConfigurationInputReadResult ReadInput() => AcmeRenewalConfigurationInputReadResult.Available(new AcmeRenewalConfigurationInput(true, "acme", "https://development-ca.example/directory", ["ops@example.org"], true, 5,
-        [new AcmeRenewalCertificateInput("site", true, ["site.example"], 30, Previous, LifetimeAwareRenewal)], RetryAfter));
+        [new AcmeRenewalCertificateInput("site", true, IncludeWildcard ? ["site.example", "*.site.example"] : ["site.example"], 30, Previous, LifetimeAwareRenewal)], RetryAfter));
     public ValueTask<AcmeCertificateIssueResult> IssueAsync(AcmeCertificateIssueRequest request, AcmeChallengeStore challengeStore, CancellationToken cancellationToken)
     { cancellationToken.ThrowIfCancellationRequested(); Issued++; return ValueTask.FromResult(AcmeCertificateIssueResult.Issued(_pfx)); }
     public void EnsureLayout(string dataDirectory, string storagePath) { }

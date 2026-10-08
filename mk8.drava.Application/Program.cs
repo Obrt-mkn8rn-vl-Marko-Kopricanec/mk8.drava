@@ -83,7 +83,8 @@ internal static class Program
         builder.Services.AddSingleton(registration.Registry);
         builder.Services.AddSingleton(registration.Handler);
         builder.Services.AddSingleton(registration.Plans);
-        builder.Services.AddOwnerAcmeLifecycle(bootstrap, registration.Plans);
+        builder.Services.AddOwnerAcmeLifecycle(bootstrap, registration.Plans,
+            registration.AcmeHistory(bootstrap.Controller!.Domain, bootstrap.Controller.Acme.DirectoryUrl));
         builder.Services.AddHostedService<ServingPlanMaintenance>();
         builder.Services.AddSingleton(services => new RegistrationService(services.GetRequiredService<Mk8.Drava.Application.INF.Registry.SignedRegistrationHandler>()));
         builder.Services.AddNoConfRuntime(bootstrap, registration);

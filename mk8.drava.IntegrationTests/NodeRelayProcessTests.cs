@@ -11,6 +11,7 @@ using Mk8.Drava.Registration;
 using Mk8.Drava.Transport.Discovery;
 using Mk8.Drava.Transport.Protocol.V1;
 using Mk8.Drava.Transport.Relay;
+using Mk8.Drava.Application.INF.Publication;
 using Xunit;
 
 namespace Mk8.Drava.IntegrationTests;
@@ -135,18 +136,56 @@ public sealed class NodeRelayProcessTests
         await using var agentLifetime = agent.ConfigureAwait(true);
         using var root = X509CertificateLoader.LoadCertificateFromFile(proxy.RootCertificatePath);
         using var node = X509CertificateLoader.LoadPkcs12FromFile(proxy.NodeCertificatePath, password: null, X509KeyStorageFlags.EphemeralKeySet);
+        Assert.Throws<UnauthorizedAccessException>(() => ControllerCertificateRole.Epoch(node, "development"));
+        await AssertControllerListenerLiveAsync(proxy, agent, root).ConfigureAwait(true);
+        var verifiedServer = 0;
         using var handler = new SocketsHttpHandler { UseProxy = false, SslOptions = new SslClientAuthenticationOptions
         {
             ClientCertificates = new X509CertificateCollection { node },
-            RemoteCertificateValidationCallback = (_, peer, _, _) => peer is not null && ValidatePeer(peer, root, agent.Descriptor),
+            RemoteCertificateValidationCallback = (_, peer, _, _) =>
+            {
+                var valid = peer is not null && ValidatePeer(peer, root, agent.Descriptor);
+                if (valid) Volatile.Write(ref verifiedServer, 1);
+                return valid;
+            },
         } };
         using var channel = GrpcChannel.ForAddress($"https://{agent.Descriptor.RelayAddress}:{agent.Descriptor.RelayPort}", new GrpcChannelOptions { HttpHandler = handler });
         using var call = new Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient(channel).Relay(deadline: DateTime.UtcNow.AddSeconds(5));
-        await Assert.ThrowsAsync<Grpc.Core.RpcException>(async () =>
+        Exception? rejected = null;
+        try
         {
             await call.RequestStream.WriteAsync(new RelayFrame { Open = new RelayOpen { Version = 1 } }).ConfigureAwait(true);
             await call.ResponseStream.MoveNext(CancellationToken.None).ConfigureAwait(true);
-        }).ConfigureAwait(true);
+        }
+        catch (Grpc.Core.RpcException exception)
+        {
+            Assert.True(exception.StatusCode is Grpc.Core.StatusCode.Unavailable or Grpc.Core.StatusCode.Unauthenticated or Grpc.Core.StatusCode.PermissionDenied);
+            rejected = exception;
+        }
+        catch (HttpIOException exception)
+        {
+            Assert.Equal(HttpRequestError.InvalidResponse, exception.HttpRequestError);
+            rejected = exception;
+        }
+        Assert.NotNull(rejected); Assert.Equal(1, Volatile.Read(ref verifiedServer));
+    }
+
+    private static async Task AssertControllerListenerLiveAsync(TwoProcessProxy proxy, DevelopmentNodeAgent agent, X509Certificate2 root)
+    {
+        var authorityPath = Path.Combine(Path.GetDirectoryName(proxy.RootCertificatePath)!, "app", "site-ca.pfx");
+        using var authority = LocalSiteCertificateAuthority.Open(authorityPath, root.GetCertHashString(HashAlgorithmName.SHA256), TimeProvider.System);
+        using var controller = authority.IssueController("development", Guid.NewGuid().ToString("N"));
+        using var handler = new SocketsHttpHandler { UseProxy = false, SslOptions = new SslClientAuthenticationOptions
+        {
+            ClientCertificates = new X509CertificateCollection { controller },
+            RemoteCertificateValidationCallback = (_, peer, _, _) => peer is not null && ValidatePeer(peer, root, agent.Descriptor),
+        } };
+        using var client = new HttpClient(handler, disposeHandler: false);
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://{agent.Descriptor.RelayAddress}:{agent.Descriptor.RelayPort}/role-probe"))
+            { Version = HttpVersion.Version20, VersionPolicy = HttpVersionPolicy.RequestVersionExact };
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var response = await client.SendAsync(request, deadline.Token).ConfigureAwait(true);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); Assert.Equal(HttpVersion.Version20, response.Version);
     }
 
     private static bool ValidatePeer(X509Certificate certificate, X509Certificate2 root, NodeAgentDescriptor descriptor)

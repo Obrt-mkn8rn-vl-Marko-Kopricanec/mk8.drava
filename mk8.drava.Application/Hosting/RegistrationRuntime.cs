@@ -5,6 +5,8 @@ using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Application.INF.Registry;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Application.INF.NodeRelay;
+using Mk8.Drava.Application.BLL.ControlPlane.Acme;
+using Mk8.Drava.Application.DAL.Acme;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Mk8.Drava.Application.Hosting;
@@ -21,6 +23,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
     public SignedRegistrationHandler Handler { get; }
     public ServingPlanState Plans { get; }
     public IPolicyRepository Policies => _repository;
+    public IAcmeCertificateStatusPersistence AcmeHistory(string domain, Uri directory) => new SqliteAcmeCertificateStatusPersistence(_repository, domain, directory);
 
     private RegistrationRuntime(SqliteRegistryRepository repository, LocalSiteCertificateAuthority authority, RegistryCoordinator registry,
         EnrollmentVerifier verifier, SignedRegistrationHandler handler, ServingPlanState plans, RegisteredRelayConnector relay, X509Certificate2 relayRoot, X509Certificate2 relayController)

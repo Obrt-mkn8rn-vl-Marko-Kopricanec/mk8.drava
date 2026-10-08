@@ -7,9 +7,11 @@ namespace Mk8.Drava.Application.Hosting;
 
 internal static class AcmeHosting
 {
-    public static void AddOwnerAcmeLifecycle(this IServiceCollection services, ApplicationBootstrap bootstrap, ServingPlanState plans)
+    public static void AddOwnerAcmeLifecycle(this IServiceCollection services, ApplicationBootstrap bootstrap, ServingPlanState plans,
+        IAcmeCertificateStatusPersistence history)
     {
         if (bootstrap.Controller?.Acme.Enabled != true) return;
+        services.AddSingleton(history);
         services.RemoveAll<IAcmeCertificateIssuer>();
         services.RemoveAll<IAcmeRenewalConfigurationSource>();
         services.RemoveAll<IAcmeRenewalScheduleInputSource>();

@@ -29,6 +29,7 @@ public sealed class AcmeCertificateManager
 
     public async ValueTask CheckRenewalsAsync(CancellationToken cancellationToken)
     {
+        await _statusStore.InitializeAsync(cancellationToken).ConfigureAwait(false);
         var inputResult = _configurationSource.ReadInput();
         if (inputResult is not AcmeRenewalConfigurationInputReadResult.AvailableResult available || !available.Input.Enabled)
         {
@@ -49,7 +50,7 @@ public sealed class AcmeCertificateManager
     {
         if (!certificate.Enabled)
         {
-            _statusStore.Upsert(CreateStatus(certificate, certificate.ActiveCertificate, nowUtc, "disabled", null, null));
+            await _statusStore.UpsertAsync(CreateStatus(certificate, certificate.ActiveCertificate, nowUtc, "disabled", null, null), cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -58,19 +59,19 @@ public sealed class AcmeCertificateManager
         var existingStatus = _statusStore.Get(certificate.Id);
         if (existingStatus?.NextAttemptNotBeforeUtc is not null && existingStatus.NextAttemptNotBeforeUtc > nowUtc && (activeCertificate is null || renewalDueAtUtc <= nowUtc))
         {
-            _statusStore.Upsert(CopyHistory(CreateStatus(certificate, activeCertificate, nowUtc, existingStatus.LastResult, existingStatus.ErrorSummary, existingStatus.NextAttemptNotBeforeUtc), existingStatus));
+            await _statusStore.UpsertAsync(CopyHistory(CreateStatus(certificate, activeCertificate, nowUtc, existingStatus.LastResult, existingStatus.ErrorSummary, existingStatus.NextAttemptNotBeforeUtc), existingStatus), cancellationToken).ConfigureAwait(false);
             return;
         }
 
         if (activeCertificate is not null && renewalDueAtUtc > nowUtc)
         {
-            _statusStore.Upsert(CopyHistory(CreateStatus(certificate, activeCertificate, nowUtc, "not-due", null, renewalDueAtUtc), existingStatus));
+            await _statusStore.UpsertAsync(CopyHistory(CreateStatus(certificate, activeCertificate, nowUtc, "not-due", null, renewalDueAtUtc), existingStatus), cancellationToken).ConfigureAwait(false);
             return;
         }
 
         var attemptStartedAtUtc = nowUtc;
         _metrics.AcmeRenewalAttempted();
-        _statusStore.Upsert(CreateStatus(certificate, activeCertificate, nowUtc, "attempting", null, null, LastAttemptAtUtc: attemptStartedAtUtc));
+        await _statusStore.UpsertAsync(CreateStatus(certificate, activeCertificate, nowUtc, "attempting", null, attemptStartedAtUtc.Add(input.RetryAfter ?? TimeSpan.FromMinutes(input.RetryAfterMinutes)), LastAttemptAtUtc: attemptStartedAtUtc), cancellationToken).ConfigureAwait(false);
         var request = new AcmeCertificateIssueRequest(certificate.Id, certificate.Domains, input.DirectoryUrl, input.ContactEmails, input.TermsAccepted);
         AcmeCertificateIssueResult result;
         try
@@ -87,7 +88,7 @@ public sealed class AcmeCertificateManager
             _metrics.AcmeRenewalFailed();
             var nextAttempt = attemptStartedAtUtc.Add(input.RetryAfter ?? TimeSpan.FromMinutes(input.RetryAfterMinutes));
             _events.RenewalFailed(certificate.Id, failed.ErrorSummary);
-            _statusStore.Upsert(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(failed.ErrorSummary), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc));
+            await _statusStore.UpsertAsync(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(failed.ErrorSummary), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc), cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -101,7 +102,7 @@ public sealed class AcmeCertificateManager
         {
             _metrics.AcmeRenewalFailed();
             var nextAttempt = attemptStartedAtUtc.Add(input.RetryAfter ?? TimeSpan.FromMinutes(input.RetryAfterMinutes));
-            _statusStore.Upsert(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(exception.Message), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc));
+            await _statusStore.UpsertAsync(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(exception.Message), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc), cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -118,11 +119,11 @@ public sealed class AcmeCertificateManager
             renewedCertificate.Certificate.Dispose();
             _metrics.AcmeRenewalFailed();
             var nextAttempt = attemptStartedAtUtc.Add(input.RetryAfter ?? TimeSpan.FromMinutes(input.RetryAfterMinutes));
-            _statusStore.Upsert(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(exception.Message), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc));
+            await _statusStore.UpsertAsync(CreateStatus(certificate, activeCertificate, nowUtc, "failed", SafeError(exception.Message), nextAttempt, LastAttemptAtUtc: attemptStartedAtUtc, LastFailedAtUtc: attemptStartedAtUtc), cancellationToken).ConfigureAwait(false);
             return;
         }
         _metrics.AcmeRenewalSucceeded();
-        _statusStore.Upsert(CreateStatus(certificate, renewedActiveCertificate, nowUtc, "succeeded", null, CalculateRenewalDueAt(renewedActiveCertificate, certificate.RenewBeforeDays, certificate.LifetimeAwareRenewal), LastAttemptAtUtc: attemptStartedAtUtc, LastSucceededAtUtc: attemptStartedAtUtc));
+        await _statusStore.UpsertAsync(CreateStatus(certificate, renewedActiveCertificate, nowUtc, "succeeded", null, CalculateRenewalDueAt(renewedActiveCertificate, certificate.RenewBeforeDays, certificate.LifetimeAwareRenewal), LastAttemptAtUtc: attemptStartedAtUtc, LastSucceededAtUtc: attemptStartedAtUtc), cancellationToken).ConfigureAwait(false);
     }
 
     private static AcmeCertificateLifecycleStatus CreateStatus(AcmeRenewalCertificateInput certificate, AcmeRenewalActiveCertificate? activeCertificate, DateTimeOffset nowUtc, string result, string? errorSummary, DateTimeOffset? nextAttemptNotBeforeUtc, DateTimeOffset? LastAttemptAtUtc = null, DateTimeOffset? LastSucceededAtUtc = null, DateTimeOffset? LastFailedAtUtc = null)

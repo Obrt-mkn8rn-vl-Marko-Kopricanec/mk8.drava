@@ -143,6 +143,8 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
             CREATE TABLE IF NOT EXISTS policy_state(id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL, revision INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS policy_revisions(revision INTEGER PRIMARY KEY, canonical BLOB NOT NULL, digest BLOB NOT NULL,
                 at_utc INTEGER NOT NULL, actor TEXT NOT NULL, source TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS acme_lifecycle(id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL,
+                site_id TEXT NOT NULL, scope TEXT NOT NULL, state BLOB NOT NULL, digest BLOB NOT NULL);
             INSERT OR IGNORE INTO policy_state VALUES(1,1,0);
             """;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
