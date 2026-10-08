@@ -10,7 +10,7 @@ namespace Mk8.Drava.UnitTests;
 
 internal sealed class PolicyRuntime : IAsyncDisposable
 {
-    public PolicyRuntime(SqliteRegistryRepository repository, string directory)
+    public PolicyRuntime(SqliteRegistryRepository repository, string directory, IPolicyRepository? policies = null)
     {
         Availability = new DestinationAvailabilityStore(TimeProvider.System);
         Registry = new RegistryCoordinator(repository, Availability, TimeProvider.System);
@@ -18,7 +18,7 @@ internal sealed class PolicyRuntime : IAsyncDisposable
         store.Replace(NoConfCompilerTests.Baseline());
         var site = new UnpublishedSite();
         Reconciler = new NoConfReconciler(Registry, Availability, store, NoConfCompilerTests.Compiler(), site, site, site,
-            Path.Combine(directory, "noconf.json"), "site.example", "node", TimeProvider.System, NullLogger<NoConfReconciler>.Instance, repository);
+            Path.Combine(directory, "noconf.json"), "site.example", "node", TimeProvider.System, NullLogger<NoConfReconciler>.Instance, policies ?? repository);
     }
 
     public DestinationAvailabilityStore Availability { get; }

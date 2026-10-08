@@ -10,10 +10,13 @@ internal sealed class DevelopmentDnsProvider : HttpMessageHandler
 {
     private readonly Lock _gate = new();
     private readonly List<ProviderRequest> _requests = [];
-    public List<ProviderRecord> Records { get; } = [];
+    public List<ProviderRecord> Records { get; }
+    public DevelopmentDnsProvider(List<ProviderRecord>? records = null) => Records = records ?? [];
+    public Action? BeforeCreate { get; set; }
     public string Failure { get; set; } = "";
     public bool Block { get; set; }
     public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public TaskCompletionSource Exited { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource FourEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public ProviderRequest[] Requests { get { lock (_gate) return _requests.ToArray(); } }
 
@@ -30,7 +33,11 @@ internal sealed class DevelopmentDnsProvider : HttpMessageHandler
             if (_requests.Count == 4) FourEntered.TrySetResult();
         }
         Entered.TrySetResult();
-        if (Block) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+        if (Block)
+        {
+            try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false); }
+            finally { Exited.TrySetResult(); }
+        }
         if (uri.AbsolutePath.EndsWith("/" + new string('a', 32), StringComparison.Ordinal))
             return Json(new { success = true, errors = Array.Empty<object>(), result = new { name = string.Equals(Failure, "zone", StringComparison.Ordinal) ? "foreign.example" : "site.example" } });
         if (request.Method == HttpMethod.Post) return CreateRecord(body);
@@ -58,10 +65,12 @@ internal sealed class DevelopmentDnsProvider : HttpMessageHandler
 
     private HttpResponseMessage CreateRecord(string body)
     {
+        BeforeCreate?.Invoke();
         using var value = JsonDocument.Parse(body);
         var root = value.RootElement;
         var record = new ProviderRecord(root.GetProperty("name").GetString()!, root.GetProperty("type").GetString()!, root.GetProperty("content").GetString()!, false, root.GetProperty("comment").GetString()!) { Id = Guid.NewGuid().ToString("N") };
         lock (_gate) Records.Add(record);
+        if (string.Equals(Failure, "create-response-lost", StringComparison.Ordinal)) throw new HttpRequestException("Development provider lost the create response after mutation.");
         return Json(new { success = true, errors = Array.Empty<object>(), result = Record(string.Equals(Failure, "created-host", StringComparison.Ordinal) ? record with { Name = "foreign.example" } : record) });
     }
 
@@ -74,6 +83,7 @@ internal sealed class DevelopmentDnsProvider : HttpMessageHandler
         if (method == HttpMethod.Delete)
         {
             lock (_gate) Records.Remove(record);
+            if (string.Equals(Failure, "delete-response-lost", StringComparison.Ordinal)) throw new HttpRequestException("Development provider lost the delete response after mutation.");
             return Json(new { success = true, errors = Array.Empty<object>(), result = new { id = string.Equals(Failure, "delete-id", StringComparison.Ordinal) ? new string('c', 32) : id } });
         }
         Assert.Equal(HttpMethod.Get, method);

@@ -59,6 +59,7 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
 
     private async ValueTask<AcmeCertificateIssueResult> IssueOwnedAsync(AcmeCertificateIssueRequest request, CancellationToken cancellationToken)
     {
+        await _dns.RecoverAsync(cancellationToken).ConfigureAwait(false);
         var accountKey = await AcmeAccountKeyStore.OpenAsync(_policy.AccountKeyPath, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         using var operation = new AcmeOperationHttpClient(_policy.Directory, _policy.RequestTimeout, cancellationToken, _handler?.Invoke());

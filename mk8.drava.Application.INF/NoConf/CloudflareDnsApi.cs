@@ -67,11 +67,15 @@ internal sealed partial class CloudflareDnsApi : IDisposable
             RequiredString(record, "id").Length is > 0 and <= 64;
     }
 
-    private async ValueTask<JsonDocument> SendAsync(HttpMethod method, string path, HttpContent? content, CancellationToken cancellationToken)
+    private async ValueTask<JsonDocument> SendAsync(HttpMethod method, string path, HttpContent? content, CancellationToken cancellationToken) =>
+        await SendCoreAsync(method, path, content, allowNotFound: false, cancellationToken).ConfigureAwait(false) ?? throw new InvalidDataException("DNS provider response is absent.");
+
+    private async ValueTask<JsonDocument?> SendCoreAsync(HttpMethod method, string path, HttpContent? content, bool allowNotFound, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, new Uri(path, UriKind.Relative)) { Content = content };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _credential);
         using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        if (allowNotFound && response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaximumResponseBytes)
             throw new InvalidDataException("DNS provider rejected the operation or exceeded its response bound.");
         var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);

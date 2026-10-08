@@ -33,6 +33,33 @@ internal sealed partial class CloudflareDnsApi
         return string.Equals(RequiredString(response.RootElement.GetProperty("result"), "id"), identity.Id, StringComparison.Ordinal);
     }
 
+    public async ValueTask<CloudflareTxtRecord?> FindRecoveryTxtAsync(string host, string value, string ownership, string recordId, CancellationToken cancellationToken)
+    {
+        RequireChallenge(host, value, ownership);
+        CloudflareTxtRecord? identity = null;
+        if (recordId.Length != 0)
+        {
+            RequireRecordId(recordId);
+            identity = new CloudflareTxtRecord(_zonePath, recordId, host, value, ownership);
+            using var current = await SendCoreAsync(HttpMethod.Get, _zonePath + "/dns_records/" + recordId, null, allowNotFound: true, cancellationToken).ConfigureAwait(false);
+            if (current is null) return null;
+            if (!MatchesTxt(current.RootElement.GetProperty("result"), identity)) throw new InvalidDataException("Recovered DNS01 record no longer matches its durable ownership.");
+        }
+        else
+        {
+            using var records = await ListAsync(host, cancellationToken).ConfigureAwait(false);
+            foreach (var record in records.RootElement.GetProperty("result").EnumerateArray())
+            {
+                if (!record.TryGetProperty("comment", out var comment) || comment.ValueKind != JsonValueKind.String || !string.Equals(comment.GetString(), ownership, StringComparison.Ordinal)) continue;
+                var id = RequiredString(record, "id"); RequireRecordId(id);
+                var found = new CloudflareTxtRecord(_zonePath, id, host, value, ownership);
+                if (identity is not null || !MatchesTxt(record, found)) throw new InvalidDataException("Unconfirmed DNS01 creation has conflicting provider ownership.");
+                identity = found;
+            }
+        }
+        return identity;
+    }
+
     private static bool MatchesTxt(JsonElement record, CloudflareTxtRecord identity) =>
         string.Equals(RequiredString(record, "id"), identity.Id, StringComparison.Ordinal) &&
         string.Equals(RequiredString(record, "name"), identity.Host, StringComparison.OrdinalIgnoreCase) &&

@@ -41,7 +41,7 @@ public static class PrivateCertificateFile
         finally { File.Delete(temporary); }
     }
 
-    private static void ValidatePath(string path)
+    internal static void ValidatePath(string path)
     {
         if (!Path.IsPathFullyQualified(path) || new FileInfo(path).LinkTarget is not null || !Directory.Exists(Path.GetDirectoryName(path)))
             throw new InvalidDataException("Certificate material requires a private absolute file path.");

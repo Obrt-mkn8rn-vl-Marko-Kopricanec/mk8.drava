@@ -65,6 +65,19 @@ public sealed partial class NoConfReconciler : BackgroundService
     public CompiledNoConfSnapshot? Compiled => Volatile.Read(ref _compiled);
     public string Failure => Volatile.Read(ref _failure);
 
+    public async ValueTask InitializeAsync(CancellationToken cancellationToken)
+    {
+        await CompileLatestAsync(cancellationToken).ConfigureAwait(false);
+        if (Compiled is null || !_registry.StorageHealthy)
+            throw new InvalidOperationException("Initial noconf policy and route compilation did not complete.");
+    }
+
+    public override async Task StartAsync(CancellationToken cancellationToken)
+    {
+        await InitializeAsync(cancellationToken).ConfigureAwait(false);
+        await base.StartAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);

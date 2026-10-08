@@ -96,6 +96,8 @@ internal static class Program
         var app = builder.Build();
         await using var appLifetime = app.ConfigureAwait(false);
         await RuntimeInitializer.InitializeAsync(app.Services, CancellationToken.None).ConfigureAwait(false);
+        if (registration is not null)
+            await app.Services.GetRequiredService<NoConfReconciler>().InitializeAsync(app.Lifetime.ApplicationStopping).ConfigureAwait(false);
         app.MapGrpcService<ProxyExchangeService>();
         app.MapGrpcService<ControlService>();
         if (registration is not null)
