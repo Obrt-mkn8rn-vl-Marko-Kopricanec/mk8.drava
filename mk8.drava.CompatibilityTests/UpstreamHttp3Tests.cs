@@ -492,24 +492,34 @@ internal static class UpstreamHttp3Tests
         {
             var connection = (await listener.AcceptConnectionAsync(cancellationToken).ConfigureAwait(false));
             await using var connectionDisposal = connection.ConfigureAwait(false);
-            while (true)
+            using var drainStop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            List<Task> drains = [];
+            try
             {
-                var stream = await connection.AcceptInboundStreamAsync(cancellationToken).ConfigureAwait(false);
-                if (stream.Type != QuicStreamType.Bidirectional)
+                while (true)
                 {
-                    _ = DrainAsync(stream, cancellationToken);
-                    continue;
-                }
+                    var stream = await connection.AcceptInboundStreamAsync(cancellationToken).ConfigureAwait(false);
+                    if (stream.Type != QuicStreamType.Bidirectional)
+                    {
+                        drains.Add(ObserveAsync(DrainAsync(stream, drainStop.Token)));
+                        continue;
+                    }
 
-                await using var ownedStream = stream.ConfigureAwait(false);
-                var observation = await ReadRequestAsync(stream, cancellationToken).ConfigureAwait(false);
-                if (closeBeforeResponseHeaders)
-                {
+                    await using var ownedStream = stream.ConfigureAwait(false);
+                    var observation = await ReadRequestAsync(stream, cancellationToken).ConfigureAwait(false);
+                    if (closeBeforeResponseHeaders)
+                    {
+                        return observation;
+                    }
+
+                    await WriteResponseAsync(stream, statusCode, responseHeaders, responseBody, cancellationToken, malformedResponseHeaders, closeAfterResponseHeaders).ConfigureAwait(false);
                     return observation;
                 }
-
-                await WriteResponseAsync(stream, statusCode, responseHeaders, responseBody, cancellationToken, malformedResponseHeaders, closeAfterResponseHeaders).ConfigureAwait(false);
-                return observation;
+            }
+            finally
+            {
+                await drainStop.CancelAsync().ConfigureAwait(false);
+                await Task.WhenAll(drains).ConfigureAwait(false);
             }
         }
         catch (Exception exception)when (exception is AuthenticationException or IOException or QuicException)
@@ -525,7 +535,7 @@ internal static class UpstreamHttp3Tests
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var requests = new ConcurrentQueue<Http3UpstreamObservation>();
         var connectionTasks = new ConcurrentBag<Task>();
-        var streamTasks = new ConcurrentBag<Task>();
+        Task<QuicConnection>? pendingAccept = null;
         var completed = 0;
         var read = 0;
         var connections = 0;
@@ -535,15 +545,15 @@ internal static class UpstreamHttp3Tests
         var goAwaySent = 0;
         var resetSent = 0;
         var closeSent = 0;
-        async Task HandleStreamAsync(QuicConnection connection, QuicStream stream)
+        async Task HandleStreamAsync(QuicConnection connection, QuicStream stream, CancellationToken streamStop, ConcurrentBag<QuicStream> controls)
         {
             await using var ownedStream = stream.ConfigureAwait(false);
-            var observation = await ReadRequestAsync(stream, stop.Token).ConfigureAwait(false);
+            var observation = await ReadRequestAsync(stream, streamStop).ConfigureAwait(false);
             requests.Enqueue(observation);
             var resetThisStream = resetFirstStreamBeforeResponse && Interlocked.Exchange(ref resetSent, 1) == 0;
             if (sendGoAwayAfterFirstRequest && Interlocked.Exchange(ref goAwaySent, 1) == 0)
             {
-                await SendGoAwayAsync(connection, stop.Token).ConfigureAwait(false);
+                controls.Add(await SendGoAwayAsync(connection, streamStop).ConfigureAwait(false));
             }
 
             if (Interlocked.Increment(ref read) >= requestCount)
@@ -553,14 +563,14 @@ internal static class UpstreamHttp3Tests
 
             if (holdResponsesUntilAllRequestsRead)
             {
-                await allRead.Task.WaitAsync(stop.Token).ConfigureAwait(false);
+                await allRead.Task.WaitAsync(streamStop).ConfigureAwait(false);
             }
 
             if (resetThisStream)
             {
                 if (requestCount > 1)
                 {
-                    await resetCanRun.Task.WaitAsync(stop.Token).ConfigureAwait(false);
+                    await resetCanRun.Task.WaitAsync(streamStop).ConfigureAwait(false);
                 }
 
                 stream.Abort(QuicAbortDirection.Write, 0x100);
@@ -574,7 +584,7 @@ internal static class UpstreamHttp3Tests
 
             if (closeConnectionAfterFirstRequest && Interlocked.Exchange(ref closeSent, 1) == 0)
             {
-                await connection.CloseAsync(0x100, stop.Token).ConfigureAwait(false);
+                await connection.CloseAsync(0x100, streamStop).ConfigureAwait(false);
                 if (Interlocked.Increment(ref completed) >= requestCount)
                 {
                     allCompleted.TrySetResult();
@@ -585,10 +595,10 @@ internal static class UpstreamHttp3Tests
 
             if (responseDelay.HasValue)
             {
-                await Task.Delay(responseDelay.Value, stop.Token).ConfigureAwait(false);
+                await Task.Delay(responseDelay.Value, streamStop).ConfigureAwait(false);
             }
 
-            await WriteResponseAsync(stream, 200, responseHeaders, responseBody, stop.Token, malformedResponseHeaders: false).ConfigureAwait(false);
+            await WriteResponseAsync(stream, 200, responseHeaders, responseBody, streamStop, malformedResponseHeaders: false).ConfigureAwait(false);
             resetCanRun.TrySetResult();
             if (Interlocked.Increment(ref completed) >= requestCount)
             {
@@ -599,17 +609,30 @@ internal static class UpstreamHttp3Tests
         async Task HandleConnectionAsync(QuicConnection connection)
         {
             await using var ownedConnection = connection.ConfigureAwait(false);
-            while (!stop.IsCancellationRequested)
+            using var connectionStop = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+            List<Task> children = [];
+            var controls = new ConcurrentBag<QuicStream>();
+            try
             {
-                var stream = await connection.AcceptInboundStreamAsync(stop.Token).ConfigureAwait(false);
-                if (stream.Type != QuicStreamType.Bidirectional)
+                while (!connectionStop.IsCancellationRequested)
                 {
-                    _ = DrainAsync(stream, stop.Token);
-                    continue;
+                    var stream = await connection.AcceptInboundStreamAsync(connectionStop.Token).ConfigureAwait(false);
+                    children.Add(ObserveAsync(stream.Type == QuicStreamType.Bidirectional
+                        ? HandleStreamAsync(connection, stream, connectionStop.Token, controls)
+                        : DrainAsync(stream, connectionStop.Token)));
                 }
-
-                var task = HandleStreamAsync(connection, stream);
-                streamTasks.Add(task);
+            }
+            finally
+            {
+                await connectionStop.CancelAsync().ConfigureAwait(false);
+                try
+                {
+                    await Task.WhenAll(children).ConfigureAwait(false);
+                }
+                finally
+                {
+                    foreach (var control in controls) await control.DisposeAsync().ConfigureAwait(false);
+                }
             }
         }
 
@@ -617,16 +640,17 @@ internal static class UpstreamHttp3Tests
         {
             while (Volatile.Read(ref completed) < requestCount)
             {
-                var acceptTask = listener.AcceptConnectionAsync(stop.Token).AsTask();
-                var completedTask = await Task.WhenAny(acceptTask, allCompleted.Task).ConfigureAwait(false);
+                pendingAccept = listener.AcceptConnectionAsync(stop.Token).AsTask();
+                var completedTask = await Task.WhenAny(pendingAccept, allCompleted.Task).ConfigureAwait(false);
                 if (completedTask == allCompleted.Task)
                 {
                     break;
                 }
 
-                var connection = await acceptTask.ConfigureAwait(false);
+                var connection = await pendingAccept.ConfigureAwait(false);
+                pendingAccept = null;
                 Interlocked.Increment(ref connections);
-                var task = HandleConnectionAsync(connection);
+                var task = ObserveAsync(HandleConnectionAsync(connection));
                 connectionTasks.Add(task);
             }
 
@@ -638,9 +662,23 @@ internal static class UpstreamHttp3Tests
         }
         finally
         {
-            stop.Cancel();
-            await Task.WhenAll(streamTasks.Select(static task => ObserveAsync(task))).ConfigureAwait(false);
-            await Task.WhenAll(connectionTasks.Select(static task => ObserveAsync(task))).ConfigureAwait(false);
+            await stop.CancelAsync().ConfigureAwait(false);
+            try
+            {
+                if (pendingAccept is not null)
+                {
+                    try
+                    {
+                        var unassigned = await pendingAccept.ConfigureAwait(false);
+                        await unassigned.DisposeAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception exception) when (exception is OperationCanceledException or IOException or QuicException) { }
+                }
+            }
+            finally
+            {
+                await Task.WhenAll(connectionTasks).ConfigureAwait(false);
+            }
         }
 
         return new ReusableHttp3UpstreamObservation(connections, requests.ToArray());
@@ -725,16 +763,25 @@ internal static class UpstreamHttp3Tests
         }
     }
 
-    private static async ValueTask SendGoAwayAsync(QuicConnection connection, CancellationToken cancellationToken)
+    private static async ValueTask<QuicStream> SendGoAwayAsync(QuicConnection connection, CancellationToken cancellationToken)
     {
         var control = await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, cancellationToken).ConfigureAwait(false);
-        using var payload = new MemoryStream();
-        Http3Codec.WriteVarInt(payload, Http3Codec.ControlStream);
-        Http3Codec.WriteFrame(payload, Http3Codec.SettingsFrame, ReadOnlySpan<byte>.Empty);
-        using var goAwayPayload = new MemoryStream();
-        Http3Codec.WriteVarInt(goAwayPayload, 0);
-        Http3Codec.WriteFrame(payload, Http3Codec.GoAwayFrame, goAwayPayload.ToArray());
-        await control.WriteAsync(payload.ToArray(), completeWrites: false, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var payload = new MemoryStream();
+            Http3Codec.WriteVarInt(payload, Http3Codec.ControlStream);
+            Http3Codec.WriteFrame(payload, Http3Codec.SettingsFrame, ReadOnlySpan<byte>.Empty);
+            using var goAwayPayload = new MemoryStream();
+            Http3Codec.WriteVarInt(goAwayPayload, 0);
+            Http3Codec.WriteFrame(payload, Http3Codec.GoAwayFrame, goAwayPayload.ToArray());
+            await control.WriteAsync(payload.ToArray(), completeWrites: false, cancellationToken).ConfigureAwait(false);
+            return control;
+        }
+        catch
+        {
+            await control.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     private static async Task DrainAsync(QuicStream stream, CancellationToken cancellationToken)
