@@ -67,7 +67,7 @@ public sealed class GatewayUpload : IDisposable
             var count = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
             if (count == 0) return;
             _digest.Append(buffer.AsSpan(0, count));
-            if (boundedBody && _digest.Bytes > (ulong)_maximumBytes) throw new InvalidDataException("Gateway request body limit exceeded.");
+            if (boundedBody && _digest.Bytes > (ulong)_maximumBytes) throw new BadHttpRequestException("Gateway request body limit exceeded.", StatusCodes.Status413PayloadTooLarge);
             await _writer.WriteAsync(new ExchangeFrame { Data = new DataFrame { Payload = ByteString.CopyFrom(buffer, 0, count) } }, cancellationToken).ConfigureAwait(false);
         }
     }

@@ -74,6 +74,9 @@ Mk8.Drava.Configuration.GatewayBootstrap.MaxRequestBodyBytes.get -> long
 Mk8.Drava.Configuration.GatewayBootstrap.MaxRequestBodyBytes.init -> void
 Mk8.Drava.Configuration.GatewayBootstrap.RegistrationPort.get -> int
 Mk8.Drava.Configuration.GatewayBootstrap.RegistrationPort.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.RequestBodyLimits.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Configuration.GatewayRequestBodyLimit!>!
+Mk8.Drava.Configuration.GatewayBootstrap.RequestBodyLimits.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.ResolveRequestBodyLimit(string! host) -> long
 Mk8.Drava.Configuration.GatewayBootstrap.SchemaVersion.get -> int
 Mk8.Drava.Configuration.GatewayBootstrap.SchemaVersion.init -> void
 Mk8.Drava.Configuration.GatewayBootstrap.SiteId.get -> string!
@@ -83,6 +86,13 @@ Mk8.Drava.Configuration.GatewayBootstrap.StateDirectory.init -> void
 Mk8.Drava.Configuration.GatewayBootstrap.StreamWindowFrames.get -> int
 Mk8.Drava.Configuration.GatewayBootstrap.StreamWindowFrames.init -> void
 Mk8.Drava.Configuration.GatewayBootstrap.Validate() -> void
+Mk8.Drava.Configuration.GatewayRequestBodyLimit
+Mk8.Drava.Configuration.GatewayRequestBodyLimit.GatewayRequestBodyLimit() -> void
+Mk8.Drava.Configuration.GatewayRequestBodyLimit.Host.get -> string!
+Mk8.Drava.Configuration.GatewayRequestBodyLimit.Host.init -> void
+Mk8.Drava.Configuration.GatewayRequestBodyLimit.MaxRequestBodyBytes.get -> long
+Mk8.Drava.Configuration.GatewayRequestBodyLimit.MaxRequestBodyBytes.init -> void
+Mk8.Drava.Configuration.GatewayRequestBodyLimit.Validate() -> void
 Mk8.Drava.Configuration.IpcEndpoint
 Mk8.Drava.Configuration.IpcEndpoint.<Clone>$() -> Mk8.Drava.Configuration.IpcEndpoint!
 Mk8.Drava.Configuration.IpcEndpoint.ClientCertificatePath.get -> string!

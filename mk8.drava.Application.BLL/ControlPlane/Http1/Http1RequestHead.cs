@@ -24,5 +24,6 @@ public sealed class Http1RequestHead
     public Http1RequestFraming Framing { get; }
     public IReadOnlyList<ProxyHeaderField> Headers { get; }
     public long? ContentLength => Framing.ContentLength;
+    public long? SourceContentLength { get; init; }
     public bool HasTransferEncoding => Framing.Kind == Http1BodyKind.Chunked;
 }

@@ -292,7 +292,7 @@ public sealed partial class ProxyForwarder
         }
         var upload = UploadAsync();
         var response = RelayResponseAsync(upstreamStream, clientStream, requestHead, route, listener, timeouts, preferClientKeepAlive,
-            upstreamTarget, requestId, suppressGeneratedFailureResponse, markResponseStarted, responseCancellation.Token, OnFinalResponse).AsTask();
+            upstreamTarget, requestId, suppressGeneratedFailureResponse, markResponseStarted, responseCancellation.Token, OnFinalResponse, upload).AsTask();
         try
         {
             var first = await Task.WhenAny(upload, response).ConfigureAwait(false);
@@ -443,9 +443,9 @@ public sealed partial class ProxyForwarder
 #pragma warning restore CA1308
         }
 
-        if (requestHead.Framing.Kind == Http1BodyKind.ContentLength)
+        if ((requestHead.SourceContentLength ?? requestHead.Framing.ContentLength) is { } contentLength)
         {
-            headers.Add(new ProxyHeaderField("content-length", requestHead.Framing.ContentLength.GetValueOrDefault().ToString(CultureInfo.InvariantCulture)));
+            headers.Add(new ProxyHeaderField("content-length", contentLength.ToString(CultureInfo.InvariantCulture)));
         }
 
         return headers;
@@ -696,9 +696,9 @@ public sealed partial class ProxyForwarder
             builder.Append(header.Name).Append(": ").Append(header.Value).Append("\r\n");
         }
 
-        if (requestHead.Framing.Kind == Http1BodyKind.ContentLength)
+        if (Http1UpstreamContentLength(requestHead) is { } contentLength)
         {
-            builder.Append("Content-Length: ").Append(requestHead.Framing.ContentLength.GetValueOrDefault()).Append("\r\n");
+            builder.Append("Content-Length: ").Append(contentLength).Append("\r\n");
         }
         else if (requestHead.Framing.Kind == Http1BodyKind.Chunked)
         {
@@ -722,7 +722,12 @@ public sealed partial class ProxyForwarder
             }
             else if (requestHead.Framing.Kind == Http1BodyKind.Chunked)
             {
-                await RelayChunkedBodyAsync(reader, upstreamStream, listener, timeouts.DownstreamWriteTimeout, preReadChunkLine, maxRequestBodyBytes, cancellationToken).ConfigureAwait(false);
+                if (Http1UpstreamContentLength(requestHead) is not null)
+                    await RelayChunkedBodyToFramedUpstreamAsync(reader,
+                        (data, _, policy, token) => WriteHttp1PayloadAsync(upstreamStream, data, policy, token),
+                        listener, timeouts, preReadChunkLine, maxRequestBodyBytes, RejectFixedHttp1TrailersAsync, cancellationToken).ConfigureAwait(false);
+                else
+                    await RelayChunkedBodyAsync(reader, upstreamStream, listener, timeouts.DownstreamWriteTimeout, preReadChunkLine, maxRequestBodyBytes, cancellationToken).ConfigureAwait(false);
             }
         }
         catch
@@ -732,7 +737,7 @@ public sealed partial class ProxyForwarder
         }
     }
 
-    private async ValueTask<ResponseForwardingResult> RelayResponseAsync(Stream upstreamStream, Stream clientStream, Http1RequestHead requestHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, bool preferClientKeepAlive, string upstreamTarget, string requestId, bool suppressRetryableStatusResponse, Action markResponseStarted, CancellationToken cancellationToken, Action<int>? finalResponseReceived = null)
+    private async ValueTask<ResponseForwardingResult> RelayResponseAsync(Stream upstreamStream, Stream clientStream, Http1RequestHead requestHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, bool preferClientKeepAlive, string upstreamTarget, string requestId, bool suppressRetryableStatusResponse, Action markResponseStarted, CancellationToken cancellationToken, Action<int>? finalResponseReceived = null, Task? requestCompleted = null)
     {
         ReadOnlyMemory<byte> initialBodyBytes = ReadOnlyMemory<byte>.Empty;
         var responseStarted = false;
@@ -743,7 +748,7 @@ public sealed partial class ProxyForwarder
         {
             while (true)
             {
-                var responseHeadRead = await Http1UpstreamResponseHeadReader.ReadAsync(responseInput, listener.MaxResponseHeadBytes, timeouts.UpstreamResponseHeadTimeout, _metrics, cancellationToken).ConfigureAwait(false);
+                var responseHeadRead = await Http1UpstreamResponseHeadReader.ReadAsync(responseInput, listener.MaxResponseHeadBytes, timeouts.UpstreamResponseHeadTimeout, _metrics, cancellationToken, requestCompleted).ConfigureAwait(false);
                 var responseHead = ParseUpstreamResponseHead(responseHeadRead, requestHead.Method);
                 var upstreamWantsClose = HopByHopHeaderPolicy.HasConnectionToken(responseHead.Headers, "close");
                 var keepClientConnectionOpen = preferClientKeepAlive && responseHead.Framing.Kind != Http1BodyKind.CloseDelimited;
