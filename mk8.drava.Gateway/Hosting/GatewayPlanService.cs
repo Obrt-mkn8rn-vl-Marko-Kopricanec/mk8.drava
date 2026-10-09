@@ -12,6 +12,8 @@ internal sealed class GatewayPlanService(GatewayBootstrap bootstrap, Application
     private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private static readonly Action<ILogger, Exception?> PlanUnavailable = LoggerMessage.Define(LogLevel.Warning, new EventId(1, nameof(PlanUnavailable)),
         "Application presentation plan is unavailable; retaining valid installed material.");
+    private static readonly Action<ILogger, ulong, DateTimeOffset, Exception?> PlanInstalled = LoggerMessage.Define<ulong, DateTimeOffset>(LogLevel.Information,
+        new EventId(10069, nameof(PlanInstalled)), "Gateway installed presentation generation {Generation} at {InstalledAtUtc}.");
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -57,6 +59,7 @@ internal sealed class GatewayPlanService(GatewayBootstrap bootstrap, Application
             await cache.WriteAsync(plan, cancellationToken).ConfigureAwait(false);
             material.Install(candidate);
             candidate = null;
+            PlanInstalled(logger, plan.Generation, DateTimeOffset.UtcNow, null);
         }
         finally { candidate?.Dispose(); }
     }

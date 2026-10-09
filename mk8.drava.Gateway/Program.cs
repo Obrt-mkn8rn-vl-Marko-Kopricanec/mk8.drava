@@ -24,8 +24,11 @@ internal static class Program
     {
         if (args.Length != 2 || !string.Equals(args[0], "--bootstrap", StringComparison.Ordinal) || !Path.IsPathFullyQualified(args[1]))
             throw new ArgumentException("Use --bootstrap with an absolute Gateway bootstrap file.", nameof(args));
+        using var startup = new GatewayStartupProgress();
+        startup.Enter(GatewayStartupPhase.BootstrapRead);
         var bootstrap = await BootstrapFile.LoadAsync<GatewayBootstrap>(args[1], CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
+        startup.Enter(GatewayStartupPhase.PrivateChannelOpen);
         using var channel = new ApplicationChannel(bootstrap.Application);
         using var cache = new GatewayPlanCache(bootstrap.StateDirectory);
         using var material = new GatewayMaterialState(bootstrap.Plan.MaximumRetainedGenerations);
@@ -33,9 +36,31 @@ internal static class Program
         if (!enrolled && bootstrap.HttpsPort != 0) throw new InvalidDataException("TLS presentation requires enrolled site trust.");
         if (enrolled)
         {
+            startup.Enter(GatewayStartupPhase.CachedMaterialRestore);
             var cached = await cache.ReadAsync(CancellationToken.None).ConfigureAwait(false);
             if (cached is not null) InstallCachedMaterial(material, cached, bootstrap);
         }
+        startup.Enter(GatewayStartupPhase.ServiceConfiguration);
+        var builder = CreateBuilder(bootstrap, channel, cache, material, enrolled);
+        startup.Enter(GatewayStartupPhase.ServiceProviderBuild);
+        var app = builder.Build();
+        await using var lifetime = app.ConfigureAwait(false);
+        MapPresentation(app, bootstrap, enrolled);
+        startup.Enter(GatewayStartupPhase.ListenerStart);
+        await app.StartAsync().ConfigureAwait(false);
+        startup.Complete();
+        var advertisement = enrolled && bootstrap.DiscoveryEnabled ? TryAdvertise(bootstrap, app.Logger) : null;
+        if (advertisement is null) await app.WaitForShutdownAsync().ConfigureAwait(false);
+        else
+        {
+            await using var discoveryLifetime = advertisement.ConfigureAwait(false);
+            await app.WaitForShutdownAsync().ConfigureAwait(false);
+        }
+    }
+
+    private static WebApplicationBuilder CreateBuilder(GatewayBootstrap bootstrap, ApplicationChannel channel, GatewayPlanCache cache,
+        GatewayMaterialState material, bool enrolled)
+    {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.Services.AddSingleton(bootstrap);
         builder.Services.AddSingleton(channel);
@@ -51,17 +76,7 @@ internal static class Program
             builder.Services.AddSingleton(services => new GatewayRegistrationService(services.GetRequiredService<ApplicationChannel>(), bootstrap));
         }
         ConfigureListeners(builder, bootstrap, material);
-        var app = builder.Build();
-        await using var lifetime = app.ConfigureAwait(false);
-        MapPresentation(app, bootstrap, enrolled);
-        await app.StartAsync().ConfigureAwait(false);
-        var advertisement = enrolled && bootstrap.DiscoveryEnabled ? TryAdvertise(bootstrap, app.Logger) : null;
-        if (advertisement is null) await app.WaitForShutdownAsync().ConfigureAwait(false);
-        else
-        {
-            await using var discoveryLifetime = advertisement.ConfigureAwait(false);
-            await app.WaitForShutdownAsync().ConfigureAwait(false);
-        }
+        return builder;
     }
 
     private static void MapPresentation(WebApplication app, GatewayBootstrap bootstrap, bool enrolled)
