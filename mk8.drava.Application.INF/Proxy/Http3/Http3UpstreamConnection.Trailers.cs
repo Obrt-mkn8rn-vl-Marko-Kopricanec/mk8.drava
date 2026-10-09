@@ -16,7 +16,7 @@ internal sealed partial class Http3UpstreamConnection
         RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
         var fields = DecodeTrailingFields(block.Span, _maximumResponseFieldBytes);
-        var next = await ReadFrameAsync(timeouts.UpstreamResponseBodyIdleTimeout,
+        var next = await ReadResponseFrameAsync(timeouts.UpstreamResponseBodyIdleTimeout,
             ProxyTimeoutKind.UpstreamResponseBodyIdle, cancellationToken).ConfigureAwait(false);
         if (!next.EndStream) throw new Http3UpstreamProtocolException("HTTP/3 frames followed trailing fields.");
         _responseEnded = true;

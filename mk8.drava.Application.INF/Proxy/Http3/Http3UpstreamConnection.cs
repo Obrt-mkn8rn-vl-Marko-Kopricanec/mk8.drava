@@ -170,7 +170,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
         {
             while (true)
             {
-                var frame = await ReadFrameAsync(timeouts.UpstreamResponseHeadTimeout, ProxyTimeoutKind.UpstreamResponseHead, cancellationToken).ConfigureAwait(false);
+                var frame = await ReadResponseFrameAsync(timeouts.UpstreamResponseHeadTimeout, ProxyTimeoutKind.UpstreamResponseHead, cancellationToken).ConfigureAwait(false);
                 if (frame.EndStream)
                 {
                     throw new Http3UpstreamProtocolException("Upstream closed before HTTP/3 response headers were received.");
@@ -212,7 +212,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
         {
             while (true)
             {
-                var frame = await ReadFrameAsync(timeouts.UpstreamResponseBodyIdleTimeout, ProxyTimeoutKind.UpstreamResponseBodyIdle, cancellationToken).ConfigureAwait(false);
+                var frame = await ReadResponseFrameAsync(timeouts.UpstreamResponseBodyIdleTimeout, ProxyTimeoutKind.UpstreamResponseBodyIdle, cancellationToken).ConfigureAwait(false);
                 if (frame.EndStream)
                 {
                     _responseEnded = true;
@@ -347,7 +347,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
         }
 
         var length = 1 << (first[0] >> 6);
-        var value = first[0] & 0x3f;
+        long value = first[0] & 0x3f;
         if (length == 1)
         {
             return new Http3VarIntReadResult(true, value);
