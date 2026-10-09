@@ -44,7 +44,8 @@ public sealed partial class SqliteRegistryRepository : IDnsMutationJournal
     {
         await RequireWriterFenceAsync(cancellationToken).ConfigureAwait(false);
         if (_dnsJournalInitialized) return;
-        using var command = _connection.CreateCommand();
+        var command = _connection.CreateCommand();
+        await using var commandLifetime = command.ConfigureAwait(false);
         command.CommandText = """
             CREATE TABLE IF NOT EXISTS dns_mutation_journal(purpose TEXT PRIMARY KEY CHECK(purpose IN ('records','acme')),
                 schema_version INTEGER NOT NULL,site_id TEXT NOT NULL,scope TEXT NOT NULL,revision INTEGER NOT NULL,state BLOB NOT NULL,digest BLOB NOT NULL);
@@ -55,7 +56,8 @@ public sealed partial class SqliteRegistryRepository : IDnsMutationJournal
 
     private async ValueTask<DnsJournalState> ReadDnsJournalCoreAsync(DnsJournalScope scope, CancellationToken cancellationToken)
     {
-        using var command = _connection.CreateCommand();
+        var command = _connection.CreateCommand();
+        await using var commandLifetime = command.ConfigureAwait(false);
         command.CommandText = "SELECT schema_version,site_id,scope,revision,state,digest FROM dns_mutation_journal WHERE purpose=$purpose";
         command.Parameters.AddWithValue("$purpose", scope.Purpose);
         var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -75,7 +77,8 @@ public sealed partial class SqliteRegistryRepository : IDnsMutationJournal
     {
         var transaction = (SqliteTransaction)await _connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         await using var lifetime = transaction.ConfigureAwait(false);
-        using var command = _connection.CreateCommand(); command.Transaction = transaction;
+        var command = _connection.CreateCommand();
+        await using var commandLifetime = command.ConfigureAwait(false); command.Transaction = transaction;
         command.CommandText = """
             INSERT INTO dns_mutation_journal(purpose,schema_version,site_id,scope,revision,state,digest)
             SELECT $purpose,1,$site,$scope,$next,$state,$digest FROM registry_state WHERE id=1 AND fence=$fence AND schema_version=1 AND site_id=$site

@@ -56,7 +56,8 @@ internal sealed class DevelopmentNativeDnsAuthority : IAsyncDisposable
             while (true)
             {
                 using var client = await _tcp.AcceptTcpClientAsync(_stop.Token).ConfigureAwait(false);
-                using var stream = client.GetStream();
+                var stream = client.GetStream();
+                await using var streamLifetime = stream.ConfigureAwait(false);
                 var prefix = new byte[2]; await stream.ReadExactlyAsync(prefix, _stop.Token).ConfigureAwait(false);
                 var length = BinaryPrimitives.ReadUInt16BigEndian(prefix);
                 if (length is < 12 or > 512) throw new InvalidDataException("Native DNS fixture query exceeds its bound.");

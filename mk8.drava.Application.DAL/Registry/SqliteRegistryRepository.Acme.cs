@@ -17,7 +17,8 @@ public sealed partial class SqliteRegistryRepository
         try
         {
             await RequireWriterFenceAsync(cancellationToken).ConfigureAwait(false);
-            using var command = _connection.CreateCommand();
+            var command = _connection.CreateCommand();
+            await using var commandLifetime = command.ConfigureAwait(false);
             command.CommandText = "SELECT schema_version, site_id, scope, state, digest FROM acme_lifecycle WHERE id=1";
             var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             await using var readerLifetime = reader.ConfigureAwait(false);
@@ -42,7 +43,8 @@ public sealed partial class SqliteRegistryRepository
         {
             var transaction = (SqliteTransaction)await _connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             await using var transactionLifetime = transaction.ConfigureAwait(false);
-            using var command = _connection.CreateCommand(); command.Transaction = transaction;
+            var command = _connection.CreateCommand();
+            await using var commandLifetime = command.ConfigureAwait(false); command.Transaction = transaction;
             command.CommandText = """
                 INSERT INTO acme_lifecycle(id,schema_version,site_id,scope,state,digest)
                 SELECT 1,1,$site,$scope,$state,$digest FROM registry_state WHERE id=1 AND fence=$fence AND schema_version=1 AND site_id=$site
@@ -61,7 +63,8 @@ public sealed partial class SqliteRegistryRepository
 
     private async ValueTask RequireWriterFenceAsync(CancellationToken cancellationToken)
     {
-        using var command = _connection.CreateCommand();
+        var command = _connection.CreateCommand();
+        await using var commandLifetime = command.ConfigureAwait(false);
         command.CommandText = "SELECT fence FROM registry_state WHERE id=1 AND schema_version=1 AND site_id=$site";
         command.Parameters.AddWithValue("$site", _siteId);
         if (await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not long fence || fence != _fence)

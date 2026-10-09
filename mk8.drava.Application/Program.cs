@@ -46,7 +46,8 @@ internal static class Program
         var bootstrap = await BootstrapFile.LoadAsync<ApplicationBootstrap>(args[1], CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
         startup.Enter(ApplicationStartupPhase.PrivateStateOpen);
-        using var privateState = await PrivateApplicationState.OpenAsync(bootstrap, CancellationToken.None).ConfigureAwait(false);
+        var privateState = await PrivateApplicationState.OpenAsync(bootstrap, CancellationToken.None).ConfigureAwait(false);
+        await using var privateStateLifetime = privateState.ConfigureAwait(false);
         startup.Enter(ApplicationStartupPhase.ServiceConfiguration);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.Configuration["Mdrava:DataDirectory"] = bootstrap.StateDirectory;
@@ -116,7 +117,8 @@ internal static class Program
         {
             app.MapGrpcService<RegistrationService>();
         }
-        using var started = app.Lifetime.ApplicationStarted.Register(static state => ((ApplicationStartupProgress)state!).Complete(), startup);
+        var started = app.Lifetime.ApplicationStarted.Register(static state => ((ApplicationStartupProgress)state!).Complete(), startup);
+        await using var startedLifetime = started.ConfigureAwait(false);
         startup.Enter(ApplicationStartupPhase.ListenerStart);
         await app.RunAsync().ConfigureAwait(false);
     }
