@@ -39,7 +39,7 @@ internal static class HealthCheckTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var upstream = Upstream(port);
         var route = Route([upstream], timeoutSeconds: 1);
-        var listener = new TcpListener(IPAddress.Loopback, port);
+        using var listener = new TcpListener(IPAddress.Loopback, port);
         listener.Start();
         try
         {
@@ -254,7 +254,7 @@ internal static class HealthCheckTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var upstream = Upstream(port);
         var route = Route([upstream]);
-        var listener = new TcpListener(IPAddress.Loopback, port);
+        using var listener = new TcpListener(IPAddress.Loopback, port);
         listener.Start();
         try
         {
@@ -328,7 +328,7 @@ internal static class HealthCheckTests
 
     private static int GetFreeTcpPort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
         {

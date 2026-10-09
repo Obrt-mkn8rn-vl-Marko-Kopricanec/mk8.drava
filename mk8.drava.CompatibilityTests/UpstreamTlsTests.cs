@@ -298,7 +298,7 @@ internal static class UpstreamTlsTests
 
     private static async Task<TlsUpstreamObservation> RunSingleTlsResponseUpstreamAsync(int port, X509Certificate2 certificate, string response, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, port);
+        using var listener = new TcpListener(IPAddress.Loopback, port);
         listener.Start();
         var request = "";
         var handshakeSucceeded = false;
@@ -389,7 +389,7 @@ internal static class UpstreamTlsTests
 
     private static int GetFreeTcpPort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
         {

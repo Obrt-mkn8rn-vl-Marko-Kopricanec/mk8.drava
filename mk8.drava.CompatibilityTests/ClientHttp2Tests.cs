@@ -861,7 +861,7 @@ internal static class ClientHttp2Tests
 
     private static async Task<string> RunSingleResponseUpstreamAsync(int upstreamPort, string response, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         try
         {

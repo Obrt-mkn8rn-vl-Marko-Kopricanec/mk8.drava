@@ -257,7 +257,7 @@ internal static class UpstreamHttp2Tests
 
     private static async Task<Http2UpstreamObservation> RunSingleHttp2UpstreamAsync(int port, int statusCode, IReadOnlyList<(string Name, string Value)> responseHeaders, byte[] responseBody, CancellationToken cancellationToken, IReadOnlyList<SslApplicationProtocol>? applicationProtocols = null, bool readRequest = true, bool closeBeforeResponseHeaders = false, bool closeAfterResponseHeaders = false)
     {
-        var listener = new TcpListener(IPAddress.Loopback, port);
+        using var listener = new TcpListener(IPAddress.Loopback, port);
         listener.Start();
         using var certificate = CreateServerCertificate("upstream.test");
         try

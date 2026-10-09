@@ -1204,7 +1204,7 @@ internal static class ProxyIntegrationTests
 
     private static async Task<string> RunSingleResponseUpstreamAsync(int upstreamPort, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         try
         {
@@ -1532,7 +1532,7 @@ internal static class ProxyIntegrationTests
 
     private static async Task<UpgradeUpstreamResult> RunUpgradeUpstreamAsync(int upstreamPort, Func<NetworkStream, string, CancellationToken, Task<UpgradeUpstreamResult>> handler, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         try
         {
@@ -1550,7 +1550,7 @@ internal static class ProxyIntegrationTests
 
     private static async Task<int> RunUpgradeCountingUpstreamAsync(int upstreamPort, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         var count = 0;
         try
@@ -1578,7 +1578,7 @@ internal static class ProxyIntegrationTests
 
     private static async Task<int> RunReusableHttpUpstreamAsync(int upstreamPort, string name, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         var requestCount = 0;
         try
@@ -1793,7 +1793,7 @@ internal static class ProxyIntegrationTests
 
     private static async Task<PersistentUpstreamResult> RunPersistentScenarioUpstreamAsync(int upstreamPort, IReadOnlyList<string> responses, bool closeAfterEachResponse, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         List<string> requests = [];
         var acceptedConnections = 0;
@@ -1945,7 +1945,7 @@ internal static class ProxyIntegrationTests
 
     private static async Task<string> RunScenarioUpstreamAsync(int upstreamPort, string upstreamResponse, bool readBody, bool sendResponse, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         try
         {
@@ -2202,7 +2202,7 @@ internal static class ProxyIntegrationTests
 
     private static int GetFreeTcpPort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
         {

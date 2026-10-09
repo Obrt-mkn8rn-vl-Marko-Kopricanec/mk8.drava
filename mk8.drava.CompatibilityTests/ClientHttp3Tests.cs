@@ -1848,7 +1848,7 @@ internal static class ClientHttp3Tests
 
     private static async Task<string> RunSingleResponseUpstreamAsync(int upstreamPort, string response, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         try
         {
@@ -1867,7 +1867,7 @@ internal static class ClientHttp3Tests
 
     private static async Task<string[]> RunSequentialResponseUpstreamAsync(int upstreamPort, IReadOnlyList<string> responses, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         List<string> requests = [];
         try
@@ -1891,7 +1891,7 @@ internal static class ClientHttp3Tests
 
     private static async Task<string> RunStreamingResponseUpstreamAsync(int upstreamPort, TaskCompletionSource firstChunkSent, TaskCompletionSource releaseUpstream, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         try
         {

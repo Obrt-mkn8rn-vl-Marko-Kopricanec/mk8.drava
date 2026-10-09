@@ -693,7 +693,7 @@ internal static class CacheTests
 
     private static async Task<IReadOnlyList<string>> RunCountingUpstreamAsync(int upstreamPort, int expectedRequests, Func<int, string> responseFactory, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         List<string> requests = [];
         try
@@ -896,7 +896,7 @@ internal static class CacheTests
 
     private static int GetFreeTcpPort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
         {

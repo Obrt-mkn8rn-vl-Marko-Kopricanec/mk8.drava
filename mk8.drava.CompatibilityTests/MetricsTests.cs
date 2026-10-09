@@ -498,7 +498,7 @@ internal static class MetricsTests
 
     private static async Task<string> RunSingleUpstreamAsync(int upstreamPort, string response, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         try
         {
@@ -677,7 +677,7 @@ internal static class MetricsTests
 
     private static int GetFreeTcpPort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
         {

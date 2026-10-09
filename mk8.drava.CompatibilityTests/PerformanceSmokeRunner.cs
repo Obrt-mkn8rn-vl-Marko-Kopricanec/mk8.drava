@@ -413,7 +413,7 @@ internal static class PerformanceSmokeRunner
 
     private static async Task<int> RunReusableHttpUpstreamAsync(int upstreamPort, int expectedRequests, CancellationToken cancellationToken)
     {
-        var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
+        using var listener = new TcpListener(IPAddress.Loopback, upstreamPort);
         listener.Start();
         using var registration = cancellationToken.Register(static state => ((TcpListener)state!).Stop(), listener);
         var requests = 0;
@@ -557,7 +557,7 @@ internal static class PerformanceSmokeRunner
 
     private static int GetFreeTcpPort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
         {
