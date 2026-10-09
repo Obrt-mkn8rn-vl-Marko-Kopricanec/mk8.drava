@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Mk8.Drava.Application.BLL.ControlPlane.Acme;
+using Mk8.Drava.Application.DAL.Storage;
 
 namespace Mk8.Drava.Application.DAL.Acme;
 
@@ -18,9 +19,7 @@ public sealed class AcmeDns01CleanupJournal : IAcmeDns01CleanupJournal, IDisposa
         PrivateCertificateFile.ValidatePath(path); PrivateCertificateFile.ValidatePath(lockPath);
         if (!OperatingSystem.IsWindows() && File.Exists(lockPath) && (File.GetUnixFileMode(lockPath) & ~ (UnixFileMode.UserRead | UnixFileMode.UserWrite)) != UnixFileMode.None)
             throw new InvalidDataException("Cleanup journal lock must be private to its owner.");
-        var options = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
-        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        _lock = new FileStream(lockPath, options);
+        _lock = PrivateOwnerFile.AcquireLease(lockPath);
         try { _entries = File.Exists(path) ? Load(PrivateCertificateFile.ReadProtected(path, 1, 65536)) : []; }
         catch { _lock.Dispose(); _gate.Dispose(); throw; }
     }

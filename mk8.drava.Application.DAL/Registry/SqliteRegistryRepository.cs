@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.BLL.Registry;
+using Mk8.Drava.Application.DAL.Storage;
 
 namespace Mk8.Drava.Application.DAL.Registry;
 
@@ -38,7 +39,7 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
         var databasePath = Path.Combine(stateDirectory, "registry.sqlite");
         foreach (var path in new[] { databasePath, databasePath + "-wal", databasePath + "-shm", Path.Combine(stateDirectory, "registry-writer.lock") })
             if (new FileInfo(path).LinkTarget is not null) throw new InvalidDataException("Registry files cannot be symbolic links.");
-        FileStream? writerLock = new(Path.Combine(stateDirectory, "registry-writer.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        FileStream? writerLock = PrivateOwnerFile.AcquireLease(Path.Combine(stateDirectory, "registry-writer.lock"));
         SqliteConnection? connection = null;
         SqliteRegistryRepository? repository = null;
         try
