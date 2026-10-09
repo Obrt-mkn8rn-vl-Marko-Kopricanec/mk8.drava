@@ -16,7 +16,7 @@ public sealed partial class SqliteRegistryRepository
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await RequireAcmeFenceAsync(cancellationToken).ConfigureAwait(false);
+            await RequireWriterFenceAsync(cancellationToken).ConfigureAwait(false);
             using var command = _connection.CreateCommand();
             command.CommandText = "SELECT schema_version, site_id, scope, state, digest FROM acme_lifecycle WHERE id=1";
             var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -59,7 +59,7 @@ public sealed partial class SqliteRegistryRepository
         finally { _gate.Release(); }
     }
 
-    private async ValueTask RequireAcmeFenceAsync(CancellationToken cancellationToken)
+    private async ValueTask RequireWriterFenceAsync(CancellationToken cancellationToken)
     {
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT fence FROM registry_state WHERE id=1 AND schema_version=1 AND site_id=$site";

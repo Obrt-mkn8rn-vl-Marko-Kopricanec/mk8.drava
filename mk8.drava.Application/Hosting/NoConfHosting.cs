@@ -18,7 +18,10 @@ internal static class NoConfHosting
         services.AddSingleton(registration.Relay);
         var runtimePolicy = RegistrationPolicyMapping.ToPolicy(controller.Registration);
         services.AddSingleton<IRegisteredReadinessProbe>(_ => new RegisteredReadinessProbe(registration.Relay, runtimePolicy));
-        if (string.Equals(controller.DnsPublication.Provider, "cloudflare", StringComparison.Ordinal))
+        if (string.Equals(controller.DnsPublication.Provider, "mk8.dns", StringComparison.Ordinal))
+            services.AddSingleton<IServiceDnsVerifier>(_ => new Mk8.Drava.Application.INF.Dns.Management.NativeServiceDnsVerifier(
+                controller.DnsPublication, controller.Domain, bootstrap.SiteId, publicAddresses, controller.DnsServerAddress, controller.DnsServerPort, registration.DnsJournal));
+        else if (string.Equals(controller.DnsPublication.Provider, "cloudflare", StringComparison.Ordinal))
         {
             services.AddSingleton<IServiceDnsPublisher>(_ => new CloudflareDnsPublisher(controller.DnsPublication, controller.Domain, bootstrap.SiteId, publicAddresses, TimeProvider.System));
             services.AddSingleton<IServiceDnsVerifier>(provider => new PublishingServiceDnsVerifier(

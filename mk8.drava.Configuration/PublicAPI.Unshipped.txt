@@ -431,3 +431,45 @@ static Mk8.Drava.Configuration.AcmeIssuanceSettings.operator !=(Mk8.Drava.Config
 static Mk8.Drava.Configuration.AcmeIssuanceSettings.operator ==(Mk8.Drava.Configuration.AcmeIssuanceSettings? left, Mk8.Drava.Configuration.AcmeIssuanceSettings? right) -> bool
 Mk8.Drava.Configuration.ControllerBootstrap.Acme.get -> Mk8.Drava.Configuration.AcmeIssuanceSettings!
 Mk8.Drava.Configuration.ControllerBootstrap.Acme.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.NativeManagement.get -> Mk8.Drava.Configuration.NativeDnsManagementSettings?
+Mk8.Drava.Configuration.DnsPublicationSettings.NativeManagement.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.NativeManagement.get -> Mk8.Drava.Configuration.NativeDnsManagementSettings?
+Mk8.Drava.Configuration.AcmeIssuanceSettings.NativeManagement.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.NativeDnsTtlSeconds.get -> int
+Mk8.Drava.Configuration.AcmeIssuanceSettings.NativeDnsTtlSeconds.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings
+Mk8.Drava.Configuration.NativeDnsManagementSettings.NativeDnsManagementSettings() -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.<Clone>$() -> Mk8.Drava.Configuration.NativeDnsManagementSettings!
+Mk8.Drava.Configuration.NativeDnsManagementSettings.Equals(Mk8.Drava.Configuration.NativeDnsManagementSettings? other) -> bool
+Mk8.Drava.Configuration.NativeDnsManagementSettings.Validate(string! siteDomain, bool acme) -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.SocketPath.get -> string!
+Mk8.Drava.Configuration.NativeDnsManagementSettings.SocketPath.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.TenantId.get -> System.Guid
+Mk8.Drava.Configuration.NativeDnsManagementSettings.TenantId.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.ZoneId.get -> System.Guid
+Mk8.Drava.Configuration.NativeDnsManagementSettings.ZoneId.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.Origin.get -> string!
+Mk8.Drava.Configuration.NativeDnsManagementSettings.Origin.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.CredentialPath.get -> string!
+Mk8.Drava.Configuration.NativeDnsManagementSettings.CredentialPath.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.Scopes.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Configuration.NativeDnsOwnerScope!>!
+Mk8.Drava.Configuration.NativeDnsManagementSettings.Scopes.init -> void
+override Mk8.Drava.Configuration.NativeDnsManagementSettings.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.NativeDnsManagementSettings.GetHashCode() -> int
+override Mk8.Drava.Configuration.NativeDnsManagementSettings.ToString() -> string!
+static Mk8.Drava.Configuration.NativeDnsManagementSettings.operator !=(Mk8.Drava.Configuration.NativeDnsManagementSettings? left, Mk8.Drava.Configuration.NativeDnsManagementSettings? right) -> bool
+static Mk8.Drava.Configuration.NativeDnsManagementSettings.operator ==(Mk8.Drava.Configuration.NativeDnsManagementSettings? left, Mk8.Drava.Configuration.NativeDnsManagementSettings? right) -> bool
+override Mk8.Drava.Configuration.NativeDnsOwnerScope.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.NativeDnsOwnerScope.GetHashCode() -> int
+override Mk8.Drava.Configuration.NativeDnsOwnerScope.ToString() -> string!
+static Mk8.Drava.Configuration.NativeDnsOwnerScope.operator !=(Mk8.Drava.Configuration.NativeDnsOwnerScope? left, Mk8.Drava.Configuration.NativeDnsOwnerScope? right) -> bool
+static Mk8.Drava.Configuration.NativeDnsOwnerScope.operator ==(Mk8.Drava.Configuration.NativeDnsOwnerScope? left, Mk8.Drava.Configuration.NativeDnsOwnerScope? right) -> bool
+Mk8.Drava.Configuration.NativeDnsOwnerScope
+Mk8.Drava.Configuration.NativeDnsOwnerScope.NativeDnsOwnerScope(string! Owner, ushort Type) -> void
+Mk8.Drava.Configuration.NativeDnsOwnerScope.<Clone>$() -> Mk8.Drava.Configuration.NativeDnsOwnerScope!
+Mk8.Drava.Configuration.NativeDnsOwnerScope.Equals(Mk8.Drava.Configuration.NativeDnsOwnerScope? other) -> bool
+Mk8.Drava.Configuration.NativeDnsOwnerScope.Deconstruct(out string! Owner, out ushort Type) -> void
+Mk8.Drava.Configuration.NativeDnsOwnerScope.Owner.get -> string!
+Mk8.Drava.Configuration.NativeDnsOwnerScope.Owner.init -> void
+Mk8.Drava.Configuration.NativeDnsOwnerScope.Type.get -> ushort
+Mk8.Drava.Configuration.NativeDnsOwnerScope.Type.init -> void

@@ -23,6 +23,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
     public SignedRegistrationHandler Handler { get; }
     public ServingPlanState Plans { get; }
     public IPolicyRepository Policies => _repository;
+    public Mk8.Drava.Application.BLL.Dns.IDnsMutationJournal DnsJournal => _repository;
     public IAcmeCertificateStatusPersistence AcmeHistory(string domain, Uri directory) => new SqliteAcmeCertificateStatusPersistence(_repository, domain, directory);
 
     private RegistrationRuntime(SqliteRegistryRepository repository, LocalSiteCertificateAuthority authority, RegistryCoordinator registry,

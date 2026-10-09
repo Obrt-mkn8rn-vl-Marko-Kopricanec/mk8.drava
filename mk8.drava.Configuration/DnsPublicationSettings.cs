@@ -6,6 +6,7 @@ public sealed record DnsPublicationSettings
     public string ZoneId { get; init; } = "";
     public string ZoneName { get; init; } = "";
     public string CredentialPath { get; init; } = "";
+    public NativeDnsManagementSettings? NativeManagement { get; init; }
     public int TtlSeconds { get; init; } = 300;
     public int RequestTimeoutSeconds { get; init; } = 5;
     public int RetrySeconds { get; init; } = 30;
@@ -16,6 +17,14 @@ public sealed record DnsPublicationSettings
         RequireDomain(siteDomain);
         if (TtlSeconds is < 60 or > 86400 || RequestTimeoutSeconds is < 1 or > 30 || RetrySeconds is < 5 or > 3600)
             throw new InvalidDataException("DNS publication timing is outside supported bounds.");
+        if (string.Equals(Provider, "mk8.dns", StringComparison.Ordinal))
+        {
+            if (NativeManagement is null || ZoneId.Length != 0 || ZoneName.Length != 0 || CredentialPath.Length != 0 || RequestTimeoutSeconds < 20)
+                throw new InvalidDataException("Native DNS requires its explicit separate management profile and at least20second overall request bound.");
+            NativeManagement.Validate(siteDomain, acme: false);
+            return;
+        }
+        if (NativeManagement is not null) throw new InvalidDataException("Native DNS management settings cannot accompany another provider.");
         if (string.Equals(Provider, "existing", StringComparison.Ordinal))
         {
             if (ZoneId.Length != 0 || ZoneName.Length != 0 || CredentialPath.Length != 0)

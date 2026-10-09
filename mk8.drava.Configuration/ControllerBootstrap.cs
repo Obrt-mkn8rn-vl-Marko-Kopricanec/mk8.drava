@@ -49,5 +49,8 @@ public sealed record ControllerBootstrap
                 throw new InvalidDataException("Public addresses require concrete Gateway endpoint literals.");
         if (DnsServerPort is < 1 or > 65535 || (DnsServerAddress.Length > 0 && !System.Net.IPAddress.TryParse(DnsServerAddress, out _)))
             throw new InvalidDataException("DNS verification requires an approved resolver literal and port.");
+        if (string.Equals(DnsPublication.Provider, "mk8.dns", StringComparison.Ordinal) &&
+            (!System.Net.IPAddress.TryParse(DnsServerAddress, out var authority) || authority.Equals(System.Net.IPAddress.Any) || authority.Equals(System.Net.IPAddress.IPv6Any) || PublicAddresses.Count == 0))
+            throw new InvalidDataException("Native DNS requires an explicit authority observation address and approved public Gateway addresses.");
     }
 }
