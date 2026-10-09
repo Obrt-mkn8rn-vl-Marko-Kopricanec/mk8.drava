@@ -12,7 +12,7 @@ public sealed partial class ProxyForwarder
     private async ValueTask<ResponseForwardingResult> ForwardHttp3ResponseAsync(Http3UpstreamConnection upstreamHttp3,
         Stream clientStream, Http1RequestHead requestHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts,
         string upstreamTarget, bool preferClientKeepAlive, string requestId, bool suppressRetryableStatusResponse,
-        Action markResponseStarted, CancellationToken cancellationToken)
+        Action markResponseStarted, Action<int>? onFinalHead, CancellationToken cancellationToken)
     {
         var upstreamResponse = await upstreamHttp3.ReadResponseHeadAsync(listener.MaxResponseHeadBytes, timeouts,
             async (early, token) =>
@@ -28,6 +28,7 @@ public sealed partial class ProxyForwarder
             FramedUpstreamResponseTranslationResult.AcceptedResult accepted => accepted.ResponseHead,
             FramedUpstreamResponseTranslationResult.RejectedResult rejected => throw new Http3UpstreamProtocolException($"Upstream HTTP/3 response framing was invalid: {rejected.Reason}."),
             _ => throw new InvalidOperationException($"Unexpected upstream response translation result {responseHeadTranslation.GetType().Name}.")};
+        onFinalHead?.Invoke(responseHead.StatusCode);
         if (ProxyRetryPolicy.ShouldSuppressRetryableStatusResponse(ProxyRetryRuntimeMapper.ToOutcomeInput(route.Retry), responseHead.StatusCode, suppressRetryableStatusResponse))
         {
             return CreateRetrySuppressedResult(responseHead.StatusCode);

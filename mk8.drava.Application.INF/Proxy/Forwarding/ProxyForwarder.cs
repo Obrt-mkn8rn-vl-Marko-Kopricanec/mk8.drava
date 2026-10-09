@@ -346,15 +346,17 @@ public sealed partial class ProxyForwarder
         var endRequestStream = !Http1RequestFramingPolicy.HasFramedBody(requestHead);
         await upstreamHttp3.SendHeadersAsync(requestHeaders, endRequestStream, timeouts, cancellationToken).ConfigureAwait(false);
         if (clientStream is ExchangeClientStream exchange) await exchange.AllowUploadAsync(cancellationToken).ConfigureAwait(false);
-        if (!endRequestStream)
-        {
-            await RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync,
-                (fields, readTimeouts, token) => upstreamHttp3.SendHeadersAsync(fields, true, readTimeouts, token), cancellationToken).ConfigureAwait(false);
-        }
-
-        return await ForwardHttp3ResponseAsync(upstreamHttp3, clientStream, requestHead, route, listener, timeouts,
-            upstreamTarget, preferClientKeepAlive, requestId, suppressRetryableStatusResponse, markResponseStarted,
-            cancellationToken).ConfigureAwait(false);
+        Task UploadAsync(CancellationToken token) => endRequestStream ? Task.CompletedTask
+            : RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts,
+                route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync,
+                (fields, readTimeouts, cancellation) => upstreamHttp3.SendHeadersAsync(fields, true, readTimeouts, cancellation), token).AsTask();
+        Task<ResponseForwardingResult> ResponseAsync(CancellationToken token, Action<int>? finalHead) =>
+            ForwardHttp3ResponseAsync(upstreamHttp3, clientStream, requestHead, route, listener, timeouts, upstreamTarget,
+                preferClientKeepAlive, requestId, suppressRetryableStatusResponse, markResponseStarted, finalHead, token).AsTask();
+        if (clientStream is ExchangeClientStream duplex)
+            return await ForwardFramedDuplexAsync(duplex, requestHead.Method, UploadAsync, ResponseAsync, cancellationToken).ConfigureAwait(false);
+        await UploadAsync(cancellationToken).ConfigureAwait(false);
+        return await ResponseAsync(cancellationToken, null).ConfigureAwait(false);
     }
 
     private async ValueTask HandleTimeoutAsync(Stream clientStream, Http1RequestHead requestHead, RuntimeUpstream upstream, bool responseStarted, ProxyTimeoutException exception, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken, bool suppressGeneratedFailureResponse)

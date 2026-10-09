@@ -120,6 +120,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
             using var memory = new MemoryStream();
             Http3Codec.WriteFrame(memory, Http3Codec.HeadersFrame, block);
             await WriteWithTimeoutAsync(memory.ToArray(), endStream, timeouts.DownstreamWriteTimeout, cancellationToken).ConfigureAwait(false);
+            if (endStream) _requestCompleted.TrySetResult();
         }
         catch
         {
@@ -149,6 +150,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
                 Http3Codec.WriteFrame(memory, Http3Codec.DataFrame, ReadOnlySpan<byte>.Empty);
                 await WriteWithTimeoutAsync(memory.ToArray(), completeWrites: true, timeouts.DownstreamWriteTimeout, cancellationToken).ConfigureAwait(false);
             }
+            if (endStream) _requestCompleted.TrySetResult();
         }
         catch
         {
@@ -170,7 +172,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
         {
             while (true)
             {
-                var frame = await ReadResponseFrameAsync(timeouts.UpstreamResponseHeadTimeout, ProxyTimeoutKind.UpstreamResponseHead, cancellationToken).ConfigureAwait(false);
+                var frame = await ReadHeadFrameAsync(timeouts.UpstreamResponseHeadTimeout, cancellationToken).ConfigureAwait(false);
                 if (frame.EndStream)
                 {
                     throw new Http3UpstreamProtocolException("Upstream closed before HTTP/3 response headers were received.");
@@ -186,6 +188,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
                     throw new Http3UpstreamProtocolException("Upstream sent an unsupported HTTP/3 response frame before headers.");
                 }
 
+                _headFramesObserved++;
                 var decoded = DecodeResponseHeaders(frame.Payload.Span, maximumBytes);
                 if (decoded.StatusCode is >= 100 and < 200)
                 {
