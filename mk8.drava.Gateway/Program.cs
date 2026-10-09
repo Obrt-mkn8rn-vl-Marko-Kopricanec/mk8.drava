@@ -133,13 +133,18 @@ internal static class Program
             options.Limits.MaxRequestBufferSize = 64 * 1024;
             options.Limits.MaxResponseBufferSize = 64 * 1024;
             if (bootstrap.HttpPort > 0)
-                options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.HttpPort, listener => listener.Protocols = HttpProtocols.Http1);
+                options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.HttpPort, listener =>
+                {
+                    listener.Protocols = HttpProtocols.Http1;
+                    GatewayInformationalResponses.Configure(listener);
+                });
             if (bootstrap.EnrollmentRootFingerprint.Length == 0) return;
             if (bootstrap.HttpsPort > 0)
                 options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.HttpsPort, listener =>
                 {
                     listener.Protocols = HttpProtocols.Http1AndHttp2;
                     ConfigureTls(listener, material, bootstrap.Plan, clientCertificate: false);
+                    GatewayInformationalResponses.Configure(listener);
                 });
             options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.RegistrationPort, listener =>
             {

@@ -59,7 +59,11 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
         if (endStream) _requestCompleted.TrySetResult();
     }
 
-    public async ValueTask<Http2UpstreamResponseHead> ReadResponseHeadAsync(int maxHeaderListBytes, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    public ValueTask<Http2UpstreamResponseHead> ReadResponseHeadAsync(int maxHeaderListBytes, RuntimeTimeouts timeouts, CancellationToken cancellationToken) =>
+        ReadResponseHeadAsync(maxHeaderListBytes, timeouts, informationalHead: null, cancellationToken);
+
+    public async ValueTask<Http2UpstreamResponseHead> ReadResponseHeadAsync(int maxHeaderListBytes, RuntimeTimeouts timeouts,
+        Func<Http2UpstreamResponseHead, CancellationToken, ValueTask>? informationalHead, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxHeaderListBytes, 1);
         _maximumResponseFieldBytes = Math.Min(maxHeaderListBytes, Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderBytes);
@@ -112,6 +116,7 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
                     if (decoded.Headers.Any(static field => string.Equals(field.Name, "content-length", StringComparison.OrdinalIgnoreCase)))
                         throw new Http2UpstreamProtocolException("Content-Length is forbidden on informational responses.");
                     if (headerEndsStream || decoded.StatusCode == 101 || ++informational > 8) throw new Http2UpstreamProtocolException("Malformed HTTP/2 informational response.");
+                    if (informationalHead is not null) await informationalHead(decoded, cancellationToken).ConfigureAwait(false);
                     headerBlock.SetLength(0);
                     headerBlock.Position = 0;
                     continue;

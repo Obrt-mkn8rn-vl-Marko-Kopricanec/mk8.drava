@@ -50,6 +50,18 @@ internal sealed class DevelopmentHttp2Peer : IDisposable
             await tls.FlushAsync(token).ConfigureAwait(false);
         }, cancellationToken);
 
+    public Task RespondInformationalAsync(CancellationToken cancellationToken) =>
+        RespondTlsAsync(async (tls, token) =>
+        {
+            for (var status = 102; status <= 103; status++)
+                await Http2TestFrames.WriteAsync(tls, Http2TestFrameType.Headers, 4, 1,
+                    HpackCodec.EncodeResponseHeaders(status, [new("link", "</style.css>; rel=preload")]), token).ConfigureAwait(false);
+            await Http2TestFrames.WriteAsync(tls, Http2TestFrameType.Headers, 4, 1,
+                HpackCodec.EncodeResponseHeaders(200, [new("content-length", "5")]), token).ConfigureAwait(false);
+            await Http2TestFrames.WriteAsync(tls, Http2TestFrameType.Data, 1, 1, "final"u8.ToArray(), token).ConfigureAwait(false);
+            await tls.FlushAsync(token).ConfigureAwait(false);
+        }, cancellationToken);
+
     public Task RespondHeaderBlockAsync(ReadOnlyMemory<byte> block, CancellationToken cancellationToken) =>
         RespondTlsAsync(async (tls, token) =>
         {

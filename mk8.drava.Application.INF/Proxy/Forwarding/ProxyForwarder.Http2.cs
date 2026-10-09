@@ -15,7 +15,14 @@ public sealed partial class ProxyForwarder
         string upstreamTarget, bool preferClientKeepAlive, string requestId, bool suppressRetryableStatusResponse,
         Action markResponseStarted, Action<int>? onFinalHead, CancellationToken cancellationToken)
     {
-        var upstreamResponse = await upstreamHttp2.ReadResponseHeadAsync(listener.MaxResponseHeadBytes, timeouts, cancellationToken).ConfigureAwait(false);
+        var upstreamResponse = await upstreamHttp2.ReadResponseHeadAsync(listener.MaxResponseHeadBytes, timeouts,
+            async (early, token) =>
+            {
+                var head = new Http1ResponseHead("HTTP/1.1", early.StatusCode, "Informational", Http1ResponseFraming.None, early.Headers);
+                await WriteResponseHeadAsync(clientStream, head, BuildResponseHeaders(head, route), timeouts,
+                    preferClientKeepAlive, requestId, listener, token).ConfigureAwait(false);
+                markResponseStarted();
+            }, cancellationToken).ConfigureAwait(false);
         var responseHeadTranslation = FramedUpstreamResponsePolicy.BuildHttp1ResponseHead(requestHead, new FramedUpstreamResponseTranslationInput(upstreamResponse.StatusCode, upstreamResponse.Headers, upstreamResponse.EndStream));
         var responseHead = responseHeadTranslation switch
         {

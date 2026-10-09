@@ -17,6 +17,7 @@ using Xunit;
 
 namespace Mk8.Drava.IntegrationTests;
 
+[Collection(DevelopmentSubprocessTests.Name)]
 public sealed class SiteInitializationTests
 {
     private static readonly byte[] SetupPayload = [1, 2, 3];

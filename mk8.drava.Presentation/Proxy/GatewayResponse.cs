@@ -1,5 +1,6 @@
 using Grpc.Core;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 using Microsoft.Extensions.Primitives;
 using Mk8.Drava.Transport.Protocol;
 using Mk8.Drava.Transport.Protocol.V1;
@@ -77,8 +78,13 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
         if (_finalHead) throw new InvalidDataException("Multiple final response heads.");
         if (head.Informational)
         {
-            // Kestrel supplies its own 100 on the admitted body read. Its public API cannot emit other 1xx yet.
-            if (head.StatusCode != 100 || ++_informationalCount > 8) throw new InvalidDataException("Public informational response capability is unavailable.");
+            if (++_informationalCount > 8) throw new InvalidDataException("Informational response count exceeded.");
+            // Kestrel sends 100 when the admitted body is first read.
+            if (head.StatusCode == 100) return;
+            var feature = context.Features.Get<IGatewayInformationalResponseFeature>()
+                ?? throw new InvalidDataException("Client transport has no informational response adapter.");
+            var streamId = context.Features.Get<IHttp2StreamIdFeature>()?.StreamId ?? 0;
+            await feature.WriteAsync(head, streamId, context.RequestAborted).ConfigureAwait(false);
             return;
         }
         _finalHead = true;

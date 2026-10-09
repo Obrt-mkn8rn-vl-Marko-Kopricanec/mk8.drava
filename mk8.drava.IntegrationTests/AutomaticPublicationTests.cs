@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Mk8.Drava.IntegrationTests;
 
+[Collection(DevelopmentSubprocessTests.Name)]
 public sealed class AutomaticPublicationTests
 {
     [Fact]

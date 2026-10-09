@@ -17,13 +17,15 @@ internal sealed class DevelopmentHttpUpstream : IAsyncDisposable
 
     private DevelopmentHttpUpstream(WebApplication application, int port) { _application = application; Port = port; }
 
-    public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler, X509Certificate2? certificate = null, Action<string?>? onSni = null, DravaRegistrationOptions? registration = null, bool http2 = false, bool websockets = false)
+    public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler, X509Certificate2? certificate = null, Action<string?>? onSni = null, DravaRegistrationOptions? registration = null, bool http2 = false, bool websockets = false,
+        Action<Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions>? configureListener = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.WebHost.ConfigureKestrel(options => options.Listen(System.Net.IPAddress.Loopback, 0, listener =>
         {
             if (http2) listener.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
             if (certificate is not null) listener.UseHttps(https => https.ServerCertificateSelector = (_, name) => { onSni?.Invoke(name); return certificate; });
+            configureListener?.Invoke(listener);
         }));
         if (registration is not null) builder.Services.AddDravaRegistration(registration);
         var application = builder.Build();
