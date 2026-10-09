@@ -160,7 +160,7 @@ public sealed class NodeRelayProcessTests
         }
         catch (Grpc.Core.RpcException exception)
         {
-            Assert.True(exception.StatusCode is Grpc.Core.StatusCode.Unavailable or Grpc.Core.StatusCode.Unauthenticated or Grpc.Core.StatusCode.PermissionDenied,
+            Assert.True(IsRelayRejection(exception, Volatile.Read(ref verifiedServer) != 0),
                 $"{exception.Status}; transport error: {(exception.Status.DebugException as HttpRequestException)?.HttpRequestError}; debug: {exception.Status.DebugException}");
             rejected = exception;
         }
@@ -170,7 +170,14 @@ public sealed class NodeRelayProcessTests
             rejected = exception;
         }
         Assert.NotNull(rejected); Assert.Equal(1, Volatile.Read(ref verifiedServer));
+        await AssertControllerListenerLiveAsync(proxy, agent, root).ConfigureAwait(true);
     }
+
+    private static bool IsRelayRejection(Grpc.Core.RpcException exception, bool verifiedServer) =>
+        exception.StatusCode is Grpc.Core.StatusCode.Unavailable or Grpc.Core.StatusCode.Unauthenticated or Grpc.Core.StatusCode.PermissionDenied
+        || verifiedServer && exception.StatusCode == Grpc.Core.StatusCode.Internal
+        && exception.Status.DebugException is HttpRequestException { HttpRequestError: HttpRequestError.Unknown, InnerException: null } transport
+        && string.Equals(transport.Message, "An HTTP/2 connection could not be established because the server did not complete the HTTP/2 handshake.", StringComparison.Ordinal);
 
     private static async Task AssertControllerListenerLiveAsync(TwoProcessProxy proxy, DevelopmentNodeAgent agent, X509Certificate2 root)
     {

@@ -348,7 +348,8 @@ public sealed partial class ProxyForwarder
         if (clientStream is ExchangeClientStream exchange) await exchange.AllowUploadAsync(cancellationToken).ConfigureAwait(false);
         if (!endRequestStream)
         {
-            await RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync, null, cancellationToken).ConfigureAwait(false);
+            await RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync,
+                (fields, readTimeouts, token) => upstreamHttp3.SendHeadersAsync(fields, true, readTimeouts, token), cancellationToken).ConfigureAwait(false);
         }
 
         return await ForwardHttp3ResponseAsync(upstreamHttp3, clientStream, requestHead, route, listener, timeouts,
@@ -604,7 +605,7 @@ public sealed partial class ProxyForwarder
     private static async ValueTask<FramedUpstreamDataChunk> ReadHttp3DataChunkAsync(Http3UpstreamConnection upstreamHttp3, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
         var chunk = await upstreamHttp3.ReadDataAsync(timeouts, cancellationToken).ConfigureAwait(false);
-        return new FramedUpstreamDataChunk(chunk.Data, chunk.EndStream);
+        return new FramedUpstreamDataChunk(chunk.Data, chunk.EndStream, chunk.Trailers);
     }
 
     private async ValueTask RelayHttp2ResponseBodyAsync(Http2UpstreamConnection upstreamHttp2, Stream clientStream, bool endStream, Http1ResponseHead responseHead, RuntimeTimeouts timeouts, CancellationToken cancellationToken)

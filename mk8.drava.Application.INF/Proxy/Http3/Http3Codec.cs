@@ -6,6 +6,8 @@ using System.Text;
 namespace Mk8.Drava.Application.INF.Proxy.Http3;
 public static class Http3Codec
 {
+    // HTTP field values are octets; preserve obs-text without character replacement.
+    private static readonly Encoding FieldValueEncoding = Encoding.GetEncoding(28591, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
     public const long DataFrame = 0x0;
     public const long HeadersFrame = 0x1;
     public const long SettingsFrame = 0x4;
@@ -331,17 +333,17 @@ public static class Http3Codec
                 return false;
             }
 
-            value = Encoding.ASCII.GetString(decoded);
+            value = Encoding.Latin1.GetString(decoded);
             return true;
         }
 
-        value = Encoding.ASCII.GetString(bytes);
+        value = Encoding.Latin1.GetString(bytes);
         return true;
     }
 
     private static void WriteString(Stream stream, string value)
     {
-        var bytes = Encoding.ASCII.GetBytes(value);
+        var bytes = FieldValueEncoding.GetBytes(value);
         WritePrefixedInteger(stream, 0, 7, bytes.Length);
         stream.Write(bytes);
     }

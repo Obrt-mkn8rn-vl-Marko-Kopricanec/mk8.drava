@@ -14,4 +14,4 @@ using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
 
 namespace Mk8.Drava.Application.INF.Proxy.Http3;
-internal sealed record Http3UpstreamDataChunk(byte[] Data, bool EndStream);
+internal sealed record Http3UpstreamDataChunk(byte[] Data, bool EndStream, IReadOnlyList<ProxyHeaderField>? Trailers = null);

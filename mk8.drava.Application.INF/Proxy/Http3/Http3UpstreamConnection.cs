@@ -14,7 +14,7 @@ using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
 
 namespace Mk8.Drava.Application.INF.Proxy.Http3;
-internal sealed class Http3UpstreamConnection : IAsyncDisposable
+internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
 {
     private const int MaxFramePayloadBytes = 1024 * 1024;
     private static readonly SslApplicationProtocol Http3Alpn = new("h3");
@@ -164,7 +164,7 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
         Func<Http3UpstreamResponseHead, CancellationToken, ValueTask>? informationalHead, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxHeaderListBytes, 1);
-        var maximumBytes = Math.Min(maxHeaderListBytes, Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderBytes);
+        var maximumBytes = _maximumResponseFieldBytes = Math.Min(maxHeaderListBytes, Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderBytes);
         var informational = 0;
         try
         {
@@ -207,6 +207,7 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
 
     public async ValueTask<Http3UpstreamDataChunk> ReadDataAsync(RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
+        if (_responseEnded) return new Http3UpstreamDataChunk([], EndStream: true);
         try
         {
             while (true)
@@ -214,6 +215,7 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
                 var frame = await ReadFrameAsync(timeouts.UpstreamResponseBodyIdleTimeout, ProxyTimeoutKind.UpstreamResponseBodyIdle, cancellationToken).ConfigureAwait(false);
                 if (frame.EndStream)
                 {
+                    _responseEnded = true;
                     return new Http3UpstreamDataChunk([], EndStream: true);
                 }
 
@@ -224,7 +226,7 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
 
                 if (frame.Type == Http3Codec.HeadersFrame)
                 {
-                    continue;
+                    return await ReadResponseTrailersAsync(frame.Payload, timeouts, cancellationToken).ConfigureAwait(false);
                 }
 
                 throw new Http3UpstreamProtocolException("Upstream sent an unsupported HTTP/3 response frame.");
