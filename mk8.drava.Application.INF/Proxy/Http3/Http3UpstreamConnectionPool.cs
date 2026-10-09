@@ -4,7 +4,7 @@ using Mk8.Drava.Application.BLL.ControlPlane.Metrics;
 using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
 
 namespace Mk8.Drava.Application.INF.Proxy.Http3;
-public sealed class Http3UpstreamConnectionPool : IDisposable
+public sealed class Http3UpstreamConnectionPool : IDisposable, IAsyncDisposable
 {
     private const int DefaultMaxStreamsPerConnection = 8;
     private readonly ProxyMetrics _metrics;
@@ -12,6 +12,11 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
     private readonly Lock _gate = new();
     private readonly Dictionary<string, SemaphoreSlim> _keyGates = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<Http3UpstreamPooledConnection>> _connections = new(StringComparer.OrdinalIgnoreCase);
+    private readonly CancellationTokenSource _stopping = new();
+    private readonly TaskCompletionSource _operationsDrained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _disposalReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private Task? _disposeTask;
+    private int _activeOperations;
     private bool _disposed;
     public Http3UpstreamConnectionPool(ProxyMetrics metrics, TimeProvider timeProvider)
     {
@@ -23,37 +28,48 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
     {
         var endpoint = UpstreamTransportEndpointMapper.FromUpstream(upstream);
         var key = GetKey(endpoint);
-        var gate = GetKeyGate(key);
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var gate = BeginOperation(key);
+        var entered = false;
         try
         {
+            using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopping.Token);
+            await gate.WaitAsync(stopping.Token).ConfigureAwait(false);
+            entered = true;
             ThrowIfDisposed();
-            await PruneExpiredIdleConnectionsAsync(key, timeouts.UpstreamIdleConnectionLifetime).ConfigureAwait(false);
-            if (ReserveExistingConnection(key, timeouts.UpstreamIdleConnectionLifetime)is ExistingConnectionReservation.Reserved reserved)
-            {
-                _metrics.UpstreamHttp3PoolConnectionReused();
-                return await OpenReservedStreamAsync(key, reserved.Connection, timeouts, maxFramePayloadBytes, cancellationToken).ConfigureAwait(false);
-            }
+            return await BorrowUnderGateAsync(key, endpoint, timeouts, limits, maxFramePayloadBytes, stopping.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (entered) gate.Release();
+            EndOperation();
+        }
+    }
 
-            var maxConnections = MaxConnectionsFor(limits);
-            if (ConnectionCount(key) >= maxConnections)
-            {
-                _metrics.UpstreamHttp3StreamLimitRejected();
-                throw new Http3UpstreamProtocolException("All upstream HTTP/3 pooled connections are saturated.", Http3UpstreamFailureKind.ConnectFailure);
-            }
+    private async ValueTask<Http3UpstreamConnection> BorrowUnderGateAsync(string key, UpstreamTransportEndpoint endpoint, RuntimeTimeouts timeouts,
+        RuntimeConnectionLimits limits, int maxFramePayloadBytes, CancellationToken cancellationToken)
+    {
+        await PruneExpiredIdleConnectionsAsync(key, timeouts.UpstreamIdleConnectionLifetime).ConfigureAwait(false);
+        if (ReserveExistingConnection(key, timeouts.UpstreamIdleConnectionLifetime) is ExistingConnectionReservation.Reserved reserved)
+        {
+            _metrics.UpstreamHttp3PoolConnectionReused();
+            return await OpenReservedStreamAsync(key, reserved.Connection, timeouts, maxFramePayloadBytes, cancellationToken).ConfigureAwait(false);
+        }
 
-            Http3UpstreamTransport transport;
-            try
-            {
-                transport = await Http3UpstreamConnection.OpenTransportAsync(endpoint, timeouts, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-            catch
-            {
-                _metrics.UpstreamHttp3ConnectionFailed();
-                throw;
-            }
+        if (ConnectionCount(key) >= MaxConnectionsFor(limits))
+        {
+            _metrics.UpstreamHttp3StreamLimitRejected();
+            throw new Http3UpstreamProtocolException("All upstream HTTP/3 pooled connections are saturated.", Http3UpstreamFailureKind.ConnectFailure);
+        }
 
-            var pooled = new Http3UpstreamPooledConnection(key, transport, _metrics, _timeProvider, DefaultMaxStreamsPerConnection);
+        Http3UpstreamTransport transport;
+        try { transport = await Http3UpstreamConnection.OpenTransportAsync(endpoint, timeouts, _metrics, cancellationToken).ConfigureAwait(false); }
+        catch { _metrics.UpstreamHttp3ConnectionFailed(); throw; }
+        Http3UpstreamPooledConnection? untransferred = null;
+        var transferred = false;
+        try
+        {
+            untransferred = new Http3UpstreamPooledConnection(key, transport, _metrics, _timeProvider, DefaultMaxStreamsPerConnection);
+            var pooled = untransferred;
             AddConnection(key, pooled);
             if (!pooled.TryReserveStream(timeouts.UpstreamIdleConnectionLifetime))
             {
@@ -62,51 +78,115 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
                 throw new Http3UpstreamProtocolException("New upstream HTTP/3 pooled connection could not reserve a stream.", Http3UpstreamFailureKind.ConnectFailure);
             }
 
-            return await OpenReservedStreamAsync(key, pooled, timeouts, maxFramePayloadBytes, cancellationToken).ConfigureAwait(false);
+            var connection = await OpenReservedStreamAsync(key, pooled, timeouts, maxFramePayloadBytes, cancellationToken).ConfigureAwait(false);
+            untransferred = null; // The registered pool retains ownership beyond this individual stream lease.
+            transferred = true;
+            return connection;
         }
         finally
         {
-            gate.Release();
+            if (untransferred is not null)
+            {
+                RemoveConnection(key, untransferred);
+                await untransferred.DisposeAsync().ConfigureAwait(false);
+            }
+            else if (!transferred)
+            {
+                try { await transport.ControlStream.DisposeAsync().ConfigureAwait(false); }
+                finally
+                {
+                    await transport.Connection.DisposeAsync().ConfigureAwait(false);
+                    _metrics.UpstreamHttp3ConnectionClosed();
+                    _metrics.UpstreamHttp3PoolConnectionClosed();
+                }
+            }
         }
     }
 
     public async ValueTask PruneIdleConnectionsAsync(UpstreamTransportEndpoint endpoint, TimeSpan idleLifetime)
     {
         var key = GetKey(endpoint);
-        var gate = GetKeyGate(key);
-        await gate.WaitAsync().ConfigureAwait(false);
+        var gate = BeginOperation(key);
+        var entered = false;
         try
         {
+            await gate.WaitAsync(_stopping.Token).ConfigureAwait(false);
+            entered = true;
             await PruneExpiredIdleConnectionsAsync(key, idleLifetime).ConfigureAwait(false);
         }
         finally
         {
-            gate.Release();
+            if (entered) gate.Release();
+            EndOperation();
         }
     }
 
     public void Dispose()
     {
-        List<Http3UpstreamPooledConnection> connections = [];
+        // Preserve inherited synchronous host disposal; owned I/O continuations never require its calling thread.
+#pragma warning disable VSTHRD002
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Task disposal;
         lock (_gate)
         {
-            if (_disposed)
+            if (_disposeTask is null)
             {
-                return;
+                _disposed = true;
+                if (_activeOperations == 0) _operationsDrained.TrySetResult();
+                _disposeTask = DisposeOwnedAsync();
             }
-
-            _disposed = true;
-            foreach (var entry in _connections.Values)
-            {
-                connections.AddRange(entry);
-            }
-
-            _connections.Clear();
+            disposal = _disposeTask;
         }
+        _disposalReady.TrySetResult();
+        return new ValueTask(disposal);
+    }
 
-        foreach (var connection in connections)
+    private async Task DisposeOwnedAsync()
+    {
+        // DisposeAsync publishes the shared task, releases the lock and immediately signals this owned source.
+#pragma warning disable VSTHRD003
+        await _disposalReady.Task.ConfigureAwait(false);
+#pragma warning restore VSTHRD003
+        try { await _stopping.CancelAsync().ConfigureAwait(false); }
+        finally
         {
-            connection.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            try
+            {
+                // Only this pool's context-free operations can complete this drain, in their finally blocks.
+#pragma warning disable VSTHRD003
+                await _operationsDrained.Task.ConfigureAwait(false);
+#pragma warning restore VSTHRD003
+            }
+            finally { await CloseConnectionsAndGatesAsync().ConfigureAwait(false); }
+        }
+    }
+
+    private async Task CloseConnectionsAndGatesAsync()
+    {
+        List<Http3UpstreamPooledConnection> connections = [];
+        SemaphoreSlim[] gates;
+        lock (_gate)
+        {
+            foreach (var entry in _connections.Values) connections.AddRange(entry);
+            _connections.Clear();
+            gates = _keyGates.Values.ToArray();
+            _keyGates.Clear();
+        }
+        try
+        {
+            var closing = new Task[connections.Count];
+            for (var index = 0; index < connections.Count; index++) closing[index] = connections[index].DisposeAsync().AsTask();
+            await Task.WhenAll(closing).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var gate in gates) gate.Dispose();
+            _stopping.Dispose();
         }
     }
 
@@ -127,8 +207,9 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
             }
         }
 
-        foreach (var connection in connections)
+        for (var index = 0; index < connections.Count; index++)
         {
+            var connection = connections[index];
             if (!connection.TryReserveStream(idleLifetime))
             {
                 continue;
@@ -195,9 +276,9 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
             }
         }
 
-        foreach (var connection in expired)
+        for (var index = 0; index < expired.Count; index++)
         {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            await expired[index].DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -205,7 +286,9 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
     {
         try
         {
-            return await Http3UpstreamConnection.OpenStreamAsync(pooled, timeouts, _metrics, maxFramePayloadBytes, cancellationToken).ConfigureAwait(false);
+            var connection = await Http3UpstreamConnection.OpenStreamAsync(pooled, timeouts, _metrics, maxFramePayloadBytes, cancellationToken).ConfigureAwait(false);
+            try { ThrowIfDisposed(); return connection; }
+            catch { await connection.DisposeAsync().ConfigureAwait(false); throw; }
         }
         catch
         {
@@ -232,17 +315,28 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
         }
     }
 
-    private SemaphoreSlim GetKeyGate(string key)
+    private SemaphoreSlim BeginOperation(string key)
     {
         lock (_gate)
         {
+            ThrowIfDisposed();
             if (!_keyGates.TryGetValue(key, out var gate))
             {
                 gate = new SemaphoreSlim(1, 1);
                 _keyGates.Add(key, gate);
             }
 
+            _activeOperations++;
             return gate;
+        }
+    }
+
+    private void EndOperation()
+    {
+        lock (_gate)
+        {
+            _activeOperations--;
+            if (_disposed && _activeOperations == 0) _operationsDrained.TrySetResult();
         }
     }
 
@@ -258,6 +352,7 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
     {
         lock (_gate)
         {
+            ThrowIfDisposed();
             if (!_connections.TryGetValue(key, out var connections))
             {
                 connections = [];
@@ -275,9 +370,6 @@ public sealed class Http3UpstreamConnectionPool : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(Http3UpstreamConnectionPool));
-        }
+        lock (_gate) ObjectDisposedException.ThrowIf(_disposed, this);
     }
 }

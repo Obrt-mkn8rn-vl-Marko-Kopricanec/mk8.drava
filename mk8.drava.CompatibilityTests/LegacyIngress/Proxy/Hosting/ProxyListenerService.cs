@@ -374,7 +374,7 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
         UpdateRuntimeState(null);
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
         _upstreamConnectionPool.Dispose();
-        _http3UpstreamConnectionPool.Dispose();
+        await _http3UpstreamConnectionPool.DisposeAsync().ConfigureAwait(false);
     }
 
     private ListenerReloadPlan CreateListenerReloadPlan(ProxyConfigurationSnapshot snapshot)
