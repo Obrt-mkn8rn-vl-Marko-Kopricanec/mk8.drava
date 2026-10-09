@@ -351,34 +351,9 @@ public sealed partial class ProxyForwarder
             await RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts, route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync, null, cancellationToken).ConfigureAwait(false);
         }
 
-        var upstreamResponse = await upstreamHttp3.ReadResponseHeadAsync(listener.MaxResponseHeadBytes, timeouts, cancellationToken).ConfigureAwait(false);
-        var responseHeadTranslation = FramedUpstreamResponsePolicy.BuildHttp1ResponseHead(requestHead, new FramedUpstreamResponseTranslationInput(upstreamResponse.StatusCode, upstreamResponse.Headers, ResponseEndedWithHead: false));
-        var responseHead = responseHeadTranslation switch
-        {
-            FramedUpstreamResponseTranslationResult.AcceptedResult accepted => accepted.ResponseHead,
-            FramedUpstreamResponseTranslationResult.RejectedResult rejected => throw new Http3UpstreamProtocolException($"Upstream HTTP/3 response framing was invalid: {rejected.Reason}."),
-            _ => throw new InvalidOperationException($"Unexpected upstream response translation result {responseHeadTranslation.GetType().Name}.")};
-        if (ProxyRetryPolicy.ShouldSuppressRetryableStatusResponse(ProxyRetryRuntimeMapper.ToOutcomeInput(route.Retry), responseHead.StatusCode, suppressRetryableStatusResponse))
-        {
-            return CreateRetrySuppressedResult(responseHead.StatusCode);
-        }
-
-        var keepClientConnectionOpen = preferClientKeepAlive;
-        var responseHeaders = BuildResponseHeaders(responseHead, route);
-        if (ProxyCacheEligibilityPolicy.EvaluateResponseForBuffering(ProxyCacheRuntimeMapper.ToPolicyFacts(route.Cache), requestHead, responseHead) is ProxyCacheEligibilityResult.AcceptedResult)
-        {
-            var body = await ReadFramedUpstreamCacheCandidateBodyAsync((readTimeouts, token) => ReadHttp3DataChunkAsync(upstreamHttp3, readTimeouts, token), responseHead, endStream: false, route.Cache.MaxEntryBytes, timeouts, cancellationToken).ConfigureAwait(false);
-            await WriteAndStoreBufferedCacheResponseAsync(clientStream, route, listener, timeouts, requestHead, upstreamTarget, responseHead, responseHeaders, body.Data, keepClientConnectionOpen, requestId, markResponseStarted, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            RecordUncacheableFraming(route.Cache, responseHead);
-            await WriteResponseHeadAsync(clientStream, responseHead, responseHeaders, timeouts, keepClientConnectionOpen, requestId, listener, cancellationToken).ConfigureAwait(false);
-            markResponseStarted();
-            await RelayHttp3ResponseBodyAsync(upstreamHttp3, clientStream, responseHead, timeouts, cancellationToken).ConfigureAwait(false);
-        }
-
-        return new ResponseForwardingResult(true, keepClientConnectionOpen, false, responseHead.StatusCode);
+        return await ForwardHttp3ResponseAsync(upstreamHttp3, clientStream, requestHead, route, listener, timeouts,
+            upstreamTarget, preferClientKeepAlive, requestId, suppressRetryableStatusResponse, markResponseStarted,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async ValueTask HandleTimeoutAsync(Stream clientStream, Http1RequestHead requestHead, RuntimeUpstream upstream, bool responseStarted, ProxyTimeoutException exception, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken, bool suppressGeneratedFailureResponse)

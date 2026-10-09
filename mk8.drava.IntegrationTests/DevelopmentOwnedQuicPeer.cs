@@ -28,6 +28,9 @@ internal sealed class DevelopmentOwnedQuicPeer : IAsyncDisposable
     public Http3UpstreamPooledConnection Connection { get; }
     public ProxyMetrics Metrics { get; }
 
+    public ValueTask<QuicStream> AcceptRequestAsync(CancellationToken cancellationToken) =>
+        _peer.AcceptInboundStreamAsync(cancellationToken);
+
     public static async Task<DevelopmentOwnedQuicPeer> CreateAsync(Func<QuicStream, CancellationToken, Task>? processor, CancellationToken cancellationToken)
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)

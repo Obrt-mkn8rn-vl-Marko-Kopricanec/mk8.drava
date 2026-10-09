@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Runtime.Versioning;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Mk8.Drava.Application.INF.Proxy.Http2;
@@ -9,6 +10,9 @@ using Xunit;
 namespace Mk8.Drava.IntegrationTests;
 
 [Collection(DevelopmentSubprocessTests.Name)]
+[SupportedOSPlatform("windows")]
+[SupportedOSPlatform("linux")]
+[SupportedOSPlatform("osx")]
 public sealed class GatewayInformationalResponseTests
 {
     private static readonly int[] ExpectedStatuses = [102, 103, 200];
@@ -19,7 +23,26 @@ public sealed class GatewayInformationalResponseTests
     {
         using var certificate = DevelopmentUpstreamCertificate.Create();
         using var upstream = new DevelopmentHttp2Peer(certificate);
-        var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: http2, upstreamHttp2: true).ConfigureAwait(true);
+        await VerifyResponseAsync(upstream.Port, http2, http3: false, upstream.RespondInformationalAsync).ConfigureAwait(true);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpstreamQuicEarlyHeadsCrossBothProcessesBeforeTheFinalResponseAsync(bool http2)
+    {
+        using var setup = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var listener = await DevelopmentPendingQuicPeer.CreateAsync(setup.Token).ConfigureAwait(true);
+        await using var listenerLifetime = listener.ConfigureAwait(true);
+        listener.ReleaseHandshake();
+        var upstream = new DevelopmentHttp3Peer(listener);
+        await VerifyResponseAsync(upstream.Port, http2, http3: true, upstream.RespondInformationalAsync, upstream.FinishResponse).ConfigureAwait(true);
+    }
+
+    private static async Task VerifyResponseAsync(int port, bool http2, bool http3,
+        Func<CancellationToken, Task> respond, Action? finishPeer = null)
+    {
+        var proxy = await TwoProcessProxy.StartAsync(port, "svc.site.test", enrolledSite: http2, upstreamHttp2: !http3, upstreamHttp3: http3).ConfigureAwait(false);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var socket = new TcpClient();
@@ -36,15 +59,17 @@ public sealed class GatewayInformationalResponseTests
                 RemoteCertificateValidationCallback = verifier!.ValidateServer,
             }, deadline.Token).ConfigureAwait(true);
         Stream stream = http2 ? tls : network;
-        var peer = upstream.RespondInformationalAsync(deadline.Token);
+        var peer = respond(deadline.Token);
         try
         {
             if (http2) await VerifyHttp2Async(stream, deadline.Token).ConfigureAwait(true);
             else await VerifyHttp1Async(stream, deadline.Token).ConfigureAwait(true);
+            finishPeer?.Invoke();
             await peer.ConfigureAwait(true);
         }
         finally
         {
+            finishPeer?.Invoke();
             await deadline.CancelAsync().ConfigureAwait(true);
             try { await peer.ConfigureAwait(true); }
             catch (Exception exception) when (exception is OperationCanceledException or IOException) { }

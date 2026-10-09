@@ -157,8 +157,15 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
         }
     }
 
-    public async ValueTask<Http3UpstreamResponseHead> ReadResponseHeadAsync(int maxHeaderListBytes, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    public ValueTask<Http3UpstreamResponseHead> ReadResponseHeadAsync(int maxHeaderListBytes, RuntimeTimeouts timeouts, CancellationToken cancellationToken) =>
+        ReadResponseHeadAsync(maxHeaderListBytes, timeouts, informationalHead: null, cancellationToken);
+
+    public async ValueTask<Http3UpstreamResponseHead> ReadResponseHeadAsync(int maxHeaderListBytes, RuntimeTimeouts timeouts,
+        Func<Http3UpstreamResponseHead, CancellationToken, ValueTask>? informationalHead, CancellationToken cancellationToken)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxHeaderListBytes, 1);
+        var maximumBytes = Math.Min(maxHeaderListBytes, Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderBytes);
+        var informational = 0;
         try
         {
             while (true)
@@ -179,7 +186,16 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
                     throw new Http3UpstreamProtocolException("Upstream sent an unsupported HTTP/3 response frame before headers.");
                 }
 
-                return DecodeResponseHeaders(frame.Payload.Span, maxHeaderListBytes);
+                var decoded = DecodeResponseHeaders(frame.Payload.Span, maximumBytes);
+                if (decoded.StatusCode is >= 100 and < 200)
+                {
+                    if (decoded.StatusCode == 101 || ++informational > 8
+                        || decoded.Headers.Any(static field => string.Equals(field.Name, "content-length", StringComparison.OrdinalIgnoreCase)))
+                        throw new Http3UpstreamProtocolException("Malformed HTTP/3 informational response.");
+                    if (informationalHead is not null) await informationalHead(decoded, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+                return decoded;
             }
         }
         catch
@@ -371,7 +387,8 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
 
     private static Http3UpstreamResponseHead DecodeResponseHeaders(ReadOnlySpan<byte> block, int maxHeaderListBytes)
     {
-        if (!Http3Codec.TryDecodeHeaderBlock(block, maxHeaderListBytes, out var headers, out var reason))
+        if (!Http3Codec.TryDecodeHeaderBlock(block, maxHeaderListBytes, out var headers, out var reason)
+            || headers.Count > Mk8.Drava.Transport.Protocol.FrameLimits.MaximumHeaderCount)
         {
             throw new Http3UpstreamProtocolException($"Upstream sent invalid HTTP/3 response headers: {reason}.");
         }
@@ -382,7 +399,8 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
         {
             if (string.Equals(header.Name, ":status", StringComparison.Ordinal))
             {
-                if (statusCode.HasValue || !int.TryParse(header.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed is < 100 or > 599)
+                if (statusCode.HasValue || regularHeaders.Count != 0 || header.Value.Length != 3
+                    || !int.TryParse(header.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed is < 100 or > 599)
                 {
                     throw new Http3UpstreamProtocolException("Upstream sent an invalid HTTP/3 :status pseudo-header.");
                 }
@@ -396,7 +414,7 @@ internal sealed class Http3UpstreamConnection : IAsyncDisposable
                 throw new Http3UpstreamProtocolException("Upstream sent an invalid HTTP/3 response pseudo-header.");
             }
 
-            if (HopByHopHeaderPolicy.IsHopByHopHeader(header.Name))
+            if (!FramedResponseFieldPolicy.IsValid(header) || HopByHopHeaderPolicy.IsHopByHopHeader(header.Name))
             {
                 throw new Http3UpstreamProtocolException("Upstream sent a forbidden HTTP/3 hop-by-hop response header.");
             }
