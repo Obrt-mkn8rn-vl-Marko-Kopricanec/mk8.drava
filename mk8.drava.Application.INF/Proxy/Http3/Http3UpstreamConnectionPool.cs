@@ -68,7 +68,10 @@ public sealed class Http3UpstreamConnectionPool : IDisposable, IAsyncDisposable
         var transferred = false;
         try
         {
+            // Guarded failures dispose this temporary; successful registration transfers ownership to this pool until async shutdown.
+#pragma warning disable CA2000
             untransferred = new Http3UpstreamPooledConnection(key, transport, _metrics, _timeProvider, DefaultMaxStreamsPerConnection);
+#pragma warning restore CA2000
             var pooled = untransferred;
             AddConnection(key, pooled);
             if (!pooled.TryReserveStream(timeouts.UpstreamIdleConnectionLifetime))

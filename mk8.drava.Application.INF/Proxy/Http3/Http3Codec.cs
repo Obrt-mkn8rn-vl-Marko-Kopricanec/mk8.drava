@@ -22,7 +22,10 @@ public static class Http3Codec
         memory.WriteByte(0);
         foreach (var header in headers)
         {
+            // HTTP/3 field names require lowercase encoding (RFC 9114 section 4.2).
+#pragma warning disable CA1308
             WriteLiteralHeader(memory, header.Name.ToLowerInvariant(), header.Value);
+#pragma warning restore CA1308
         }
 
         return memory.ToArray();

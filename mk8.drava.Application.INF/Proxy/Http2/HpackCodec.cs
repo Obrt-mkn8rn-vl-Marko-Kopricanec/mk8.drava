@@ -125,7 +125,10 @@ internal static partial class HpackCodec
             WriteInteger(memory, 0x00, 4, StaticNameIndex(header.Name));
             if (StaticNameIndex(header.Name) == 0)
             {
+                // HTTP/2 field names require lowercase encoding (RFC 9113 section 8.2).
+#pragma warning disable CA1308
                 WriteString(memory, header.Name.ToLowerInvariant());
+#pragma warning restore CA1308
             }
 
             WriteString(memory, header.Value);

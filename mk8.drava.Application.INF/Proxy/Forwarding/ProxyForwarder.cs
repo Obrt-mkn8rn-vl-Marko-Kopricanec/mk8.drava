@@ -459,7 +459,10 @@ public sealed partial class ProxyForwarder
                 continue;
             }
 
+            // Serialize validated HTTP/2 field metadata with protocol-required lowercase names.
+#pragma warning disable CA1308
             headers.Add(new ProxyHeaderField(header.Name.ToLowerInvariant(), header.Value));
+#pragma warning restore CA1308
         }
 
         if (requestHead.Framing.Kind == Http1BodyKind.ContentLength)

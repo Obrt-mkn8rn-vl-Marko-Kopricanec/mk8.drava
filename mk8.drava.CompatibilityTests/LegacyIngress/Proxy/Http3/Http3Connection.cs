@@ -596,7 +596,10 @@ internal sealed partial class Http3Connection
         {
             if (!header.Name.StartsWith(':') && !HopByHopHeaderPolicy.IsHopByHopHeader(header.Name))
             {
+                // The native HTTP/3 response encoder must emit lowercase field names.
+#pragma warning disable CA1308
                 encodedHeaders.Add(new ProxyHeaderField(header.Name.ToLowerInvariant(), header.Value));
+#pragma warning restore CA1308
             }
         }
 

@@ -464,7 +464,10 @@ internal static class UpstreamHttp2Tests
             if (nameIndex == 0)
             {
                 memory.WriteByte(0);
+                // The native HTTP/2 response encoder must emit lowercase field names.
+#pragma warning disable CA1308
                 WriteString(memory, header.Name.ToLowerInvariant());
+#pragma warning restore CA1308
                 WriteString(memory, header.Value);
                 continue;
             }
