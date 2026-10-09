@@ -1591,11 +1591,13 @@ internal static class ClientHttp3Tests
 
     private static async Task<Http3ScenarioResult> RunHttp3GeneratedRouteScenarioAsync(string method, string target, string body, bool includeBodyData = false, bool dataBeforeHeaders = false, bool settingsAfterHeaders = false, bool goAwayAfterHeaders = false, bool duplicateHeadersAfterHeaders = false, bool unknownFrameBeforeHeaders = false, bool maxPushAfterHeaders = false, string? routeJson = null)
     {
-        var temp = TemporaryDirectory.Create();
+        var scenario = new UntransferredHttp3Scenario();
+        await using var scenarioLifetime = scenario.ConfigureAwait(false);
+        var temp = scenario.Directory;
         var port = GetFreeTcpUdpPort();
         WriteCertificateConfig(temp.Path);
         WriteHttp3Site(temp.Path, port, "http3", body, routeJson: routeJson);
-        var host = BuildProxyHost(temp.Path);
+        var host = scenario.CreateHost();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
@@ -1604,16 +1606,18 @@ internal static class ClientHttp3Tests
         var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
         await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
         var metrics = metricsStore.Snapshot();
-        return new Http3ScenarioResult(temp, host, response.Headers, response.Body, metrics, "");
+        return scenario.Transfer(response.Headers, response.Body, metrics, "");
     }
 
     private static async Task<Http3ScenarioResult> RunHttp3GeneratedRouteRawHeaderBlockScenarioAsync(byte[] headerBlock)
     {
-        var temp = TemporaryDirectory.Create();
+        var scenario = new UntransferredHttp3Scenario();
+        await using var scenarioLifetime = scenario.ConfigureAwait(false);
+        var temp = scenario.Directory;
         var port = GetFreeTcpUdpPort();
         WriteCertificateConfig(temp.Path);
         WriteHttp3Site(temp.Path, port, "http3", "unused");
-        var host = BuildProxyHost(temp.Path);
+        var host = scenario.CreateHost();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
@@ -1622,16 +1626,18 @@ internal static class ClientHttp3Tests
         var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
         await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
         var metrics = metricsStore.Snapshot();
-        return new Http3ScenarioResult(temp, host, response.Headers, response.Body, metrics, "");
+        return scenario.Transfer(response.Headers, response.Body, metrics, "");
     }
 
     private static async Task<Http3ScenarioResult> RunHttp3GeneratedRouteRawHeadersScenarioAsync(IReadOnlyList<ProxyHeaderField> headers)
     {
-        var temp = TemporaryDirectory.Create();
+        var scenario = new UntransferredHttp3Scenario();
+        await using var scenarioLifetime = scenario.ConfigureAwait(false);
+        var temp = scenario.Directory;
         var port = GetFreeTcpUdpPort();
         WriteCertificateConfig(temp.Path);
         WriteHttp3Site(temp.Path, port, "http3", "unused");
-        var host = BuildProxyHost(temp.Path);
+        var host = scenario.CreateHost();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
@@ -1640,28 +1646,42 @@ internal static class ClientHttp3Tests
         var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
         await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
         var metrics = metricsStore.Snapshot();
-        return new Http3ScenarioResult(temp, host, response.Headers, response.Body, metrics, "");
+        return scenario.Transfer(response.Headers, response.Body, metrics, "");
     }
 
     private static async Task<Http3ScenarioResult> RunHttp3ProxyRouteScenarioAsync(string method, string target, string upstreamResponse, string? requestBody = null, string routeExtraJson = "", string listenerExtraJson = "")
     {
-        var temp = TemporaryDirectory.Create();
+        var scenario = new UntransferredHttp3Scenario();
+        await using var scenarioLifetime = scenario.ConfigureAwait(false);
+        var temp = scenario.Directory;
         var proxyPort = GetFreeTcpUdpPort();
         var upstreamPort = GetFreeTcpPort();
         WriteCertificateConfig(temp.Path);
         WriteHttp3ProxySite(temp.Path, proxyPort, upstreamPort, routeExtraJson, listenerExtraJson);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var upstreamTask = string.IsNullOrEmpty(upstreamResponse) ? Task.FromResult("") : RunSingleResponseUpstreamAsync(upstreamPort, upstreamResponse, timeout.Token);
-        var host = BuildProxyHost(temp.Path);
-        await host.StartAsync(timeout.Token).ConfigureAwait(false);
-        var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
-        await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-        var response = await SendHttp3RequestAsync(proxyPort, method, target, timeout.Token, body: requestBody).ConfigureAwait(false);
-        var upstreamRequest = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
-        var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
-        await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
-        var metrics = metricsStore.Snapshot();
-        return new Http3ScenarioResult(temp, host, response.Headers, response.Body, metrics, upstreamRequest);
+        try
+        {
+            var host = scenario.CreateHost();
+            await host.StartAsync(timeout.Token).ConfigureAwait(false);
+            var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
+            await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
+            var response = await SendHttp3RequestAsync(proxyPort, method, target, timeout.Token, body: requestBody).ConfigureAwait(false);
+            var upstreamRequest = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
+            var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
+            await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
+            var metrics = metricsStore.Snapshot();
+            return scenario.Transfer(response.Headers, response.Body, metrics, upstreamRequest);
+        }
+        finally
+        {
+            try { if (!upstreamTask.IsCompleted) await timeout.CancelAsync().ConfigureAwait(false); }
+            finally
+            {
+                try { await upstreamTask.ConfigureAwait(false); }
+                catch (Exception exception) when (timeout.IsCancellationRequested && exception is OperationCanceledException or IOException or SocketException) { }
+            }
+        }
     }
 
     private static async Task<Http3Response> SendHttp3RequestAsync(int port, string method, string target, CancellationToken cancellationToken, bool includeBodyData = false, bool dataBeforeHeaders = false, string? body = null, bool settingsAfterHeaders = false, bool goAwayAfterHeaders = false, bool duplicateHeadersAfterHeaders = false, bool unknownFrameBeforeHeaders = false, bool maxPushAfterHeaders = false, Action<string>? certificateSubjectObserver = null)
@@ -2206,6 +2226,41 @@ internal static class ClientHttp3Tests
     }
 
     private sealed record Http3Response(IReadOnlyList<ProxyHeaderField> Headers, string Body);
+    private sealed class UntransferredHttp3Scenario : IAsyncDisposable
+    {
+        private TemporaryDirectory? _directory = TemporaryDirectory.Create();
+        private IHost? _host;
+
+        public TemporaryDirectory Directory => _directory ?? throw new InvalidOperationException("Scenario ownership was already transferred.");
+
+        public IHost CreateHost() => _host = BuildProxyHost(Directory.Path);
+
+        public Http3ScenarioResult Transfer(IReadOnlyList<ProxyHeaderField> headers, string body, ProxyMetricsSnapshot metrics, string upstreamRequest)
+        {
+            var result = new Http3ScenarioResult(Directory, _host ?? throw new InvalidOperationException("Scenario host has not been created."), headers, body, metrics, upstreamRequest);
+            _directory = null;
+            _host = null;
+            return result;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            try
+            {
+                if (_host is not null)
+                {
+                    try { await _host.StopAsync(CancellationToken.None).ConfigureAwait(false); }
+                    finally
+                    {
+                        if (_host is IAsyncDisposable asyncHost) await asyncHost.DisposeAsync().ConfigureAwait(false);
+                        else _host.Dispose();
+                    }
+                }
+            }
+            finally { _directory?.Dispose(); }
+        }
+    }
+
     private sealed class Http3ScenarioResult : IDisposable
     {
         private readonly TemporaryDirectory _directory;
