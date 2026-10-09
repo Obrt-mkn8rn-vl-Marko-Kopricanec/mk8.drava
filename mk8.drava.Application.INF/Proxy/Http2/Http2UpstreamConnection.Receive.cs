@@ -18,7 +18,7 @@ internal sealed partial class Http2UpstreamConnection
     private Task? _receiver;
     private int _receivedWindow = 65535;
     private int _creditDue;
-    private int _disposed;
+    private Task? _disposeTask;
     private readonly TaskCompletionSource _requestCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _headFramesObserved;
     private bool _continuationExpected;
@@ -153,15 +153,29 @@ internal sealed partial class Http2UpstreamConnection
         _sendFlow.AddCredit(frame.StreamId == 0, increment);
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD003", Justification = "The private receiver task is started exactly once by this wrapper and is always cancelled and joined before its gates and optional owned stream are disposed. Production callers join their upload/response tasks before disposal; all awaits avoid context capture.")]
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        lock (_receiveGate)
+        {
+            _disposeTask ??= DisposeOwnedAsync();
+            return new ValueTask(_disposeTask);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD003", Justification = "The private receiver task is started exactly once by this wrapper and is always cancelled and joined before its gates and optional owned stream are disposed. Production callers join their upload/response tasks before disposal; all awaits avoid context capture.")]
+    private async Task DisposeOwnedAsync()
+    {
         _sendFlow.Fail(new OperationCanceledException("The HTTP/2 exchange was disposed."));
-        await _receiveCancellation.CancelAsync().ConfigureAwait(false);
         try
         {
-            if (_receiver is not null) await _receiver.ConfigureAwait(false);
+            try
+            {
+                await _receiveCancellation.CancelAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                if (_receiver is not null) await _receiver.ConfigureAwait(false);
+            }
         }
         finally
         {
