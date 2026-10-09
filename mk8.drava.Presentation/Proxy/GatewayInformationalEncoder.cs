@@ -9,6 +9,7 @@ namespace Mk8.Drava.Presentation.Proxy;
 
 internal static class GatewayInformationalEncoder
 {
+    private static readonly Encoding FieldValueEncoding = Encoding.GetEncoding(28591, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
     public static byte[] Encode(ResponseHead head, bool http2, int streamId)
     {
         FrameLimits.ValidateResponse(head);
@@ -33,7 +34,7 @@ internal static class GatewayInformationalEncoder
         text.Append(head.StatusCode.ToString(CultureInfo.InvariantCulture)).Append(" Informational\r\n");
         foreach (var header in head.Headers) text.Append(header.Name).Append(": ").Append(header.Value).Append("\r\n");
         text.Append("\r\n");
-        return Encoding.UTF8.GetBytes(text.ToString());
+        return FieldValueEncoding.GetBytes(text.ToString());
     }
 
     private static byte[] EncodeHttp2(ResponseHead head, int streamId)
@@ -95,7 +96,7 @@ internal static class GatewayInformationalEncoder
         stream.WriteByte((byte)value);
     }
 
-    private static void WriteString(Stream stream, string value) => WriteBytes(stream, Encoding.UTF8.GetBytes(value));
+    private static void WriteString(Stream stream, string value) => WriteBytes(stream, FieldValueEncoding.GetBytes(value));
 
     private static void WriteBytes(Stream stream, ReadOnlySpan<byte> bytes)
     {
