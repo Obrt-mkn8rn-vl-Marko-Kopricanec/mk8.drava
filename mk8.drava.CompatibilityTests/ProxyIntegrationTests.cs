@@ -1679,7 +1679,7 @@ internal static class ProxyIntegrationTests
                 var tlsStream = new SslStream(client.GetStream(), false, (_, _, _, _) => true);
                 await using var tlsStreamDisposal = tlsStream.ConfigureAwait(false);
                 await tlsStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = targetHost }, timeout.Token).ConfigureAwait(false);
-                var remoteCertificate = new X509Certificate2(tlsStream.RemoteCertificate!);
+                using var remoteCertificate = new X509Certificate2(tlsStream.RemoteCertificate!);
                 var requestBytes = Encoding.ASCII.GetBytes("GET /secure HTTP/1.1\r\nHost: home.test\r\nConnection: close\r\n\r\n");
                 await tlsStream.WriteAsync(requestBytes, timeout.Token).ConfigureAwait(false);
                 var clientResponse = await ReadToEndAsync(tlsStream, timeout.Token).ConfigureAwait(false);

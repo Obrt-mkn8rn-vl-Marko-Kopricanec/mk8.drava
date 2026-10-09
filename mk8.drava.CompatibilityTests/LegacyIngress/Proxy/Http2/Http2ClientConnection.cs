@@ -576,7 +576,7 @@ internal sealed partial class Http2ClientConnection
 
             context.SetUpstream(ProxyRequestContextRuntimeMapper.ToRequestUpstream(selection.Upstream));
             var suppressGeneratedFailureResponse = ProxyRetryPolicy.ShouldSuppressAttemptFailureResponse(retryAllowed, attempt, maxAttempts);
-            var translator = new Http2ResponseTranslationStream(this, streamId, requestHead.Method, _configurationSnapshot.Timeouts.DownstreamWriteTimeout, body);
+            using var translator = new Http2ResponseTranslationStream(this, streamId, requestHead.Method, _configurationSnapshot.Timeouts.DownstreamWriteTimeout, body);
             var result = await _forwarder.ForwardAsync(translator, Http1HeadReadResult.TranslatedRequestBody(body), requestHead, route, selection.Upstream, _listener, ProxyTimeoutPolicy.ApplyRetryAttemptTimeout(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), timeouts), connectionLimits, limits, upstreamTarget, forwardedHeaders, preferClientKeepAlive: false, requestId, cancellationToken, suppressGeneratedFailureResponse).ConfigureAwait(false);
             lastResult = result;
             ProxyUpstreamAttemptRecorder.Record(selection, result, _healthStore, _circuitBreakerStore);
@@ -896,6 +896,16 @@ internal sealed partial class Http2ClientConnection
             _method = method;
             _writeTimeout = writeTimeout;
             _requestBody = new MemoryStream(requestBody, writable: false);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _requestBody.Dispose();
+                _headBuffer.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         public override bool CanRead => true;

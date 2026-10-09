@@ -225,7 +225,7 @@ internal static class UpstreamHttp3Tests
         var port = GetFreeUdpPort();
         var listener = (await CreateQuicListenerAsync(port, CancellationToken.None, applicationProtocols: [new SslApplicationProtocol("not-h3")]).ConfigureAwait(false));
         await using var listenerDisposal = listener.ConfigureAwait(false);
-        var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var client = new UpstreamHealthCheckClient(new UpstreamConnectionFactory(), new ProxyMetrics());
         var upstream = Upstream(port, RuntimeUpstreamProtocol.Http3);
         var result = await client.CheckAsync(Target(Route([upstream]), upstream), timeout.Token).ConfigureAwait(false);

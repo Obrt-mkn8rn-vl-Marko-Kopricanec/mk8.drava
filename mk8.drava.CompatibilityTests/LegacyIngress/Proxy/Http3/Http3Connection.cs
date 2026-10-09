@@ -218,7 +218,7 @@ internal sealed partial class Http3Connection
                 return true;
             }
 
-            var requestBody = new Http3RequestBodyReadStream(this, stream, requestHead.Framing, cancellationToken);
+            using var requestBody = new Http3RequestBodyReadStream(this, stream, requestHead.Framing, cancellationToken);
             var upstreamTarget = _pathRewritePolicy.Apply(ProxyPathRewriteRuntimeMapper.ToPolicyInput(route), requestHead.Target, requestHead.Path);
             var effectiveTimeouts = ProxyTimeoutPolicy.ApplyRouteTimeouts(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), _configurationSnapshot.Timeouts);
             if (await TryHandleCacheHitAsync(stream, route, requestHead, upstreamTarget, context, cancellationToken).ConfigureAwait(false))
@@ -500,7 +500,7 @@ internal sealed partial class Http3Connection
 
             context.SetUpstream(ProxyRequestContextRuntimeMapper.ToRequestUpstream(selection.Upstream));
             var suppressGeneratedFailureResponse = ProxyRetryPolicy.ShouldSuppressAttemptFailureResponse(retryAllowed, attempt, maxAttempts);
-            var translator = new Http3ResponseTranslationStream(this, stream, requestHead.Method, _configurationSnapshot.Timeouts.DownstreamWriteTimeout, body);
+            using var translator = new Http3ResponseTranslationStream(this, stream, requestHead.Method, _configurationSnapshot.Timeouts.DownstreamWriteTimeout, body);
             var result = await _forwarder.ForwardAsync(translator, Http1HeadReadResult.TranslatedRequestBody(ReadOnlyMemory<byte>.Empty), requestHead, route, selection.Upstream, _listener, ProxyTimeoutPolicy.ApplyRetryAttemptTimeout(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), timeouts), connectionLimits, limits, upstreamTarget, forwardedHeaders, preferClientKeepAlive: false, requestId, cancellationToken, suppressGeneratedFailureResponse).ConfigureAwait(false);
             lastResult = result;
             ProxyUpstreamAttemptRecorder.Record(selection, result, _healthStore, _circuitBreakerStore);
@@ -889,6 +889,16 @@ internal sealed partial class Http3Connection
             _method = method;
             _writeTimeout = writeTimeout;
             _requestBody = requestBody;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _headBuffer.Dispose();
+                _chunkBuffer.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         public override bool CanRead => true;

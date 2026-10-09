@@ -92,6 +92,7 @@ internal sealed partial class ClientConnection
     {
         _socket.NoDelay = true;
         var transportStream = new NetworkStream(_socket, ownsSocket: true);
+        await using var ownedTransportStream = transportStream.ConfigureAwait(false);
         Stream clientStream = transportStream;
         TlsAuthenticationResult? tlsResult = null;
         if (_listener.Transport == RuntimeListenerTransport.Https)
