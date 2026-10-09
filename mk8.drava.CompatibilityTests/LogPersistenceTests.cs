@@ -218,7 +218,7 @@ internal static class LogPersistenceTests
         var store = CreateStore(temp.Path, requireAdminAuth: true);
         var writer = CreateWriter(temp.Path, store);
         writer.WriteAdminAudit(AdminAudit($"/admin/proxy/status?token={querySecret}", 403));
-        var status = CreateStatusController(store, writer).Get();
+        var status = CreateStatusSnapshot(store, writer);
         var text = JsonSerializer.Serialize(status);
         AssertEx.True(status.LogPersistence.AdminAuditEnabled);
         AssertEx.Equal("degraded", status.LogPersistence.State);
@@ -260,14 +260,14 @@ internal static class LogPersistenceTests
         return new ProxyPersistentLogWriter(new MdravaDataDirectoryProvider(new MdravaDataDirectoryOptions { DataDirectory = dataDirectory }), new ProxyLogPersistenceSettingsReader(new ProxyConfigurationLogPersistenceSettingsSource(store)), NullLogger<ProxyPersistentLogWriter>.Instance, timeProvider ?? TimeProvider.System);
     }
 
-    private static ProxyStatusController CreateStatusController(ProxyConfigurationStore store, ProxyPersistentLogWriter writer)
+    private static ProxyStatusResponse CreateStatusSnapshot(ProxyConfigurationStore store, ProxyPersistentLogWriter writer)
     {
         var metrics = new ProxyMetrics();
-        var pool = new UpstreamConnectionPool(new UpstreamConnectionFactory(), metrics, TimeProvider.System);
+        using var pool = new UpstreamConnectionPool(new UpstreamConnectionFactory(), metrics, TimeProvider.System);
         var circuit = new CircuitBreakerStore(metrics, TimeProvider.System);
         var health = new UpstreamHealthStore(metrics, pool, circuit);
         var statusOperations = ProxyStatusOperationFactory.Create(new ProxyRuntimeState(TimeProvider.System), metrics, store, health, logPersistenceStore: writer);
-        return new ProxyStatusController(new ProxyStatusAdministrationService(statusOperations));
+        return new ProxyStatusController(new ProxyStatusAdministrationService(statusOperations)).Get();
     }
 
     private static ProxyConfigurationStore CreateStore(string dataDirectory, ProxyLogPersistenceOptions? logPersistence = null, bool requireAdminAuth = false)

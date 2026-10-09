@@ -501,7 +501,7 @@ internal static class UpstreamHttp3Tests
                     var stream = await connection.AcceptInboundStreamAsync(cancellationToken).ConfigureAwait(false);
                     if (stream.Type != QuicStreamType.Bidirectional)
                     {
-                        drains.Add(ObserveAsync(DrainAsync(stream, drainStop.Token)));
+                        drains.Add(ObserveAsync(() => DrainAsync(stream, drainStop.Token)));
                         continue;
                     }
 
@@ -617,7 +617,7 @@ internal static class UpstreamHttp3Tests
                 while (!connectionStop.IsCancellationRequested)
                 {
                     var stream = await connection.AcceptInboundStreamAsync(connectionStop.Token).ConfigureAwait(false);
-                    children.Add(ObserveAsync(stream.Type == QuicStreamType.Bidirectional
+                    children.Add(ObserveAsync(() => stream.Type == QuicStreamType.Bidirectional
                         ? HandleStreamAsync(connection, stream, connectionStop.Token, controls)
                         : DrainAsync(stream, connectionStop.Token)));
                 }
@@ -650,7 +650,7 @@ internal static class UpstreamHttp3Tests
                 var connection = await pendingAccept.ConfigureAwait(false);
                 pendingAccept = null;
                 Interlocked.Increment(ref connections);
-                var task = ObserveAsync(HandleConnectionAsync(connection));
+                var task = ObserveAsync(() => HandleConnectionAsync(connection));
                 connectionTasks.Add(task);
             }
 
@@ -684,21 +684,26 @@ internal static class UpstreamHttp3Tests
         return new ReusableHttp3UpstreamObservation(connections, requests.ToArray());
     }
 
-    private static async Task ObserveAsync(Task task)
+    private static async Task ObserveAsync(Func<Task> operation)
     {
         try
         {
-            await task.ConfigureAwait(false);
+            await operation().ConfigureAwait(false);
         }
         catch (Exception exception)when (exception is OperationCanceledException or IOException or QuicException)
         {
         }
     }
 
-    private static async ValueTask<QuicListener> CreateQuicListenerAsync(int port, CancellationToken cancellationToken, IReadOnlyList<SslApplicationProtocol>? applicationProtocols = null, int maxInboundBidirectionalStreams = 4)
+    private static async ValueTask<DevelopmentOwnedQuicListener> CreateQuicListenerAsync(int port, CancellationToken cancellationToken, IReadOnlyList<SslApplicationProtocol>? applicationProtocols = null, int maxInboundBidirectionalStreams = 4)
     {
         var certificate = CreateServerCertificate("upstream.test");
-        return await QuicListener.ListenAsync(new QuicListenerOptions { ListenEndPoint = new IPEndPoint(IPAddress.Loopback, port), ApplicationProtocols = applicationProtocols?.ToList() ?? [Http3Alpn], ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new QuicServerConnectionOptions { ServerAuthenticationOptions = new SslServerAuthenticationOptions { ServerCertificate = certificate, EnabledSslProtocols = SslProtocols.Tls13, ApplicationProtocols = applicationProtocols?.ToList() ?? [Http3Alpn], CertificateRevocationCheckMode = X509RevocationMode.NoCheck }, MaxInboundBidirectionalStreams = maxInboundBidirectionalStreams, MaxInboundUnidirectionalStreams = 4, IdleTimeout = TimeSpan.FromSeconds(5), HandshakeTimeout = TimeSpan.FromSeconds(5), DefaultCloseErrorCode = 0x100, DefaultStreamErrorCode = 0x100 }) }, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var listener = await QuicListener.ListenAsync(new QuicListenerOptions { ListenEndPoint = new IPEndPoint(IPAddress.Loopback, port), ApplicationProtocols = applicationProtocols?.ToList() ?? [Http3Alpn], ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new QuicServerConnectionOptions { ServerAuthenticationOptions = new SslServerAuthenticationOptions { ServerCertificate = certificate, EnabledSslProtocols = SslProtocols.Tls13, ApplicationProtocols = applicationProtocols?.ToList() ?? [Http3Alpn], CertificateRevocationCheckMode = X509RevocationMode.NoCheck }, MaxInboundBidirectionalStreams = maxInboundBidirectionalStreams, MaxInboundUnidirectionalStreams = 4, IdleTimeout = TimeSpan.FromSeconds(5), HandshakeTimeout = TimeSpan.FromSeconds(5), DefaultCloseErrorCode = 0x100, DefaultStreamErrorCode = 0x100 }) }, cancellationToken).ConfigureAwait(false);
+            return new DevelopmentOwnedQuicListener(listener, certificate);
+        }
+        catch { certificate.Dispose(); throw; }
     }
 
     private static async ValueTask<Http3UpstreamObservation> ReadRequestAsync(QuicStream stream, CancellationToken cancellationToken)
