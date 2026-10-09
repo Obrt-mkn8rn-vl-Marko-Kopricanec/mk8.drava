@@ -319,6 +319,8 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
 
     private async ValueTask<Http3FrameReadResult> ReadFrameAsync(TimeSpan timeout, ProxyTimeoutKind timeoutKind, CancellationToken cancellationToken)
     {
+        if (_responseDataBytesRemaining > 0)
+            return await ReadResponseDataChunkAsync(timeout, timeoutKind, cancellationToken).ConfigureAwait(false);
         var type = await ReadVarIntAsync(timeout, timeoutKind, cancellationToken).ConfigureAwait(false);
         if (!type.Success)
         {
@@ -326,9 +328,15 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
         }
 
         var length = await ReadVarIntAsync(timeout, timeoutKind, cancellationToken).ConfigureAwait(false);
-        if (!length.Success || length.Value < 0 || length.Value > _maxFramePayloadBytes)
+        if (!length.Success || length.Value < 0 || type.Value != Http3Codec.DataFrame && length.Value > _maxFramePayloadBytes)
         {
             throw new Http3UpstreamProtocolException("Upstream HTTP/3 frame was malformed or exceeded the configured maximum size.");
+        }
+
+        if (type.Value == Http3Codec.DataFrame)
+        {
+            _responseDataBytesRemaining = length.Value;
+            return await ReadResponseDataChunkAsync(timeout, timeoutKind, cancellationToken).ConfigureAwait(false);
         }
 
         var payload = length.Value == 0 ? [] : await ReadExactAsync((int)length.Value, timeout, timeoutKind, cancellationToken).ConfigureAwait(false);
