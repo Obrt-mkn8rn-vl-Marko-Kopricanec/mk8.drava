@@ -1977,7 +1977,7 @@ internal static class ClientHttp3Tests
         var head = Encoding.ASCII.GetString(bytes, 0, headerEnd);
         foreach (var line in head.Split("\r\n", StringSplitOptions.None))
         {
-            var colon = line.IndexOf(':');
+            var colon = line.IndexOf(':', StringComparison.Ordinal);
             if (colon <= 0 || !line[..colon].Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
             {
                 continue;

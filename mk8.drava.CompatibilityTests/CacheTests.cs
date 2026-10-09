@@ -40,7 +40,7 @@ internal static class CacheTests
     {
         var validation = new ProxyOptionsValidator(new ProxyEndpointAddressPolicy(), new Mk8.Drava.Application.INF.Configuration.ProxyUrlSyntaxPolicy()).Validate(null, new ProxyOptions { Routes = [new ProxyRouteOptions { Name = "bad-cache", Host = "*", PathPrefix = "/", Cache = new ProxyCachePolicyOptions { Enabled = true, MaxEntryBytes = -1, Methods = ["POST"], VaryByHeaders = ["bad header"] }, Upstreams = [new UpstreamOptions { Name = "local", Address = "127.0.0.1", Port = 5000 }] }] });
         AssertEx.True(validation.Failed);
-        var failures = AssertEx.NotNull(validation.Failures);
+        var failures = AssertEx.NotNull(validation.Failures).ToArray();
         AssertEx.True(failures.Any(static failure => failure.Contains("MaxEntryBytes", StringComparison.Ordinal)));
         AssertEx.True(failures.Any(static failure => failure.Contains("Methods", StringComparison.Ordinal)));
         AssertEx.True(failures.Any(static failure => failure.Contains("VaryByHeaders", StringComparison.Ordinal)));

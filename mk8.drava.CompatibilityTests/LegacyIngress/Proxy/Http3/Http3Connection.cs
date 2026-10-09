@@ -335,7 +335,7 @@ internal sealed partial class Http3Connection
         }, CancellationToken.None);
     }
 
-    private async ValueTask DrainUnsupportedStreamAsync(QuicStream stream, CancellationToken cancellationToken)
+    private static async ValueTask DrainUnsupportedStreamAsync(QuicStream stream, CancellationToken cancellationToken)
     {
         await using var ownedStream = stream.ConfigureAwait(false);
         var buffer = new byte[256];

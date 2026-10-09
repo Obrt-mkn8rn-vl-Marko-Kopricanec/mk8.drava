@@ -417,7 +417,7 @@ internal sealed partial class Http2ClientConnection
         return true;
     }
 
-    private Http2RequestBuildResult BuildRequest(StreamState stream)
+    private static Http2RequestBuildResult BuildRequest(StreamState stream)
     {
         if (!HpackCodec.TryDecodeRequestHeaders(stream.HeaderBlock.ToArray(), out var headers, out var rejectionReason))
         {
@@ -805,7 +805,7 @@ internal sealed partial class Http2ClientConnection
 
     private static string ExtractPath(string target)
     {
-        var queryIndex = target.IndexOf('?');
+        var queryIndex = target.IndexOf('?', StringComparison.Ordinal);
         return queryIndex < 0 ? target : target[..queryIndex];
     }
 

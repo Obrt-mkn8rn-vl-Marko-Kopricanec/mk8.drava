@@ -98,7 +98,7 @@ internal static class Http3InfrastructureTests
         var options = ValidProxyOptions(Http3Listener("main", "http3"));
         options.Listeners.Add(new ListenerOptions { Name = "legacy", Address = "127.0.0.1", Port = 9443, Transport = "https", Protocols = "http3Preview", Http3Enablement = "preview", DefaultCertificateId = "default" });
         var validation = new ProxyOptionsValidator(new ProxyEndpointAddressPolicy(), new Mk8.Drava.Application.INF.Configuration.ProxyUrlSyntaxPolicy()).Validate(null, options);
-        var failures = AssertEx.NotNull(validation.Failures);
+        var failures = AssertEx.NotNull(validation.Failures).ToArray();
         AssertEx.True(validation.Failed);
         AssertEx.True(failures.Any(static failure => failure.Contains("Protocols must be", StringComparison.Ordinal)), string.Join("; ", failures));
         AssertEx.True(failures.Any(static failure => failure.Contains("Http3Enablement must be", StringComparison.Ordinal)), string.Join("; ", failures));
