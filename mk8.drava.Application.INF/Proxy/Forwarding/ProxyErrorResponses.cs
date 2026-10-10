@@ -10,10 +10,10 @@ public static class ProxyErrorResponses
     public static ValueTask WriteGeneratedFailureAsync(Stream stream, ProxyGeneratedFailureResponse response, string? requestId, TimeSpan timeout, ProxyMetrics metrics, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(response);
-        return WriteGeneratedAsync(stream, response.StatusCode, response.ReasonPhrase, response.Body, requestId, timeout, metrics, cancellationToken, ProxyGeneratedFailurePolicy.PlainTextContentType, []);
+        return WriteGeneratedAsync(stream, response.StatusCode, response.ReasonPhrase, response.Body, requestId, timeout, metrics, ProxyGeneratedFailurePolicy.PlainTextContentType, [], cancellationToken);
     }
 
-    public static ValueTask WriteGeneratedAsync(Stream stream, int statusCode, string reasonPhrase, string body, string? requestId, TimeSpan timeout, ProxyMetrics metrics, CancellationToken cancellationToken, string? contentType, IReadOnlyList<ProxyHeaderField> headers)
+    public static ValueTask WriteGeneratedAsync(Stream stream, int statusCode, string reasonPhrase, string body, string? requestId, TimeSpan timeout, ProxyMetrics metrics, string? contentType, IReadOnlyList<ProxyHeaderField> headers, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(headers);
         var builder = new StringBuilder();

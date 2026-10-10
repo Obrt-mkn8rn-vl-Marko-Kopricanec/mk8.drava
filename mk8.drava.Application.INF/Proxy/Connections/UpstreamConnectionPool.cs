@@ -184,9 +184,11 @@ public sealed class UpstreamConnectionPool : IUpstreamConnectionPruner, IDisposa
 
     private void ThrowIfDisposed()
     {
+#pragma warning disable CA1513 // ThrowIf uses the type full name; this public boundary preserves its established short ObjectName, verified by the disposed-pool regression.
         if (_disposed)
         {
             throw new ObjectDisposedException(nameof(UpstreamConnectionPool));
         }
+#pragma warning restore CA1513
     }
 }

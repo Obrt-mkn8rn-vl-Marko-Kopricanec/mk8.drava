@@ -9,6 +9,22 @@ namespace Mk8.Drava.UnitTests;
 
 public sealed class UpstreamPoolBoundaryTests
 {
+    [Fact]
+    public async Task DisposedPoolPreservesItsFailureIdentityBeforeAnyConnectionIsOpenedAsync()
+    {
+        var metrics = new ProxyMetrics();
+        using var pool = new UpstreamConnectionPool(new UpstreamConnectionFactory(), metrics, TimeProvider.System);
+        pool.Dispose();
+        var upstream = new RuntimeUpstream("route", "peer", "http", "http1", "127.0.0.1", 1, 1, RuntimeUpstreamTlsOptions.Default);
+        var failure = await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
+        {
+            var lease = await pool.BorrowAsync(upstream, Timeouts(), new RuntimeConnectionLimits(10, 1, 1), CancellationToken.None).ConfigureAwait(false);
+            await using var leaseLifetime = lease.ConfigureAwait(false);
+        }).ConfigureAwait(true);
+        Assert.Equal(nameof(UpstreamConnectionPool), failure.ObjectName);
+        Assert.Equal(0L, metrics.Snapshot().UpstreamPool.ConnectionsOpened);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

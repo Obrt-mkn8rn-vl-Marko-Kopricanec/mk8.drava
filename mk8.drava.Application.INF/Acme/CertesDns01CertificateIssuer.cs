@@ -13,14 +13,17 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
     private readonly AcmeDns01IssuerPolicy _policy;
     private readonly IAcmeDns01ChallengeProvider _dns;
     private readonly Func<HttpMessageHandler>? _handler;
+    private readonly TimeProvider _operationTimeProvider;
     private readonly SemaphoreSlim _admission = new(1, 1);
 
-    public CertesDns01CertificateIssuer(AcmeDns01IssuerPolicy policy, IAcmeDns01ChallengeProvider dns, Func<HttpMessageHandler>? handler = null)
+    public CertesDns01CertificateIssuer(AcmeDns01IssuerPolicy policy, IAcmeDns01ChallengeProvider dns, Func<HttpMessageHandler>? handler = null,
+        TimeProvider? operationTimeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(policy); ArgumentNullException.ThrowIfNull(dns);
         policy.Validate();
         _policy = policy with { ContactEmails = Array.AsReadOnly(policy.ContactEmails.ToArray()) };
         _dns = dns; _handler = handler;
+        _operationTimeProvider = operationTimeProvider ?? TimeProvider.System;
     }
 
     public async ValueTask<AcmeCertificateIssueResult> IssueAsync(AcmeCertificateIssueRequest request, AcmeChallengeStore challengeStore, CancellationToken cancellationToken)
@@ -32,8 +35,8 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
             return AcmeCertificateIssueResult.Failed("Another ACME operation is active; retry through the certificate lifecycle.");
         try
         {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(_policy.OperationTimeout);
+            using var operationDeadline = new CancellationTokenSource(_policy.OperationTimeout, _operationTimeProvider);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, operationDeadline.Token);
             try { return await IssueOwnedAsync(request, deadline.Token).ConfigureAwait(false); }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception exception) when (exception is AcmeException or HttpRequestException or InvalidDataException or IOException or JsonException or FormatException or CryptographicException or OperationCanceledException)

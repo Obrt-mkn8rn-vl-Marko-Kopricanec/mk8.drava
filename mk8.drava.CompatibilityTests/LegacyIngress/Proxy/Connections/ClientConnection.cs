@@ -524,7 +524,7 @@ internal sealed partial class ClientConnection
 
     private async ValueTask WriteGeneratedResponseAsync(Stream clientStream, ProxyGeneratedFailureResponse response, ProxyRequestContext context, CancellationToken cancellationToken)
     {
-        await ProxyErrorResponses.WriteGeneratedAsync(clientStream, response.StatusCode, response.ReasonPhrase, response.Body, context.RequestId, _configurationSnapshot.Timeouts.DownstreamWriteTimeout, _metrics, cancellationToken, contentType: ProxyGeneratedFailurePolicy.PlainTextContentType, headers: ApplyAltSvc([])).ConfigureAwait(false);
+        await ProxyErrorResponses.WriteGeneratedAsync(clientStream, response.StatusCode, response.ReasonPhrase, response.Body, context.RequestId, _configurationSnapshot.Timeouts.DownstreamWriteTimeout, _metrics, contentType: ProxyGeneratedFailurePolicy.PlainTextContentType, headers: ApplyAltSvc([]), cancellationToken: cancellationToken).ConfigureAwait(false);
         context.RecordGeneratedFailureResponse(response, keepClientConnectionOpen: false);
     }
 
@@ -563,7 +563,7 @@ internal sealed partial class ClientConnection
 
     private async ValueTask WriteGeneratedRouteResponseAsync(Stream clientStream, GeneratedRouteResponse response, ProxyRequestContext context, CancellationToken cancellationToken)
     {
-        await ProxyErrorResponses.WriteGeneratedAsync(clientStream, response.StatusCode, response.ReasonPhrase, response.Body, context.RequestId, _configurationSnapshot.Timeouts.DownstreamWriteTimeout, _metrics, cancellationToken, contentType: response.ContentType, headers: ApplyAltSvc(response.Headers)).ConfigureAwait(false);
+        await ProxyErrorResponses.WriteGeneratedAsync(clientStream, response.StatusCode, response.ReasonPhrase, response.Body, context.RequestId, _configurationSnapshot.Timeouts.DownstreamWriteTimeout, _metrics, contentType: response.ContentType, headers: ApplyAltSvc(response.Headers), cancellationToken: cancellationToken).ConfigureAwait(false);
         context.RecordGeneratedRouteResponse(response, keepClientConnectionOpen: false);
     }
 

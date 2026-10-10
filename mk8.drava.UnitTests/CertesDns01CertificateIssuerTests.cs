@@ -134,14 +134,48 @@ public sealed class CertesDns01CertificateIssuerTests
         Assert.Equal(0, fixture.Servers[0].Finalizations);
     }
 
-    [Fact]
-    public async Task MissingPropagationTimesOutWithoutNotifyingTheCaAndJoinsCleanupAsync()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MissingPropagationTimesOutWithoutNotifyingTheCaAndJoinsCleanupAsync(bool blockedProof)
     {
-        using var fixture = new IssuerFixture(new DevelopmentAcmeDnsProvider { MissingProof = true });
-        using var issuer = fixture.CreateIssuer(policy: fixture.Policy with { OperationTimeout = TimeSpan.FromSeconds(1) });
-        Assert.IsType<AcmeCertificateIssueResult.FailedResult>(await issuer.IssueAsync(fixture.Request(), new AcmeChallengeStore(), CancellationToken.None).ConfigureAwait(true));
+        var clock = new DevelopmentOperationDeadlineClock();
+        using var fixture = new IssuerFixture(new DevelopmentAcmeDnsProvider { MissingProof = true, BlockProof = blockedProof });
+        using var issuer = fixture.CreateIssuer(policy: fixture.Policy with { OperationTimeout = TimeSpan.FromSeconds(1) }, operationTimeProvider: clock);
+        using var cancellation = new CancellationTokenSource();
+        var issue = issuer.IssueAsync(fixture.Request(), new AcmeChallengeStore(), cancellation.Token).AsTask();
+        try
+        {
+            await fixture.Dns.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TimeProvider.System, cancellation.Token).ConfigureAwait(true);
+            clock.Advance(TimeSpan.FromMilliseconds(999));
+            Assert.False(issue.IsCompleted);
+            Assert.Equal(0, fixture.Dns.Removed);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.IsType<AcmeCertificateIssueResult.FailedResult>(await issue.WaitAsync(TimeSpan.FromSeconds(5), TimeProvider.System, cancellation.Token).ConfigureAwait(true));
+        }
+        finally { await cancellation.CancelAsync().ConfigureAwait(true); await issue.ConfigureAwait(true); }
         Assert.Equal(1, fixture.Dns.Published); Assert.Equal(1, fixture.Dns.Removed); Assert.Empty(fixture.Dns.Records);
+        Assert.True(fixture.Dns.Exited.Task.IsCompletedSuccessfully);
         Assert.Equal(0, fixture.Servers[0].Validations); Assert.Equal(0, fixture.Servers[0].Finalizations);
+    }
+
+    [Fact]
+    public async Task OperationExpiryBeforePublicationDisposesTheHandlerAndLeavesNoChallengeAsync()
+    {
+        var clock = new DevelopmentOperationDeadlineClock();
+        using var fixture = new IssuerFixture();
+        using var handler = new DevelopmentAcmeHttpHandler();
+        using var issuer = new CertesDns01CertificateIssuer(fixture.Policy with { OperationTimeout = TimeSpan.FromSeconds(1) }, fixture.Dns, () =>
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            return handler;
+        }, clock);
+        Assert.IsType<AcmeCertificateIssueResult.FailedResult>(await issuer.IssueAsync(fixture.Request(), new AcmeChallengeStore(), CancellationToken.None).ConfigureAwait(true));
+        Assert.Equal(1, handler.Disposals);
+        Assert.Equal(0, handler.Requests);
+        Assert.Equal(0, fixture.Dns.Published);
+        Assert.Equal(0, fixture.Dns.Removed);
+        Assert.Empty(fixture.Dns.Records);
     }
 
     [Fact]
@@ -214,11 +248,11 @@ public sealed class CertesDns01CertificateIssuerTests
             Policy = new AcmeDns01IssuerPolicy { SiteDomain = "site.example", Directory = new Uri("https://ca.example/directory"),
                 AccountKeyPath = Path.Combine(_directory.Path, "acme-account.pem"), ContactEmails = ["owner@example.org"], TermsAccepted = true, PollInterval = TimeSpan.FromMilliseconds(100) };
         }
-        public CertesDns01CertificateIssuer CreateIssuer(string behavior = "normal", AcmeDns01IssuerPolicy? policy = null) => new(policy ?? Policy, Dns, () =>
+        public CertesDns01CertificateIssuer CreateIssuer(string behavior = "normal", AcmeDns01IssuerPolicy? policy = null, TimeProvider? operationTimeProvider = null) => new(policy ?? Policy, Dns, () =>
         {
             var server = new DevelopmentAcmeServer(Dns, Policy.AccountKeyPath) { CorruptOrder = string.Equals(behavior, "order", StringComparison.Ordinal), CorruptAuthorization = string.Equals(behavior, "authorization", StringComparison.Ordinal), RejectAuthorization = string.Equals(behavior, "rejected", StringComparison.Ordinal), PendingOrder = string.Equals(behavior, "pending", StringComparison.Ordinal) };
             Servers.Add(server); return server;
-        });
+        }, operationTimeProvider);
         public AcmeCertificateIssueRequest Request() => new("site", ["site.example", "*.site.example"], Policy.Directory.AbsoluteUri, Policy.ContactEmails, true);
         public void Dispose() { for (var i = 0; i < Servers.Count; i++) Servers[i].Dispose(); _directory.Dispose(); }
     }
