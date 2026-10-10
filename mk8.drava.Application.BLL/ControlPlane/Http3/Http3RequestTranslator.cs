@@ -21,42 +21,10 @@ public static class Http3RequestTranslator
         ArgumentNullException.ThrowIfNull(headers);
         Dictionary<string, string> pseudo = new(StringComparer.Ordinal);
         List<ProxyHeaderField> regularHeaders = [];
-        var regularHeaderSeen = false;
-        foreach (var header in headers)
+        var headerFailure = ReadHeaders(headers, pseudo, regularHeaders);
+        if (headerFailure is not null)
         {
-            if (header.Name.Length == 0)
-            {
-                return Http3RequestTranslationResult.Rejected("empty_header_name");
-            }
-
-            if (header.Name.Any(static character => char.IsAsciiLetterUpper(character)))
-            {
-                return Http3RequestTranslationResult.Rejected("uppercase_header_name");
-            }
-
-            if (header.Name[0] == ':')
-            {
-                if (regularHeaderSeen || pseudo.ContainsKey(header.Name) || !IsAllowedPseudoHeader(header.Name))
-                {
-                    return Http3RequestTranslationResult.Rejected("invalid_pseudo_header");
-                }
-
-                pseudo[header.Name] = header.Value;
-                continue;
-            }
-
-            regularHeaderSeen = true;
-            if (!IsValidHeaderName(header.Name))
-            {
-                return Http3RequestTranslationResult.Rejected("invalid_header_name");
-            }
-
-            if (ForbiddenHeaders.Contains(header.Name))
-            {
-                return Http3RequestTranslationResult.Rejected("forbidden_header");
-            }
-
-            regularHeaders.Add(header);
+            return Http3RequestTranslationResult.Rejected(headerFailure);
         }
 
         if (!pseudo.TryGetValue(":method", out var method))
@@ -74,6 +42,11 @@ public static class Http3RequestTranslator
             return BuildConnectRequest(pseudo, regularHeaders, listener, method);
         }
 
+        return BuildOrdinaryRequest(pseudo, regularHeaders, listener, method, bodyMayFollow: bodyMayFollow);
+    }
+
+    private static Http3RequestTranslationResult BuildOrdinaryRequest(Dictionary<string, string> pseudo, List<ProxyHeaderField> regularHeaders, Http3RequestTranslationListenerInput listener, string method, bool bodyMayFollow)
+    {
         if (!pseudo.TryGetValue(":scheme", out var scheme) || !pseudo.TryGetValue(":authority", out var authority) || !pseudo.TryGetValue(":path", out var target))
         {
             return Http3RequestTranslationResult.Rejected("missing_pseudo_header");
@@ -111,6 +84,49 @@ public static class Http3RequestTranslator
         var path = target.Split('?', 2)[0];
         regularHeaders.Insert(0, new ProxyHeaderField("Host", authority));
         return Http3RequestTranslationResult.Accepted(new Http1RequestHead(method, target, path, "HTTP/3", authority, framing, regularHeaders));
+    }
+
+    private static string? ReadHeaders(IReadOnlyList<ProxyHeaderField> headers, Dictionary<string, string> pseudo, List<ProxyHeaderField> regularHeaders)
+    {
+        var regularHeaderSeen = false;
+        foreach (var header in headers)
+        {
+            if (header.Name.Length == 0)
+            {
+                return "empty_header_name";
+            }
+
+            if (header.Name.Any(static character => char.IsAsciiLetterUpper(character)))
+            {
+                return "uppercase_header_name";
+            }
+
+            if (header.Name[0] == ':')
+            {
+                if (regularHeaderSeen || pseudo.ContainsKey(header.Name) || !IsAllowedPseudoHeader(header.Name))
+                {
+                    return "invalid_pseudo_header";
+                }
+
+                pseudo[header.Name] = header.Value;
+                continue;
+            }
+
+            regularHeaderSeen = true;
+            if (!IsValidHeaderName(header.Name))
+            {
+                return "invalid_header_name";
+            }
+
+            if (ForbiddenHeaders.Contains(header.Name))
+            {
+                return "forbidden_header";
+            }
+
+            regularHeaders.Add(header);
+        }
+
+        return null;
     }
 
     private static bool IsAllowedPseudoHeader(string name)

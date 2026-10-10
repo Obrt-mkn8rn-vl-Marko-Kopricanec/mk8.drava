@@ -105,6 +105,11 @@ public static partial class ProxyRouteDiagnosticsRequestReader
             return ProxyRouteDiagnosticsRequestDecision.Rejected(Failure(evaluatedAtUtc, "invalid_port", "Port must be between 1 and 65535 when supplied."));
         }
 
+        return ReadTarget(request, evaluatedAtUtc, clientAddressSyntaxPolicy, scheme, protocol);
+    }
+
+    private static ProxyRouteDiagnosticsRequestDecision ReadTarget(RouteMatchDryRunRequest request, DateTimeOffset evaluatedAtUtc, IProxyClientAddressSyntaxPolicy clientAddressSyntaxPolicy, string scheme, string? protocol)
+    {
         var method = NormalizeMethod(request.Method);
         if (method.Length is 0 or > 32 || ContainsControl(method) || method.Any(static character => char.IsWhiteSpace(character)))
         {

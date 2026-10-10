@@ -33,21 +33,7 @@ public sealed partial class PrometheusMetricsExporter
         AppendRouteRequestCounters(builder, input.IncludePerRouteLabels, requestClassifications.ByRoute);
         AppendRequestRejectionCounters(builder, proxy);
         AppendUpstreamAndResilienceMetrics(builder, input, proxy, health);
-        AppendGauge(builder, "mdrava_cache_entries", "Current in-memory response cache entries.", cache.EntryCount);
-        AppendGauge(builder, "mdrava_cache_bytes", "Approximate in-memory response cache bytes.", cache.ApproximateBytes);
-        AppendCounter(builder, "mdrava_cache_hits_total", "Response cache hits.", cache.HitCount);
-        AppendCounter(builder, "mdrava_cache_misses_total", "Response cache misses.", cache.MissCount);
-        AppendCounter(builder, "mdrava_cache_stores_total", "Stored response cache entries.", cache.StoreCount);
-        AppendCounter(builder, "mdrava_cache_evictions_total", "Evicted response cache entries.", cache.EvictionCount);
-        if (cache.Rejections.Count > 0)
-        {
-            AppendHelpAndType(builder, "mdrava_cache_store_rejections_total", "Response cache store rejections by bounded reason.", "counter");
-        }
-
-        foreach (var rejection in cache.Rejections)
-        {
-            AppendSample(builder, "mdrava_cache_store_rejections_total", rejection.Count, new Label("reason", rejection.Reason));
-        }
+        AppendCacheMetrics(builder, cache);
 
         AppendLabeledCounter(builder, "mdrava_config_reloads_total", "Configuration reloads by result.", configReloads.Successes, new Label("result", "success"));
         AppendLabeledCounter(builder, "mdrava_config_reloads_total", null, configReloads.Failures, new Label("result", "failure"));
@@ -72,6 +58,42 @@ public sealed partial class PrometheusMetricsExporter
         }
 
         var listeners = proxy.Listeners;
+        AppendListenerMetrics(builder, listeners);
+        AppendAuthenticationAndAcmeMetrics(builder, adminAuth, acmeRenewals, acme);
+        return builder.ToString();
+    }
+
+    private static void AppendAuthenticationAndAcmeMetrics(StringBuilder builder, ProxyAdminAuthMetricsSnapshot adminAuth, ProxyAcmeRenewalMetricsSnapshot acmeRenewals, IReadOnlyList<AcmeCertificateLifecycleStatus> acme)
+    {
+        AppendLabeledCounter(builder, "mdrava_admin_auth_total", "Admin authentication attempts by result.", adminAuth.Successes, new Label("result", "success"));
+        AppendLabeledCounter(builder, "mdrava_admin_auth_total", null, adminAuth.Failures, new Label("result", "failure"));
+        AppendLabeledCounter(builder, "mdrava_acme_renewals_total", "ACME renewal attempts by result.", acmeRenewals.Attempts, new Label("result", "attempt"));
+        AppendLabeledCounter(builder, "mdrava_acme_renewals_total", null, acmeRenewals.Successes, new Label("result", "success"));
+        AppendLabeledCounter(builder, "mdrava_acme_renewals_total", null, acmeRenewals.Failures, new Label("result", "failure"));
+        AppendAcmeCertificateStatus(builder, acme);
+    }
+
+    private static void AppendCacheMetrics(StringBuilder builder, Mk8.Drava.Application.BLL.ControlPlane.Caching.ProxyCacheStatus cache)
+    {
+        AppendGauge(builder, "mdrava_cache_entries", "Current in-memory response cache entries.", cache.EntryCount);
+        AppendGauge(builder, "mdrava_cache_bytes", "Approximate in-memory response cache bytes.", cache.ApproximateBytes);
+        AppendCounter(builder, "mdrava_cache_hits_total", "Response cache hits.", cache.HitCount);
+        AppendCounter(builder, "mdrava_cache_misses_total", "Response cache misses.", cache.MissCount);
+        AppendCounter(builder, "mdrava_cache_stores_total", "Stored response cache entries.", cache.StoreCount);
+        AppendCounter(builder, "mdrava_cache_evictions_total", "Evicted response cache entries.", cache.EvictionCount);
+        if (cache.Rejections.Count > 0)
+        {
+            AppendHelpAndType(builder, "mdrava_cache_store_rejections_total", "Response cache store rejections by bounded reason.", "counter");
+        }
+
+        foreach (var rejection in cache.Rejections)
+        {
+            AppendSample(builder, "mdrava_cache_store_rejections_total", rejection.Count, new Label("reason", rejection.Reason));
+        }
+    }
+
+    private static void AppendListenerMetrics(StringBuilder builder, ProxyListenerMetricsSnapshot listeners)
+    {
         AppendLabeledCounter(builder, "mdrava_listener_reloads_total", "Proxy listener reload attempts by result.", listeners.ReloadSuccesses, new Label("result", "success"));
         AppendLabeledCounter(builder, "mdrava_listener_reloads_total", null, listeners.ReloadFailures, new Label("result", "failure"));
         AppendCounter(builder, "mdrava_listener_reload_attempts_total", "Proxy listener reload attempts.", listeners.ReloadAttempts);
@@ -82,13 +104,51 @@ public sealed partial class PrometheusMetricsExporter
         AppendCounter(builder, "mdrava_listener_start_failures_total", "Proxy listener start failures.", listeners.StartFailures);
         AppendCounter(builder, "mdrava_listener_drains_total", "Proxy listener drains after reload removal or replacement.", listeners.Drains);
         AppendGauge(builder, "mdrava_listeners_active", "Currently active proxy listeners.", listeners.ActiveListeners);
-        AppendLabeledCounter(builder, "mdrava_admin_auth_total", "Admin authentication attempts by result.", adminAuth.Successes, new Label("result", "success"));
-        AppendLabeledCounter(builder, "mdrava_admin_auth_total", null, adminAuth.Failures, new Label("result", "failure"));
-        AppendLabeledCounter(builder, "mdrava_acme_renewals_total", "ACME renewal attempts by result.", acmeRenewals.Attempts, new Label("result", "attempt"));
-        AppendLabeledCounter(builder, "mdrava_acme_renewals_total", null, acmeRenewals.Successes, new Label("result", "success"));
-        AppendLabeledCounter(builder, "mdrava_acme_renewals_total", null, acmeRenewals.Failures, new Label("result", "failure"));
-        AppendAcmeCertificateStatus(builder, acme);
-        return builder.ToString();
+    }
+
+    private static void AppendHttp2ClientMetrics(StringBuilder builder, ProxyHttp2MetricsSnapshot http2)
+    {
+        AppendCounter(builder, "mdrava_http2_connections_accepted_total", "Accepted HTTP/2 downstream client connections.", http2.AcceptedConnections);
+        AppendCounter(builder, "mdrava_http2_requests_total", "HTTP/2 requests received by the dataplane.", http2.Requests);
+        AppendGauge(builder, "mdrava_http2_streams_active", "Currently active HTTP/2 streams.", http2.ActiveStreams);
+        if (http2.ProtocolErrors.Count > 0)
+        {
+            AppendHelpAndType(builder, "mdrava_http2_protocol_errors_total", "HTTP/2 protocol errors by bounded reason.", "counter");
+            foreach (var error in http2.ProtocolErrors.OrderBy(static item => item.Key, StringComparer.Ordinal))
+            {
+                AppendSample(builder, "mdrava_http2_protocol_errors_total", error.Value, new Label("reason", error.Key));
+            }
+        }
+    }
+
+    private static void AppendResilienceAndPoolMetrics(StringBuilder builder, ProxyResilienceMetricsSnapshot resilience, ProxyUpstreamPoolMetricsSnapshot upstreamPool, ProxyHealthMetricsSnapshot healthMetrics, bool includePerUpstreamLabels, IReadOnlyList<ProxyUpstreamStatus> health)
+    {
+        AppendCounter(builder, "mdrava_retry_attempts_total", "Retry attempts after an initial failed upstream attempt.", resilience.RetryAttempts);
+        AppendCounter(builder, "mdrava_retry_exhausted_total", "Requests that exhausted their configured retry attempts.", resilience.RetryExhausted);
+        if (resilience.RetrySkipped.Count > 0)
+        {
+            AppendHelpAndType(builder, "mdrava_retry_skipped_total", "Retries skipped by bounded reason.", "counter");
+        }
+
+        foreach (var skipped in resilience.RetrySkipped)
+        {
+            AppendSample(builder, "mdrava_retry_skipped_total", skipped.Count, new Label("reason", skipped.Reason));
+        }
+
+        AppendLabeledCounter(builder, "mdrava_circuit_transitions_total", "Circuit breaker transitions by state.", resilience.CircuitOpened, new Label("state", "open"));
+        AppendLabeledCounter(builder, "mdrava_circuit_transitions_total", null, resilience.CircuitHalfOpened, new Label("state", "half_open"));
+        AppendLabeledCounter(builder, "mdrava_circuit_transitions_total", null, resilience.CircuitClosed, new Label("state", "closed"));
+        AppendCounter(builder, "mdrava_circuit_rejections_total", "Requests rejected by open or saturated half-open circuits.", resilience.CircuitRejections);
+        AppendGauge(builder, "mdrava_upstream_connections_active", "Active borrowed upstream connections.", upstreamPool.ActiveConnections);
+        AppendGauge(builder, "mdrava_upstream_connections_idle", "Idle reusable upstream connections.", upstreamPool.IdleConnections);
+        AppendCounter(builder, "mdrava_upstream_connections_opened_total", "Opened upstream connections.", upstreamPool.ConnectionsOpened);
+        AppendCounter(builder, "mdrava_upstream_connections_reused_total", "Reused upstream connections.", upstreamPool.ConnectionsReused);
+        AppendCounter(builder, "mdrava_upstream_connections_discarded_total", "Discarded upstream connections.", upstreamPool.ConnectionsDiscarded);
+        AppendLabeledCounter(builder, "mdrava_health_checks_total", "Health checks by result.", healthMetrics.ChecksAttempted, new Label("result", "attempted"));
+        AppendLabeledCounter(builder, "mdrava_health_checks_total", null, healthMetrics.ChecksSucceeded, new Label("result", "success"));
+        AppendLabeledCounter(builder, "mdrava_health_checks_total", null, healthMetrics.ChecksFailed, new Label("result", "failure"));
+        AppendCounter(builder, "mdrava_upstream_health_transitions_total", "Upstream health state transitions.", healthMetrics.UpstreamTransitions);
+        AppendUpstreamHealth(builder, includePerUpstreamLabels, health);
     }
 
     private static void AppendUpstreamSelectionCounters(StringBuilder builder, bool includePerUpstreamLabels, IReadOnlyList<ProxyUpstreamSelectionSnapshot> selections)
@@ -188,17 +248,7 @@ public sealed partial class PrometheusMetricsExporter
     private static void AppendClientProtocolMetrics(StringBuilder builder, ProxyMetricsExportInput input, ProxyMetricsSnapshot proxy)
     {
         var http2 = proxy.Http2;
-        AppendCounter(builder, "mdrava_http2_connections_accepted_total", "Accepted HTTP/2 downstream client connections.", http2.AcceptedConnections);
-        AppendCounter(builder, "mdrava_http2_requests_total", "HTTP/2 requests received by the dataplane.", http2.Requests);
-        AppendGauge(builder, "mdrava_http2_streams_active", "Currently active HTTP/2 streams.", http2.ActiveStreams);
-        if (http2.ProtocolErrors.Count > 0)
-        {
-            AppendHelpAndType(builder, "mdrava_http2_protocol_errors_total", "HTTP/2 protocol errors by bounded reason.", "counter");
-            foreach (var error in http2.ProtocolErrors.OrderBy(static item => item.Key, StringComparer.Ordinal))
-            {
-                AppendSample(builder, "mdrava_http2_protocol_errors_total", error.Value, new Label("reason", error.Key));
-            }
-        }
+        AppendHttp2ClientMetrics(builder, http2);
 
         var http3 = proxy.Http3;
         AppendCounter(builder, "mdrava_http3_connections_accepted_total", "Accepted HTTP/3 downstream client connections.", http3.AcceptedConnections);
@@ -293,32 +343,7 @@ public sealed partial class PrometheusMetricsExporter
             }
         }
 
-        AppendCounter(builder, "mdrava_retry_attempts_total", "Retry attempts after an initial failed upstream attempt.", resilience.RetryAttempts);
-        AppendCounter(builder, "mdrava_retry_exhausted_total", "Requests that exhausted their configured retry attempts.", resilience.RetryExhausted);
-        if (resilience.RetrySkipped.Count > 0)
-        {
-            AppendHelpAndType(builder, "mdrava_retry_skipped_total", "Retries skipped by bounded reason.", "counter");
-        }
-
-        foreach (var skipped in resilience.RetrySkipped)
-        {
-            AppendSample(builder, "mdrava_retry_skipped_total", skipped.Count, new Label("reason", skipped.Reason));
-        }
-
-        AppendLabeledCounter(builder, "mdrava_circuit_transitions_total", "Circuit breaker transitions by state.", resilience.CircuitOpened, new Label("state", "open"));
-        AppendLabeledCounter(builder, "mdrava_circuit_transitions_total", null, resilience.CircuitHalfOpened, new Label("state", "half_open"));
-        AppendLabeledCounter(builder, "mdrava_circuit_transitions_total", null, resilience.CircuitClosed, new Label("state", "closed"));
-        AppendCounter(builder, "mdrava_circuit_rejections_total", "Requests rejected by open or saturated half-open circuits.", resilience.CircuitRejections);
-        AppendGauge(builder, "mdrava_upstream_connections_active", "Active borrowed upstream connections.", upstreamPool.ActiveConnections);
-        AppendGauge(builder, "mdrava_upstream_connections_idle", "Idle reusable upstream connections.", upstreamPool.IdleConnections);
-        AppendCounter(builder, "mdrava_upstream_connections_opened_total", "Opened upstream connections.", upstreamPool.ConnectionsOpened);
-        AppendCounter(builder, "mdrava_upstream_connections_reused_total", "Reused upstream connections.", upstreamPool.ConnectionsReused);
-        AppendCounter(builder, "mdrava_upstream_connections_discarded_total", "Discarded upstream connections.", upstreamPool.ConnectionsDiscarded);
-        AppendLabeledCounter(builder, "mdrava_health_checks_total", "Health checks by result.", healthMetrics.ChecksAttempted, new Label("result", "attempted"));
-        AppendLabeledCounter(builder, "mdrava_health_checks_total", null, healthMetrics.ChecksSucceeded, new Label("result", "success"));
-        AppendLabeledCounter(builder, "mdrava_health_checks_total", null, healthMetrics.ChecksFailed, new Label("result", "failure"));
-        AppendCounter(builder, "mdrava_upstream_health_transitions_total", "Upstream health state transitions.", healthMetrics.UpstreamTransitions);
-        AppendUpstreamHealth(builder, input.IncludePerUpstreamLabels, health);
+        AppendResilienceAndPoolMetrics(builder, resilience, upstreamPool, healthMetrics, includePerUpstreamLabels: input.IncludePerUpstreamLabels, health);
     }
 
     private static void AppendRouteRequestCounters(StringBuilder builder, bool includePerRouteLabels, IReadOnlyList<ProxyRequestSeriesSnapshot> requests)
