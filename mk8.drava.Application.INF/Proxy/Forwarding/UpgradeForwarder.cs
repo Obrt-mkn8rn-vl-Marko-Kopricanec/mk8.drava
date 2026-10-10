@@ -39,6 +39,7 @@ public sealed partial class UpgradeForwarder
     {
         RequireForwardingInputs(connectionLimits, upstream, requestHead, timeouts, route, listener, upgrade);
         var responseStarted = false;
+        void MarkResponseStarted() => responseStarted = true;
         UpstreamTransportConnection? upstreamConnection = null;
         try
         {
@@ -53,8 +54,8 @@ public sealed partial class UpgradeForwarder
                 var (responseHead, initialBody) = await ReadUpgradeResponseAsync(upstreamStream, requestHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
                 if (responseHead.StatusCode != 101)
                 {
-                    await ForwardNonUpgradeResponseAsync(upstreamStream, clientStream, initialBody, responseHead, route, listener, timeouts, requestId, cancellationToken).ConfigureAwait(false);
-                    responseStarted = true;
+                    await ForwardNonUpgradeResponseAsync(upstreamStream, clientStream, initialBody, responseHead, route, listener, timeouts,
+                        requestId, MarkResponseStarted, cancellationToken).ConfigureAwait(false);
                     return ForwardingResult.Success(responseStarted, keepClientConnectionOpen: false, responseHead.StatusCode);
                 }
 
@@ -63,8 +64,8 @@ public sealed partial class UpgradeForwarder
                     throw new Http1UpstreamProtocolException("Upstream returned an invalid 101 Switching Protocols response.");
                 }
 
-                await WriteSwitchingProtocolsResponseAsync(clientStream, responseHead, upgrade, route, timeouts, requestId, cancellationToken).ConfigureAwait(false);
-                responseStarted = true;
+                await WriteSwitchingProtocolsResponseAsync(clientStream, responseHead, upgrade, route, timeouts, requestId,
+                    MarkResponseStarted, cancellationToken).ConfigureAwait(false);
                 return await RelayUpgradedAsync(clientStream, upstreamStream, initialBody, requestHead, upgrade, upstream,
                     listener, timeouts, cancellationToken).ConfigureAwait(false);
             }
@@ -245,7 +246,8 @@ public sealed partial class UpgradeForwarder
         _metrics.AddBytesWritten(bytes.Length);
     }
 
-    private async ValueTask WriteSwitchingProtocolsResponseAsync(Stream clientStream, Http1ResponseHead responseHead, UpgradeRequestInfo upgrade, RuntimeRoute route, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken)
+    private async ValueTask WriteSwitchingProtocolsResponseAsync(Stream clientStream, Http1ResponseHead responseHead, UpgradeRequestInfo upgrade, RuntimeRoute route,
+        RuntimeTimeouts timeouts, string requestId, Action markResponseStarted, CancellationToken cancellationToken)
     {
         var builder = new StringBuilder();
         builder.Append(responseHead.Version).Append(' ').Append(responseHead.StatusCode).Append(' ').Append(responseHead.ReasonPhrase).Append("\r\n");
@@ -264,20 +266,24 @@ public sealed partial class UpgradeForwarder
         builder.Append("Upgrade: ").Append(upgrade.Protocol).Append("\r\n");
         builder.Append("Connection: Upgrade\r\n\r\n");
         var bytes = Encoding.ASCII.GetBytes(builder.ToString());
+        markResponseStarted();
         await ProxyTimedStreamWriter.WriteAsync(clientStream, bytes, timeouts.DownstreamWriteTimeout, cancellationToken).ConfigureAwait(false);
         _metrics.AddBytesWritten(bytes.Length);
     }
 
-    private async ValueTask ForwardNonUpgradeResponseAsync(Stream upstreamStream, Stream clientStream, ReadOnlyMemory<byte> initialBodyBytes, Http1ResponseHead responseHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken)
+    private async ValueTask ForwardNonUpgradeResponseAsync(Stream upstreamStream, Stream clientStream, ReadOnlyMemory<byte> initialBodyBytes, Http1ResponseHead responseHead,
+        RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, string requestId, Action markResponseStarted, CancellationToken cancellationToken)
     {
-        await WriteNonUpgradeResponseHeadAsync(clientStream, responseHead, route, timeouts, requestId, cancellationToken).ConfigureAwait(false);
+        await WriteNonUpgradeResponseHeadAsync(clientStream, responseHead, route, timeouts, requestId, markResponseStarted, cancellationToken).ConfigureAwait(false);
         await RelayNonUpgradeResponseBodyAsync(upstreamStream, clientStream, initialBodyBytes, responseHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
     }
 
-    private async ValueTask WriteNonUpgradeResponseHeadAsync(Stream clientStream, Http1ResponseHead responseHead, RuntimeRoute route, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken)
+    private async ValueTask WriteNonUpgradeResponseHeadAsync(Stream clientStream, Http1ResponseHead responseHead, RuntimeRoute route, RuntimeTimeouts timeouts,
+        string requestId, Action markResponseStarted, CancellationToken cancellationToken)
     {
         var filtered = _headerPolicy.FilterForForwarding(responseHead.Headers, preserveTransferEncoding: false, preserveTrailer: responseHead.Framing.Kind == Http1BodyKind.Chunked);
         var responseHeaders = ProxyHeaderMutationPolicy.ApplyResponseHeaders(filtered, ProxyHeaderMutationRuntimeMapper.ToPolicyInput(route.HeaderPolicy));
+        markResponseStarted();
         await Http1ResponseHeadWriter.WriteAsync(clientStream, responseHead, responseHeaders, [], requestId, responseHead.Framing.Kind == Http1BodyKind.ContentLength ? responseHead.Framing.ContentLength : null, responseHead.Framing.Kind == Http1BodyKind.Chunked, keepClientConnectionOpen: false, timeouts.DownstreamWriteTimeout, _metrics, cancellationToken).ConfigureAwait(false);
     }
 
