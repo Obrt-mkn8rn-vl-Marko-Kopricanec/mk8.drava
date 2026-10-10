@@ -1923,6 +1923,22 @@ internal static class ConfigurationTests
         var projection = ProxyConfigurationReloadResultAssertions.Reloaded(result).ActiveConfiguration;
         var listener = projection.Listeners[0];
         object listenerCollection = projection.Listeners;
+        VerifyListenerProjectionIdentityAndViews(listener);
+        VerifyListenerHttp3Guards();
+        VerifyListenerHttp2Guards();
+        VerifyListenerRuntimeGuards();
+        VerifyListenerProjectionGuards(listener);
+        VerifyListenerRuntimeGuardsText();
+        VerifyListenerIdentityGuards();
+        VerifyListenerProjectionGuardsText(listener);
+        VerifyQuicListenerIdentityGuards();
+        VerifyListenerHttp3AndCollectionViews(listenerCollection, listener);
+        VerifyListenerSniCopiesAndReferenceGuards(listener);
+
+    }
+
+    private static void VerifyListenerProjectionIdentityAndViews(RuntimeListenerProjection listener)
+    {
         AssertEx.Equal("main", listener.Name);
         AssertEx.Equal(18080, listener.Port);
         AssertEx.Equal(RuntimeListenerTransport.Http, listener.Transport);
@@ -1943,102 +1959,10 @@ internal static class ConfigurationTests
         object http2Limits = listener.Http2Limits;
         AssertEx.True(http2Limits is RuntimeHttp2LimitsProjection);
         AssertEx.False(http2Limits is RuntimeHttp2Limits);
-        AssertHttp3AltSvcOptionsRejects(maxAgeSeconds: -1);
-        AssertHttp3AltSvcOptionsRejects(maxAgeSeconds: 31536001);
-        AssertHttp3AltSvcProjectionRejects(maxAgeSeconds: -1);
-        AssertHttp3AltSvcProjectionRejects(maxAgeSeconds: 31536001);
-        AssertHttp3ListenerReadinessRejects(enablementLevel: null!);
-        AssertHttp3ListenerReadinessRejects(enablementLevel: " ");
-        AssertHttp3ListenerReadinessRejects(disabledReason: null!);
-        AssertHttp3ListenerReadinessRejects(disabledReason: " ");
-        AssertHttp3ListenerReadinessRejects(altSvcMaxAgeSeconds: -1);
-        AssertHttp3ListenerReadinessRejects(altSvcMaxAgeSeconds: 31536001);
-        AssertHttp3ListenerReadinessProjectionRejects(enablementLevel: null!);
-        AssertHttp3ListenerReadinessProjectionRejects(enablementLevel: " ");
-        AssertHttp3ListenerReadinessProjectionRejects(disabledReason: null!);
-        AssertHttp3ListenerReadinessProjectionRejects(disabledReason: " ");
-        AssertHttp3ListenerReadinessProjectionRejects(altSvcMaxAgeSeconds: -1);
-        AssertHttp3ListenerReadinessProjectionRejects(altSvcMaxAgeSeconds: 31536001);
-        AssertHttp2LimitsReject(maxConcurrentStreams: 0);
-        AssertHttp2LimitsReject(maxConcurrentStreams: 1001);
-        AssertHttp2LimitsReject(maxHeaderListBytes: 1023);
-        AssertHttp2LimitsReject(maxHeaderListBytes: 1048577);
-        AssertHttp2LimitsReject(maxFrameSize: 16383);
-        AssertHttp2LimitsReject(maxFrameSize: 16777216);
-        AssertHttp2LimitsProjectionReject(maxConcurrentStreams: 0);
-        AssertHttp2LimitsProjectionReject(maxConcurrentStreams: 1001);
-        AssertHttp2LimitsProjectionReject(maxHeaderListBytes: 1023);
-        AssertHttp2LimitsProjectionReject(maxHeaderListBytes: 1048577);
-        AssertHttp2LimitsProjectionReject(maxFrameSize: 16383);
-        AssertHttp2LimitsProjectionReject(maxFrameSize: 16777216);
-        AssertRuntimeListenerRejects(port: 0);
-        AssertRuntimeListenerRejects(port: 65536);
-        AssertRuntimeListenerRejects(backlog: 0);
-        AssertRuntimeListenerRejects(maxRequestHeadBytes: 1023);
-        AssertRuntimeListenerRejects(maxRequestHeadBytes: 1048577);
-        AssertRuntimeListenerRejects(maxResponseHeadBytes: 1023);
-        AssertRuntimeListenerRejects(maxResponseHeadBytes: 1048577);
-        AssertRuntimeListenerRejects(maxChunkLineBytes: 63);
-        AssertRuntimeListenerRejects(maxChunkLineBytes: 16385);
-        AssertRuntimeListenerRejects(forwardingBufferBytes: 4095);
-        AssertRuntimeListenerRejects(forwardingBufferBytes: 1048577);
-        AssertRuntimeListenerProjectionRejects(port: 0);
-        AssertRuntimeListenerProjectionRejects(port: 65536);
-        AssertRuntimeListenerProjectionRejects(backlog: 0);
-        AssertRuntimeListenerProjectionRejects(maxRequestHeadBytes: 1023);
-        AssertRuntimeListenerProjectionRejects(maxRequestHeadBytes: 1048577);
-        AssertRuntimeListenerProjectionRejects(maxResponseHeadBytes: 1023);
-        AssertRuntimeListenerProjectionRejects(maxResponseHeadBytes: 1048577);
-        AssertRuntimeListenerProjectionRejects(maxChunkLineBytes: 63);
-        AssertRuntimeListenerProjectionRejects(maxChunkLineBytes: 16385);
-        AssertRuntimeListenerProjectionRejects(forwardingBufferBytes: 4095);
-        AssertRuntimeListenerProjectionRejects(forwardingBufferBytes: 1048577);
-        AssertRuntimeListenerRejects(name: null!);
-        AssertRuntimeListenerRejects(name: " ");
-        AssertRuntimeListenerRejects(address: null!);
-        AssertRuntimeListenerRejects(address: " ");
-        AssertRuntimeListenerRejects(defaultCertificateId: " ");
-        AssertRuntimeListenerRejects(transport: (RuntimeListenerTransport)99);
-        AssertRuntimeListenerIdentityRejects(name: null!);
-        AssertRuntimeListenerIdentityRejects(name: " ");
-        AssertRuntimeListenerIdentityRejects(address: null!);
-        AssertRuntimeListenerIdentityRejects(address: " ");
-        AssertRuntimeListenerIdentityRejects(port: 0);
-        AssertRuntimeListenerIdentityRejects(port: 65536);
-        AssertRuntimeListenerIdentityRejects(transport: (RuntimeListenerTransport)99);
-        AssertRuntimeListenerIdentityProjectionRejects(name: null!);
-        AssertRuntimeListenerIdentityProjectionRejects(name: " ");
-        AssertRuntimeListenerIdentityProjectionRejects(address: null!);
-        AssertRuntimeListenerIdentityProjectionRejects(address: " ");
-        AssertRuntimeListenerIdentityProjectionRejects(port: 0);
-        AssertRuntimeListenerIdentityProjectionRejects(port: 65536);
-        AssertRuntimeListenerIdentityProjectionRejects(transport: (RuntimeListenerTransport)99);
-        AssertRuntimeListenerIdentityProjectionRejects(key: null!);
-        AssertRuntimeListenerIdentityProjectionRejects(key: " ");
-        AssertRuntimeListenerIdentityProjectionRejects(bindKey: null!);
-        AssertRuntimeListenerIdentityProjectionRejects(bindKey: " ");
-        AssertRuntimeListenerProjectionRejects(name: null!);
-        AssertRuntimeListenerProjectionRejects(name: " ");
-        AssertRuntimeListenerProjectionRejects(address: null!);
-        AssertRuntimeListenerProjectionRejects(address: " ");
-        AssertRuntimeListenerProjectionRejects(defaultCertificateId: " ");
-        AssertRuntimeListenerProjectionRejects(transport: (RuntimeListenerTransport)99);
-        AssertRuntimeQuicListenerIdentityRejects(name: null!);
-        AssertRuntimeQuicListenerIdentityRejects(name: " ");
-        AssertRuntimeQuicListenerIdentityRejects(address: null!);
-        AssertRuntimeQuicListenerIdentityRejects(address: " ");
-        AssertRuntimeQuicListenerIdentityRejects(port: 0);
-        AssertRuntimeQuicListenerIdentityRejects(port: 65536);
-        AssertRuntimeQuicListenerIdentityProjectionRejects(name: null!);
-        AssertRuntimeQuicListenerIdentityProjectionRejects(name: " ");
-        AssertRuntimeQuicListenerIdentityProjectionRejects(address: null!);
-        AssertRuntimeQuicListenerIdentityProjectionRejects(address: " ");
-        AssertRuntimeQuicListenerIdentityProjectionRejects(port: 0);
-        AssertRuntimeQuicListenerIdentityProjectionRejects(port: 65536);
-        AssertRuntimeQuicListenerIdentityProjectionRejects(key: null!);
-        AssertRuntimeQuicListenerIdentityProjectionRejects(key: " ");
-        AssertRuntimeQuicListenerIdentityProjectionRejects(bindKey: null!);
-        AssertRuntimeQuicListenerIdentityProjectionRejects(bindKey: " ");
+    }
+
+    private static void VerifyListenerHttp3AndCollectionViews(object listenerCollection, RuntimeListenerProjection listener)
+    {
         object http3 = listener.Http3;
         AssertEx.True(http3 is RuntimeHttp3ListenerReadinessProjection);
         AssertEx.False(http3 is RuntimeHttp3ListenerReadiness);
@@ -2047,6 +1971,10 @@ internal static class ConfigurationTests
         AssertEx.False(quicIdentity is RuntimeQuicListenerIdentity);
         AssertEx.False(listenerCollection is RuntimeListener[]);
         AssertEx.False(listenerCollection is RuntimeListenerProjection[]);
+    }
+
+    private static void VerifyListenerSniCopiesAndReferenceGuards(RuntimeListenerProjection listener)
+    {
         var directSniCertificates = new List<RuntimeSniCertificateBindingProjection>
         {
             new("owned.example.test", "owned-cert")
@@ -2068,75 +1996,204 @@ internal static class ConfigurationTests
         AssertEx.Equal("owned.example.test", directListener.SniCertificates[0].HostName);
         AssertEx.Equal("main", directListener.Name);
         AssertEx.False(directListener.SniCertificates is RuntimeSniCertificateBindingProjection[]);
-        static void AssertHttp3AltSvcOptionsRejects(int maxAgeSeconds)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHttp3AltSvcOptions(Enabled: true, maxAgeSeconds));
-        }
+    }
 
-        static void AssertHttp3AltSvcProjectionRejects(int maxAgeSeconds)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHttp3AltSvcProjection(Enabled: true, maxAgeSeconds));
-        }
+    private static void VerifyListenerHttp3Guards()
+    {
+        AssertHttp3AltSvcOptionsRejects(maxAgeSeconds: -1);
+        AssertHttp3AltSvcOptionsRejects(maxAgeSeconds: 31536001);
+        AssertHttp3AltSvcProjectionRejects(maxAgeSeconds: -1);
+        AssertHttp3AltSvcProjectionRejects(maxAgeSeconds: 31536001);
+        AssertHttp3ListenerReadinessRejects(enablementLevel: null!);
+        AssertHttp3ListenerReadinessRejects(enablementLevel: " ");
+        AssertHttp3ListenerReadinessRejects(disabledReason: null!);
+        AssertHttp3ListenerReadinessRejects(disabledReason: " ");
+        AssertHttp3ListenerReadinessRejects(altSvcMaxAgeSeconds: -1);
+        AssertHttp3ListenerReadinessRejects(altSvcMaxAgeSeconds: 31536001);
+        AssertHttp3ListenerReadinessProjectionRejects(enablementLevel: null!);
+        AssertHttp3ListenerReadinessProjectionRejects(enablementLevel: " ");
+        AssertHttp3ListenerReadinessProjectionRejects(disabledReason: null!);
+        AssertHttp3ListenerReadinessProjectionRejects(disabledReason: " ");
+        AssertHttp3ListenerReadinessProjectionRejects(altSvcMaxAgeSeconds: -1);
+        AssertHttp3ListenerReadinessProjectionRejects(altSvcMaxAgeSeconds: 31536001);
+    }
 
-        static void AssertHttp3ListenerReadinessRejects(string enablementLevel = "default", string disabledReason = "default_enabled", int altSvcMaxAgeSeconds = 86400)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHttp3ListenerReadiness(Configured: true, DefaultEnabled: true, EnablementLevel: enablementLevel, EnabledForTraffic: true, DisabledReason: disabledReason, AltSvcConfigured: true, AltSvcMaxAgeSeconds: altSvcMaxAgeSeconds, UdpQuicListenerIdentityModeled: true, QuicIdentity: null));
-        }
+    private static void VerifyListenerHttp2Guards()
+    {
+        AssertHttp2LimitsReject(maxConcurrentStreams: 0);
+        AssertHttp2LimitsReject(maxConcurrentStreams: 1001);
+        AssertHttp2LimitsReject(maxHeaderListBytes: 1023);
+        AssertHttp2LimitsReject(maxHeaderListBytes: 1048577);
+        AssertHttp2LimitsReject(maxFrameSize: 16383);
+        AssertHttp2LimitsReject(maxFrameSize: 16777216);
+        AssertHttp2LimitsProjectionReject(maxConcurrentStreams: 0);
+        AssertHttp2LimitsProjectionReject(maxConcurrentStreams: 1001);
+        AssertHttp2LimitsProjectionReject(maxHeaderListBytes: 1023);
+        AssertHttp2LimitsProjectionReject(maxHeaderListBytes: 1048577);
+        AssertHttp2LimitsProjectionReject(maxFrameSize: 16383);
+        AssertHttp2LimitsProjectionReject(maxFrameSize: 16777216);
+    }
 
-        static void AssertHttp3ListenerReadinessProjectionRejects(string enablementLevel = "default", string disabledReason = "default_enabled", int altSvcMaxAgeSeconds = 86400)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHttp3ListenerReadinessProjection(Configured: true, DefaultEnabled: true, EnablementLevel: enablementLevel, EnabledForTraffic: true, DisabledReason: disabledReason, AltSvcConfigured: true, AltSvcMaxAgeSeconds: altSvcMaxAgeSeconds, UdpQuicListenerIdentityModeled: true, QuicIdentity: null));
-        }
+    private static void VerifyListenerRuntimeGuards()
+    {
+        AssertRuntimeListenerRejects(port: 0);
+        AssertRuntimeListenerRejects(port: 65536);
+        AssertRuntimeListenerRejects(backlog: 0);
+        AssertRuntimeListenerRejects(maxRequestHeadBytes: 1023);
+        AssertRuntimeListenerRejects(maxRequestHeadBytes: 1048577);
+        AssertRuntimeListenerRejects(maxResponseHeadBytes: 1023);
+        AssertRuntimeListenerRejects(maxResponseHeadBytes: 1048577);
+        AssertRuntimeListenerRejects(maxChunkLineBytes: 63);
+        AssertRuntimeListenerRejects(maxChunkLineBytes: 16385);
+        AssertRuntimeListenerRejects(forwardingBufferBytes: 4095);
+        AssertRuntimeListenerRejects(forwardingBufferBytes: 1048577);
+    }
 
-        static void AssertHttp2LimitsReject(int maxConcurrentStreams = 100, int maxHeaderListBytes = 32768, int maxFrameSize = 16384)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHttp2Limits(maxConcurrentStreams, maxHeaderListBytes, maxFrameSize));
-        }
+    private static void VerifyListenerProjectionGuards(RuntimeListenerProjection listener)
+    {
+        AssertRuntimeListenerProjectionRejects(listener, port: 0);
+        AssertRuntimeListenerProjectionRejects(listener, port: 65536);
+        AssertRuntimeListenerProjectionRejects(listener, backlog: 0);
+        AssertRuntimeListenerProjectionRejects(listener, maxRequestHeadBytes: 1023);
+        AssertRuntimeListenerProjectionRejects(listener, maxRequestHeadBytes: 1048577);
+        AssertRuntimeListenerProjectionRejects(listener, maxResponseHeadBytes: 1023);
+        AssertRuntimeListenerProjectionRejects(listener, maxResponseHeadBytes: 1048577);
+        AssertRuntimeListenerProjectionRejects(listener, maxChunkLineBytes: 63);
+        AssertRuntimeListenerProjectionRejects(listener, maxChunkLineBytes: 16385);
+        AssertRuntimeListenerProjectionRejects(listener, forwardingBufferBytes: 4095);
+        AssertRuntimeListenerProjectionRejects(listener, forwardingBufferBytes: 1048577);
+    }
 
-        static void AssertHttp2LimitsProjectionReject(int maxConcurrentStreams = 100, int maxHeaderListBytes = 32768, int maxFrameSize = 16384)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHttp2LimitsProjection(maxConcurrentStreams, maxHeaderListBytes, maxFrameSize));
-        }
+    private static void VerifyListenerRuntimeGuardsText()
+    {
+        AssertRuntimeListenerRejects(name: null!);
+        AssertRuntimeListenerRejects(name: " ");
+        AssertRuntimeListenerRejects(address: null!);
+        AssertRuntimeListenerRejects(address: " ");
+        AssertRuntimeListenerRejects(defaultCertificateId: " ");
+        AssertRuntimeListenerRejects(transport: (RuntimeListenerTransport)99);
+    }
 
-        static void AssertRuntimeListenerRejects(string name = "main", string address = "127.0.0.1", int port = 18080, RuntimeListenerTransport transport = RuntimeListenerTransport.Http, int backlog = 128, int maxRequestHeadBytes = 32768, int maxResponseHeadBytes = 32768, int maxChunkLineBytes = 8192, int forwardingBufferBytes = 8192, string? defaultCertificateId = null)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeListener(Name: name, Address: address, Port: port, Enabled: true, Transport: transport, DefaultCertificateId: defaultCertificateId, SniCertificates: [], Backlog: backlog, MaxRequestHeadBytes: maxRequestHeadBytes, MaxResponseHeadBytes: maxResponseHeadBytes, MaxChunkLineBytes: maxChunkLineBytes, ForwardingBufferBytes: forwardingBufferBytes));
-        }
+    private static void VerifyListenerIdentityGuards()
+    {
+        AssertRuntimeListenerIdentityRejects(name: null!);
+        AssertRuntimeListenerIdentityRejects(name: " ");
+        AssertRuntimeListenerIdentityRejects(address: null!);
+        AssertRuntimeListenerIdentityRejects(address: " ");
+        AssertRuntimeListenerIdentityRejects(port: 0);
+        AssertRuntimeListenerIdentityRejects(port: 65536);
+        AssertRuntimeListenerIdentityRejects(transport: (RuntimeListenerTransport)99);
+        AssertRuntimeListenerIdentityProjectionRejects(name: null!);
+        AssertRuntimeListenerIdentityProjectionRejects(name: " ");
+        AssertRuntimeListenerIdentityProjectionRejects(address: null!);
+        AssertRuntimeListenerIdentityProjectionRejects(address: " ");
+        AssertRuntimeListenerIdentityProjectionRejects(port: 0);
+        AssertRuntimeListenerIdentityProjectionRejects(port: 65536);
+        AssertRuntimeListenerIdentityProjectionRejects(transport: (RuntimeListenerTransport)99);
+        AssertRuntimeListenerIdentityProjectionRejects(key: null!);
+        AssertRuntimeListenerIdentityProjectionRejects(key: " ");
+        AssertRuntimeListenerIdentityProjectionRejects(bindKey: null!);
+        AssertRuntimeListenerIdentityProjectionRejects(bindKey: " ");
+    }
 
-        static void AssertRuntimeListenerIdentityRejects(string name = "main", string address = "127.0.0.1", int port = 18080, RuntimeListenerTransport transport = RuntimeListenerTransport.Http)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeListenerIdentity(name, address, port, transport, TlsEnabled: false));
-        }
+    private static void VerifyListenerProjectionGuardsText(RuntimeListenerProjection listener)
+    {
+        AssertRuntimeListenerProjectionRejects(listener, name: null!);
+        AssertRuntimeListenerProjectionRejects(listener, name: " ");
+        AssertRuntimeListenerProjectionRejects(listener, address: null!);
+        AssertRuntimeListenerProjectionRejects(listener, address: " ");
+        AssertRuntimeListenerProjectionRejects(listener, defaultCertificateId: " ");
+        AssertRuntimeListenerProjectionRejects(listener, transport: (RuntimeListenerTransport)99);
+    }
 
-        static void AssertRuntimeListenerIdentityProjectionRejects(string name = "main", string address = "127.0.0.1", int port = 18080, RuntimeListenerTransport transport = RuntimeListenerTransport.Http, string key = "main", string bindKey = "127.0.0.1|18080|http")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeListenerIdentityProjection(name, address, port, transport, TlsEnabled: false, key, bindKey));
-        }
+    private static void VerifyQuicListenerIdentityGuards()
+    {
+        AssertRuntimeQuicListenerIdentityRejects(name: null!);
+        AssertRuntimeQuicListenerIdentityRejects(name: " ");
+        AssertRuntimeQuicListenerIdentityRejects(address: null!);
+        AssertRuntimeQuicListenerIdentityRejects(address: " ");
+        AssertRuntimeQuicListenerIdentityRejects(port: 0);
+        AssertRuntimeQuicListenerIdentityRejects(port: 65536);
+        AssertRuntimeQuicListenerIdentityProjectionRejects(name: null!);
+        AssertRuntimeQuicListenerIdentityProjectionRejects(name: " ");
+        AssertRuntimeQuicListenerIdentityProjectionRejects(address: null!);
+        AssertRuntimeQuicListenerIdentityProjectionRejects(address: " ");
+        AssertRuntimeQuicListenerIdentityProjectionRejects(port: 0);
+        AssertRuntimeQuicListenerIdentityProjectionRejects(port: 65536);
+        AssertRuntimeQuicListenerIdentityProjectionRejects(key: null!);
+        AssertRuntimeQuicListenerIdentityProjectionRejects(key: " ");
+        AssertRuntimeQuicListenerIdentityProjectionRejects(bindKey: null!);
+        AssertRuntimeQuicListenerIdentityProjectionRejects(bindKey: " ");
+    }
 
-        void AssertRuntimeListenerProjectionRejects(string name = "main", string address = "127.0.0.1", int port = 18080, RuntimeListenerTransport transport = RuntimeListenerTransport.Http, int backlog = 128, int maxRequestHeadBytes = 32768, int maxResponseHeadBytes = 32768, int maxChunkLineBytes = 8192, int forwardingBufferBytes = 8192, string? defaultCertificateId = "home-cert")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeListenerProjection(Name: name, Address: address, Port: port, Enabled: listener.Enabled, Transport: transport, DefaultCertificateId: defaultCertificateId, SniCertificates: [], Backlog: backlog, MaxRequestHeadBytes: maxRequestHeadBytes, MaxResponseHeadBytes: maxResponseHeadBytes, MaxChunkLineBytes: maxChunkLineBytes, ForwardingBufferBytes: forwardingBufferBytes, Identity: listener.Identity, Protocols: listener.Protocols, Http3Enablement: listener.Http3Enablement, Http3AltSvc: listener.Http3AltSvc, Http2Limits: listener.Http2Limits, TcpTrafficEnabled: listener.TcpTrafficEnabled, Http3ProtocolConfigured: listener.Http3ProtocolConfigured, QuicIdentity: listener.QuicIdentity, Http3: listener.Http3));
-        }
+    private static void AssertHttp3AltSvcOptionsRejects(int maxAgeSeconds)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHttp3AltSvcOptions(Enabled: true, maxAgeSeconds));
+    }
 
-        static void AssertRuntimeQuicListenerIdentityRejects(string name = "main", string address = "127.0.0.1", int port = 18080)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeQuicListenerIdentity(name, address, port, TlsEnabled: true));
-        }
+    private static void AssertHttp3AltSvcProjectionRejects(int maxAgeSeconds)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHttp3AltSvcProjection(Enabled: true, maxAgeSeconds));
+    }
 
-        static void AssertRuntimeQuicListenerIdentityProjectionRejects(string name = "main", string address = "127.0.0.1", int port = 18080, string key = "main|quic", string bindKey = "127.0.0.1|18080|udp|quic")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeQuicListenerIdentityProjection(name, address, port, TlsEnabled: true, key, bindKey));
-        }
+    private static void AssertHttp3ListenerReadinessRejects(string enablementLevel = "default", string disabledReason = "default_enabled", int altSvcMaxAgeSeconds = 86400)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHttp3ListenerReadiness(Configured: true, DefaultEnabled: true, EnablementLevel: enablementLevel, EnabledForTraffic: true, DisabledReason: disabledReason, AltSvcConfigured: true, AltSvcMaxAgeSeconds: altSvcMaxAgeSeconds, UdpQuicListenerIdentityModeled: true, QuicIdentity: null));
+    }
 
-        static void AssertRuntimeSniCertificateBindingRejects(string hostName = "owned.example.test", string certificateId = "owned-cert")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeSniCertificateBinding(hostName, certificateId));
-        }
+    private static void AssertHttp3ListenerReadinessProjectionRejects(string enablementLevel = "default", string disabledReason = "default_enabled", int altSvcMaxAgeSeconds = 86400)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHttp3ListenerReadinessProjection(Configured: true, DefaultEnabled: true, EnablementLevel: enablementLevel, EnabledForTraffic: true, DisabledReason: disabledReason, AltSvcConfigured: true, AltSvcMaxAgeSeconds: altSvcMaxAgeSeconds, UdpQuicListenerIdentityModeled: true, QuicIdentity: null));
+    }
 
-        static void AssertRuntimeSniCertificateBindingProjectionRejects(string hostName = "owned.example.test", string certificateId = "owned-cert")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeSniCertificateBindingProjection(hostName, certificateId));
-        }
+    private static void AssertHttp2LimitsReject(int maxConcurrentStreams = 100, int maxHeaderListBytes = 32768, int maxFrameSize = 16384)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHttp2Limits(maxConcurrentStreams, maxHeaderListBytes, maxFrameSize));
+    }
+
+    private static void AssertHttp2LimitsProjectionReject(int maxConcurrentStreams = 100, int maxHeaderListBytes = 32768, int maxFrameSize = 16384)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHttp2LimitsProjection(maxConcurrentStreams, maxHeaderListBytes, maxFrameSize));
+    }
+
+    private static void AssertRuntimeListenerRejects(string name = "main", string address = "127.0.0.1", int port = 18080, RuntimeListenerTransport transport = RuntimeListenerTransport.Http, int backlog = 128, int maxRequestHeadBytes = 32768, int maxResponseHeadBytes = 32768, int maxChunkLineBytes = 8192, int forwardingBufferBytes = 8192, string? defaultCertificateId = null)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeListener(Name: name, Address: address, Port: port, Enabled: true, Transport: transport, DefaultCertificateId: defaultCertificateId, SniCertificates: [], Backlog: backlog, MaxRequestHeadBytes: maxRequestHeadBytes, MaxResponseHeadBytes: maxResponseHeadBytes, MaxChunkLineBytes: maxChunkLineBytes, ForwardingBufferBytes: forwardingBufferBytes));
+    }
+
+    private static void AssertRuntimeListenerIdentityRejects(string name = "main", string address = "127.0.0.1", int port = 18080, RuntimeListenerTransport transport = RuntimeListenerTransport.Http)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeListenerIdentity(name, address, port, transport, TlsEnabled: false));
+    }
+
+    private static void AssertRuntimeListenerIdentityProjectionRejects(string name = "main", string address = "127.0.0.1", int port = 18080, RuntimeListenerTransport transport = RuntimeListenerTransport.Http, string key = "main", string bindKey = "127.0.0.1|18080|http")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeListenerIdentityProjection(name, address, port, transport, TlsEnabled: false, key, bindKey));
+    }
+
+    private static void AssertRuntimeListenerProjectionRejects(RuntimeListenerProjection listener, string name = "main", string address = "127.0.0.1", int port = 18080, RuntimeListenerTransport transport = RuntimeListenerTransport.Http, int backlog = 128, int maxRequestHeadBytes = 32768, int maxResponseHeadBytes = 32768, int maxChunkLineBytes = 8192, int forwardingBufferBytes = 8192, string? defaultCertificateId = "home-cert")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeListenerProjection(Name: name, Address: address, Port: port, Enabled: listener.Enabled, Transport: transport, DefaultCertificateId: defaultCertificateId, SniCertificates: [], Backlog: backlog, MaxRequestHeadBytes: maxRequestHeadBytes, MaxResponseHeadBytes: maxResponseHeadBytes, MaxChunkLineBytes: maxChunkLineBytes, ForwardingBufferBytes: forwardingBufferBytes, Identity: listener.Identity, Protocols: listener.Protocols, Http3Enablement: listener.Http3Enablement, Http3AltSvc: listener.Http3AltSvc, Http2Limits: listener.Http2Limits, TcpTrafficEnabled: listener.TcpTrafficEnabled, Http3ProtocolConfigured: listener.Http3ProtocolConfigured, QuicIdentity: listener.QuicIdentity, Http3: listener.Http3));
+    }
+
+    private static void AssertRuntimeQuicListenerIdentityRejects(string name = "main", string address = "127.0.0.1", int port = 18080)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeQuicListenerIdentity(name, address, port, TlsEnabled: true));
+    }
+
+    private static void AssertRuntimeQuicListenerIdentityProjectionRejects(string name = "main", string address = "127.0.0.1", int port = 18080, string key = "main|quic", string bindKey = "127.0.0.1|18080|udp|quic")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeQuicListenerIdentityProjection(name, address, port, TlsEnabled: true, key, bindKey));
+    }
+
+    private static void AssertRuntimeSniCertificateBindingRejects(string hostName = "owned.example.test", string certificateId = "owned-cert")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeSniCertificateBinding(hostName, certificateId));
+    }
+
+    private static void AssertRuntimeSniCertificateBindingProjectionRejects(string hostName = "owned.example.test", string certificateId = "owned-cert")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeSniCertificateBindingProjection(hostName, certificateId));
     }
 
     public static async Task ActiveInspectionProjectionUsesRouteReadModelsAsync()
