@@ -74,7 +74,9 @@ internal static partial class HpackCodec
         using var memory = new MemoryStream();
         foreach (var header in headers)
         {
+#pragma warning disable CA1308 // RFC 9113 section 8.2 requires lowercase HTTP/2 field names; uppercase normalization changes the wire contract.
             var name = header.Name.ToLowerInvariant();
+#pragma warning restore CA1308
             if (Http2HeaderPolicy.IsForbiddenRequestHeader(name, header.Value))
             {
                 continue;

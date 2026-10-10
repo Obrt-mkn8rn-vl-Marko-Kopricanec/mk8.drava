@@ -37,43 +37,23 @@ public sealed partial class UpgradeForwarder
 
     public async ValueTask<ForwardingResult> ForwardAsync(Stream clientStream, Http1RequestHead requestHead, UpgradeRequestInfo upgrade, RuntimeRoute route, RuntimeUpstream upstream, RuntimeListener listener, RuntimeTimeouts timeouts, RuntimeConnectionLimits connectionLimits, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, string requestId, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(connectionLimits);
-        ArgumentNullException.ThrowIfNull(upstream);
-        ArgumentNullException.ThrowIfNull(requestHead);
-        ArgumentNullException.ThrowIfNull(timeouts);
-        ArgumentNullException.ThrowIfNull(route);
-        ArgumentNullException.ThrowIfNull(listener);
-        ArgumentNullException.ThrowIfNull(upgrade);
+        RequireForwardingInputs(connectionLimits, upstream, requestHead, timeouts, route, listener, upgrade);
         var responseStarted = false;
         UpstreamTransportConnection? upstreamConnection = null;
         try
         {
             if (_metrics.StartTunnel(connectionLimits.MaxActiveUpgradedTunnels) is ProxyTunnelAdmissionDecision.RejectedResult)
-            {
-                _metrics.UpgradeRequestRejected();
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpgradeRejected, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-                return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.UpgradeRejected), ProxyFailureKind.UpgradeRejected);
-            }
+                return await RejectAdmissionAsync(clientStream, timeouts, requestId, cancellationToken).ConfigureAwait(false);
 
             try
             {
                 upstreamConnection = await _connectionFactory.ConnectAsync(UpstreamTransportEndpointMapper.FromUpstream(upstream), timeouts.UpstreamConnectTimeout, cancellationToken).ConfigureAwait(false);
                 var upstreamStream = upstreamConnection.Stream;
                 await WriteUpgradeRequestAsync(upstreamStream, requestHead, upgrade, route, upstreamTarget, forwardedHeaders, timeouts, cancellationToken).ConfigureAwait(false);
-                var responseHeadRead = await Http1UpstreamResponseHeadReader.ReadAsync(upstreamStream, listener.MaxResponseHeadBytes, timeouts.UpstreamResponseHeadTimeout, _metrics, cancellationToken).ConfigureAwait(false);
-                if (!responseHeadRead.HasReadableHead)
-                {
-                    throw new Http1UpstreamProtocolException("Upstream closed before sending an Upgrade response.");
-                }
-
-                if (!Http1ResponseParser.TryParse(responseHeadRead.HeadBytes.Span, requestHead.Method, out var responseHead, out var parseError))
-                {
-                    throw new Http1UpstreamProtocolException($"Upstream Upgrade response was invalid: {parseError}.");
-                }
-
+                var (responseHead, initialBody) = await ReadUpgradeResponseAsync(upstreamStream, requestHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
                 if (responseHead.StatusCode != 101)
                 {
-                    await ForwardNonUpgradeResponseAsync(upstreamStream, clientStream, responseHeadRead.InitialBodyBytes, responseHead, route, listener, timeouts, requestId, cancellationToken).ConfigureAwait(false);
+                    await ForwardNonUpgradeResponseAsync(upstreamStream, clientStream, initialBody, responseHead, route, listener, timeouts, requestId, cancellationToken).ConfigureAwait(false);
                     responseStarted = true;
                     return ForwardingResult.Success(responseStarted, keepClientConnectionOpen: false, responseHead.StatusCode);
                 }
@@ -85,15 +65,8 @@ public sealed partial class UpgradeForwarder
 
                 await WriteSwitchingProtocolsResponseAsync(clientStream, responseHead, upgrade, route, timeouts, requestId, cancellationToken).ConfigureAwait(false);
                 responseStarted = true;
-                _metrics.UpgradeRequestSucceeded();
-                _metrics.TunnelStarted();
-                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-                {
-                    LogUpgradedToProtocolThroughUpstream10028(_logger, requestHead.Method, requestHead.Target, upgrade.Protocol, upstream.Name, null);
-                }
-                using var tunnelInput = new PrefixReadStream(upstreamStream, responseHeadRead.InitialBodyBytes);
-                var tunnelResult = await _tunnelRelay.RelayAsync(clientStream, tunnelInput, listener, timeouts, cancellationToken).ConfigureAwait(false);
-                return ForwardingResult.TunnelCompleted(responseStatusCode: 101, tunnel: tunnelResult);
+                return await RelayUpgradedAsync(clientStream, upstreamStream, initialBody, requestHead, upgrade, upstream,
+                    listener, timeouts, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -106,40 +79,17 @@ public sealed partial class UpgradeForwarder
         }
         catch (ProxyTimeoutException exception)
         {
-            var timeoutFailure = ProxyTimeoutFailurePolicy.ClassifyForwardingTimeout(exception.Kind, responseStarted);
-            await HandleTimeoutAsync(clientStream, requestHead, upstream, responseStarted, exception, timeouts, requestId, cancellationToken).ConfigureAwait(false);
-            return ForwardingResult.Failure(responseStarted, timeoutFailure.ResponseStatusCode, timeoutFailure.FailureKind);
+            return await HandleTimeoutAsync(clientStream, requestHead, upstream, responseStarted, exception, timeouts, requestId, cancellationToken).ConfigureAwait(false);
         }
         catch (Http1UpstreamProtocolException exception)
         {
-            _metrics.UpstreamMalformedResponse();
-            _metrics.UpgradeUpstreamFailed();
-            _metrics.UpstreamFailed();
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            {
-                LogUpstreamUpgradeResponseFailedFor10029(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamMalformedResponse, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.UpstreamMalformedResponse), ProxyFailureKind.UpstreamMalformedResponse);
+            return await HandleMalformedUpgradeAsync(clientStream, requestHead, upstream, responseStarted, exception,
+                timeouts, requestId, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)when (exception is SocketException or IOException)
         {
-            _metrics.UpgradeUpstreamFailed();
-            _metrics.UpstreamFailed();
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            {
-                LogUpgradeForwardingFailedForTo10030(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectFailed, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.UpstreamConnectFailed), ProxyFailureKind.UpstreamConnectFailed);
+            return await HandleUpgradeTransportFailureAsync(clientStream, requestHead, upstream, responseStarted, exception,
+                timeouts, requestId, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -147,8 +97,82 @@ public sealed partial class UpgradeForwarder
         }
     }
 
-    private async ValueTask HandleTimeoutAsync(Stream clientStream, Http1RequestHead requestHead, RuntimeUpstream upstream, bool responseStarted, ProxyTimeoutException exception, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken)
+    private static void RequireForwardingInputs(RuntimeConnectionLimits connectionLimits, RuntimeUpstream upstream, Http1RequestHead requestHead,
+        RuntimeTimeouts timeouts, RuntimeRoute route, RuntimeListener listener, UpgradeRequestInfo upgrade)
     {
+        ArgumentNullException.ThrowIfNull(connectionLimits);
+        ArgumentNullException.ThrowIfNull(upstream);
+        ArgumentNullException.ThrowIfNull(requestHead);
+        ArgumentNullException.ThrowIfNull(timeouts);
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(listener);
+        ArgumentNullException.ThrowIfNull(upgrade);
+    }
+
+    private async ValueTask<ForwardingResult> RejectAdmissionAsync(Stream clientStream, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken)
+    {
+        _metrics.UpgradeRequestRejected();
+        await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpgradeRejected, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
+        return ForwardingResult.Failure(responseStarted: false,
+            ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted: false, ProxyFailureKind.UpgradeRejected), ProxyFailureKind.UpgradeRejected);
+    }
+
+    private async ValueTask<(Http1ResponseHead Head, ReadOnlyMemory<byte> InitialBody)> ReadUpgradeResponseAsync(Stream upstreamStream,
+        Http1RequestHead requestHead, RuntimeListener listener, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    {
+        var read = await Http1UpstreamResponseHeadReader.ReadAsync(upstreamStream, listener.MaxResponseHeadBytes,
+            timeouts.UpstreamResponseHeadTimeout, _metrics, cancellationToken).ConfigureAwait(false);
+        if (!read.HasReadableHead) throw new Http1UpstreamProtocolException("Upstream closed before sending an Upgrade response.");
+        if (!Http1ResponseParser.TryParse(read.HeadBytes.Span, requestHead.Method, out var head, out var error))
+            throw new Http1UpstreamProtocolException($"Upstream Upgrade response was invalid: {error}.");
+        return (head, read.InitialBodyBytes);
+    }
+
+    private async ValueTask<ForwardingResult> RelayUpgradedAsync(Stream clientStream, Stream upstreamStream, ReadOnlyMemory<byte> initialBody,
+        Http1RequestHead requestHead, UpgradeRequestInfo upgrade, RuntimeUpstream upstream, RuntimeListener listener,
+        RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    {
+        _metrics.UpgradeRequestSucceeded();
+        _metrics.TunnelStarted();
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+            LogUpgradedToProtocolThroughUpstream10028(_logger, requestHead.Method, requestHead.Target, upgrade.Protocol, upstream.Name, null);
+        using var input = new PrefixReadStream(upstreamStream, initialBody);
+        var result = await _tunnelRelay.RelayAsync(clientStream, input, listener, timeouts, cancellationToken).ConfigureAwait(false);
+        return ForwardingResult.TunnelCompleted(responseStatusCode: 101, tunnel: result);
+    }
+
+    private async ValueTask<ForwardingResult> HandleMalformedUpgradeAsync(Stream clientStream, Http1RequestHead requestHead,
+        RuntimeUpstream upstream, bool responseStarted, Http1UpstreamProtocolException exception, RuntimeTimeouts timeouts,
+        string requestId, CancellationToken cancellationToken)
+    {
+        _metrics.UpstreamMalformedResponse();
+        _metrics.UpgradeUpstreamFailed();
+        _metrics.UpstreamFailed();
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            LogUpstreamUpgradeResponseFailedFor10029(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+        if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
+            await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamMalformedResponse, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
+        return ForwardingResult.Failure(responseStarted,
+            ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.UpstreamMalformedResponse), ProxyFailureKind.UpstreamMalformedResponse);
+    }
+
+    private async ValueTask<ForwardingResult> HandleUpgradeTransportFailureAsync(Stream clientStream, Http1RequestHead requestHead,
+        RuntimeUpstream upstream, bool responseStarted, Exception exception, RuntimeTimeouts timeouts,
+        string requestId, CancellationToken cancellationToken)
+    {
+        _metrics.UpgradeUpstreamFailed();
+        _metrics.UpstreamFailed();
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            LogUpgradeForwardingFailedForTo10030(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+        if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
+            await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectFailed, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
+        return ForwardingResult.Failure(responseStarted,
+            ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.UpstreamConnectFailed), ProxyFailureKind.UpstreamConnectFailed);
+    }
+
+    private async ValueTask<ForwardingResult> HandleTimeoutAsync(Stream clientStream, Http1RequestHead requestHead, RuntimeUpstream upstream, bool responseStarted, ProxyTimeoutException exception, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken)
+    {
+        var failure = ProxyTimeoutFailurePolicy.ClassifyForwardingTimeout(exception.Kind, responseStarted);
         switch (exception.Kind)
         {
             case ProxyTimeoutKind.UpstreamConnect:
@@ -195,6 +219,7 @@ public sealed partial class UpgradeForwarder
                 }
                 break;
         }
+        return ForwardingResult.Failure(responseStarted, failure.ResponseStatusCode, failure.FailureKind);
     }
 
     private async ValueTask WriteUpgradeRequestAsync(Stream upstreamStream, Http1RequestHead requestHead, UpgradeRequestInfo upgrade, RuntimeRoute route, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, RuntimeTimeouts timeouts, CancellationToken cancellationToken)

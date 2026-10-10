@@ -63,51 +63,17 @@ public sealed partial class TunnelRelay
         }
         finally
         {
-            await tunnelCancellation.CancelAsync().ConfigureAwait(false);
+            var cancellationCallbacks = tunnelCancellation.CancelAsync();
             try
             {
-                await clientToUpstream.ConfigureAwait(false);
+                // Every operation starts and settles within this owner, including throwing cancellation callbacks.
+                await Task.WhenAll(clientToUpstream, upstreamToClient, idleMonitor, cancellationCallbacks).ConfigureAwait(false);
             }
-            catch (Exception exception)when (IsExpectedTunnelEnd(exception, cancellationToken))
-            {
-            }
-
-            try
-            {
-                await upstreamToClient.ConfigureAwait(false);
-            }
-            catch (Exception exception)when (IsExpectedTunnelEnd(exception, cancellationToken))
-            {
-            }
-
-            try
-            {
-                await idleMonitor.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-            }
+            catch (OperationCanceledException) when (tunnelCancellation.IsCancellationRequested) { }
         }
 
-        var finalBytesClientToUpstream = Interlocked.Read(ref bytesClientToUpstream);
-        var finalBytesUpstreamToClient = Interlocked.Read(ref bytesUpstreamToClient);
-        var duration = _timeProvider.GetElapsedTime(started);
-        if (idleTimedOut)
-        {
-            return TunnelRelayResult.IdleTimedOut(finalBytesClientToUpstream, finalBytesUpstreamToClient, duration);
-        }
-
-        if (relayFailed)
-        {
-            return TunnelRelayResult.RelayFailed(finalBytesClientToUpstream, finalBytesUpstreamToClient, duration);
-        }
-
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return TunnelRelayResult.Shutdown(finalBytesClientToUpstream, finalBytesUpstreamToClient, duration);
-        }
-
-        return TunnelRelayResult.Closed(finalBytesClientToUpstream, finalBytesUpstreamToClient, duration);
+        return TunnelRelayCompletionPolicy.Classify(Interlocked.Read(ref bytesClientToUpstream), Interlocked.Read(ref bytesUpstreamToClient),
+            _timeProvider.GetElapsedTime(started), idleTimedOut, relayFailed, cancellationToken.IsCancellationRequested);
     }
 
     private async ValueTask RelayDirectionAsync(Stream source, Stream destination, int bufferSize, Action<int> onBytesRelayed, Action onRelayFailure, CancellationToken cancellationToken)
@@ -163,8 +129,4 @@ public sealed partial class TunnelRelay
         }
     }
 
-    private static bool IsExpectedTunnelEnd(Exception exception, CancellationToken outerToken)
-    {
-        return exception is OperationCanceledException || exception is IOException || exception is SocketException || outerToken.IsCancellationRequested;
-    }
 }

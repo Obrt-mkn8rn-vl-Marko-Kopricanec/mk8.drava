@@ -1,6 +1,7 @@
 using Mk8.Drava.Application.BLL.Http;
 using Mk8.Drava.Application.BLL.ControlPlane.Headers;
 using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Mk8.Drava.Application.INF.Proxy.Http3;
@@ -44,85 +45,65 @@ public static class Http3Codec
         }
 
         var offset = 0;
-        if (!TryReadPrefixedInteger(block, 8, ref offset, out var requiredInsertCount))
-        {
-            return false;
-        }
-
-        var deltaBaseOffset = offset;
-        if (!TryReadPrefixedInteger(block, 7, ref offset, out var deltaBase))
-        {
-            return false;
-        }
-
-        if (requiredInsertCount != 0 || deltaBase != 0 || (block[deltaBaseOffset] & 0x80) != 0)
-        {
-            reason = "unsupported_qpack_dynamic_table";
-            return false;
-        }
-
+        if (!TryReadStaticPrefix(block, ref offset, out reason)) return false;
         List<ProxyHeaderField> decoded = [];
         var decodedHeaderBytes = 0;
         while (offset < block.Length)
         {
-            var first = block[offset];
-            if ((first & 0x80) != 0)
-            {
-                var isStatic = (first & 0x40) != 0;
-                if (!isStatic || !TryReadPrefixedInteger(block, 6, ref offset, out var index) || !TryGetStaticField(index, out var field))
-                {
-                    reason = "unsupported_qpack_index";
-                    return false;
-                }
-
-                if (!TryAddDecodedHeader(decoded, new ProxyHeaderField(field.Name, field.Value), maxHeaderBytes, ref decodedHeaderBytes, out reason))
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            if ((first & 0x40) != 0)
-            {
-                var isStatic = (first & 0x10) != 0;
-                if (!isStatic || !TryReadPrefixedInteger(block, 4, ref offset, out var nameIndex) || !TryGetStaticField(nameIndex, out var namedField) || !TryReadString(block, ref offset, out var value, out reason))
-                {
-                    reason = "unsupported_qpack_name_ref";
-                    return false;
-                }
-
-                if (!TryAddDecodedHeader(decoded, new ProxyHeaderField(namedField.Name, value), maxHeaderBytes, ref decodedHeaderBytes, out reason))
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            if ((first & 0x20) != 0)
-            {
-                var literalRead = ReadLiteralHeader(block, ref offset);
-                if (literalRead is not QpackLiteralHeaderReadResult.Decoded decodedLiteral)
-                {
-                    reason = ((QpackLiteralHeaderReadResult.Rejected)literalRead).Reason;
-                    return false;
-                }
-
-                if (!TryAddDecodedHeader(decoded, decodedLiteral.Header, maxHeaderBytes, ref decodedHeaderBytes, out reason))
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            reason = "unsupported_qpack_field";
-            return false;
+            if (!TryReadField(block, ref offset, out var header, out reason) ||
+                !TryAddDecodedHeader(decoded, header, maxHeaderBytes, ref decodedHeaderBytes, out reason)) return false;
         }
 
-        headers = decoded;
+        headers = decoded.ToArray();
         return true;
+    }
+
+    private static bool TryReadStaticPrefix(ReadOnlySpan<byte> block, ref int offset, out string reason)
+    {
+        reason = "invalid_qpack";
+        if (!TryReadPrefixedInteger(block, 8, ref offset, out var requiredInsertCount)) return false;
+        var deltaBaseOffset = offset;
+        if (!TryReadPrefixedInteger(block, 7, ref offset, out var deltaBase)) return false;
+        if (requiredInsertCount == 0 && deltaBase == 0 && (block[deltaBaseOffset] & 0x80) == 0) return true;
+        reason = "unsupported_qpack_dynamic_table";
+        return false;
+    }
+
+    private static bool TryReadField(ReadOnlySpan<byte> block, ref int offset, [NotNullWhen(true)] out ProxyHeaderField? header, out string reason)
+    {
+        header = null;
+        reason = "unsupported_qpack_field";
+        var first = block[offset];
+        if ((first & 0x80) != 0)
+        {
+            if ((first & 0x40) == 0 || !TryReadPrefixedInteger(block, 6, ref offset, out var index) || !TryGetStaticField(index, out var field))
+            {
+                reason = "unsupported_qpack_index";
+                return false;
+            }
+            header = new ProxyHeaderField(field.Name, field.Value);
+            return true;
+        }
+        if ((first & 0x40) != 0)
+        {
+            if ((first & 0x10) == 0 || !TryReadPrefixedInteger(block, 4, ref offset, out var nameIndex) ||
+                !TryGetStaticField(nameIndex, out var field) || !TryReadString(block, ref offset, out var value, out reason))
+            {
+                reason = "unsupported_qpack_name_ref";
+                return false;
+            }
+            header = new ProxyHeaderField(field.Name, value);
+            return true;
+        }
+        if ((first & 0x20) == 0) return false;
+        var literal = ReadLiteralHeader(block, ref offset);
+        if (literal is QpackLiteralHeaderReadResult.Decoded decoded)
+        {
+            header = decoded.Header;
+            return true;
+        }
+        reason = ((QpackLiteralHeaderReadResult.Rejected)literal).Reason;
+        return false;
     }
 
     private static bool TryAddDecodedHeader(List<ProxyHeaderField> headers, ProxyHeaderField header, int maxHeaderBytes, ref int decodedHeaderBytes, out string reason)

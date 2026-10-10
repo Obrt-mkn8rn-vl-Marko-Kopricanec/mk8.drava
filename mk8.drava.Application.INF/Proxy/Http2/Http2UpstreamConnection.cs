@@ -72,40 +72,12 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
         var informational = 0;
         while (true)
         {
-            var frame = await ReadFrameAsync(timeouts.UpstreamResponseHeadTimeout, ProxyTimeoutKind.UpstreamResponseHead, cancellationToken).ConfigureAwait(false);
-            if (frame is null)
+            var frame = await ReadResponseStreamFrameAsync(timeouts, cancellationToken).ConfigureAwait(false);
+            if (frame.Type is Http2FrameType.Headers or Http2FrameType.Continuation)
             {
-                throw new Http2UpstreamProtocolException("Upstream closed before response headers were received.");
-            }
-
-            if (await HandleConnectionFrameAsync(frame.Value, timeouts, cancellationToken).ConfigureAwait(false))
-            {
-                continue;
-            }
-
-            if (frame.Value.StreamId != _streamId)
-            {
-                continue;
-            }
-
-            if (frame.Value.Type is Http2FrameType.Headers or Http2FrameType.Continuation)
-            {
-                if (frame.Value.Type == Http2FrameType.Headers) headerEndsStream = (frame.Value.Flags & Http2Flags.EndStream) != 0;
-                var valid = true;
-                var payload = frame.Value.Type == Http2FrameType.Headers ? StripHeaderPaddingAndPriority(frame.Value, out valid) : frame.Value.Payload;
-                if (!valid)
-                {
-                    throw new Http2UpstreamProtocolException("Upstream sent invalid HTTP/2 response headers.");
-                }
-
-                Volatile.Write(ref _headFramesObserved, 1);
-                if (headerBlock.Length + payload.Length > _maximumResponseFieldBytes)
-                {
-                    throw new Http2UpstreamProtocolException("Upstream HTTP/2 response header block exceeded the configured limit.");
-                }
-
-                headerBlock.Write(payload.Span);
-                if ((frame.Value.Flags & Http2Flags.EndHeaders) == 0)
+                if (frame.Type == Http2FrameType.Headers) headerEndsStream = (frame.Flags & Http2Flags.EndStream) != 0;
+                AppendResponseHeaderFragment(frame, headerBlock);
+                if ((frame.Flags & Http2Flags.EndHeaders) == 0)
                 {
                     continue;
                 }
@@ -128,16 +100,38 @@ internal sealed partial class Http2UpstreamConnection : IAsyncDisposable
                 };
             }
 
-            if (frame.Value.Type == Http2FrameType.RstStream)
+            if (frame.Type == Http2FrameType.RstStream)
             {
                 throw new Http2UpstreamProtocolException("Upstream reset the HTTP/2 response stream.");
             }
 
-            if (frame.Value.Type == Http2FrameType.Data)
+            if (frame.Type == Http2FrameType.Data)
             {
                 throw new Http2UpstreamProtocolException("Upstream sent HTTP/2 response data before response headers.");
             }
         }
+    }
+
+    private async ValueTask<Http2Frame> ReadResponseStreamFrameAsync(RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var frame = await ReadFrameAsync(timeouts.UpstreamResponseHeadTimeout, ProxyTimeoutKind.UpstreamResponseHead,
+                cancellationToken).ConfigureAwait(false) ?? throw new Http2UpstreamProtocolException("Upstream closed before response headers were received.");
+            if (!await HandleConnectionFrameAsync(frame, timeouts, cancellationToken).ConfigureAwait(false) && frame.StreamId == _streamId)
+                return frame;
+        }
+    }
+
+    private void AppendResponseHeaderFragment(Http2Frame frame, MemoryStream headerBlock)
+    {
+        var valid = true;
+        var payload = frame.Type == Http2FrameType.Headers ? StripHeaderPaddingAndPriority(frame, out valid) : frame.Payload;
+        if (!valid) throw new Http2UpstreamProtocolException("Upstream sent invalid HTTP/2 response headers.");
+        Volatile.Write(ref _headFramesObserved, 1);
+        if (headerBlock.Length + payload.Length > _maximumResponseFieldBytes)
+            throw new Http2UpstreamProtocolException("Upstream HTTP/2 response header block exceeded the configured limit.");
+        headerBlock.Write(payload.Span);
     }
 
     public async ValueTask<Http2UpstreamDataChunk> ReadDataAsync(RuntimeTimeouts timeouts, CancellationToken cancellationToken)
