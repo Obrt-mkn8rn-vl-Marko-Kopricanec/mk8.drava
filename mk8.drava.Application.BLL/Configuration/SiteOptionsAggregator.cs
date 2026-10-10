@@ -60,6 +60,10 @@ public static partial class SiteOptionsAggregator
             MaxRequestBodyBytes = route.MaxRequestBodyBytes ?? site.MaxRequestBodyBytes,
             ClientRequestHeadTimeoutMs = route.ClientRequestHeadTimeoutMs ?? site.ClientRequestHeadTimeoutMs,
             UpstreamResponseHeadTimeoutMs = route.UpstreamResponseHeadTimeoutMs ?? site.UpstreamResponseHeadTimeoutMs,
+            ClientRequestBodyIdleTimeoutMs = route.ClientRequestBodyIdleTimeoutMs ?? site.ClientRequestBodyIdleTimeoutMs,
+            UpstreamConnectTimeoutMs = route.UpstreamConnectTimeoutMs ?? site.UpstreamConnectTimeoutMs,
+            UpstreamResponseBodyIdleTimeoutMs = route.UpstreamResponseBodyIdleTimeoutMs ?? site.UpstreamResponseBodyIdleTimeoutMs,
+            DownstreamWriteTimeoutMs = route.DownstreamWriteTimeoutMs ?? site.DownstreamWriteTimeoutMs,
             AccessLogEnabled = route.AccessLogEnabled ?? site.AccessLogEnabled
         };
     }
@@ -299,6 +303,10 @@ public static partial class SiteOptionsAggregator
             MaxRequestBodyBytes = source.MaxRequestBodyBytes,
             ClientRequestHeadTimeoutMs = source.ClientRequestHeadTimeoutMs,
             UpstreamResponseHeadTimeoutMs = source.UpstreamResponseHeadTimeoutMs,
+            ClientRequestBodyIdleTimeoutMs = source.ClientRequestBodyIdleTimeoutMs,
+            UpstreamConnectTimeoutMs = source.UpstreamConnectTimeoutMs,
+            UpstreamResponseBodyIdleTimeoutMs = source.UpstreamResponseBodyIdleTimeoutMs,
+            DownstreamWriteTimeoutMs = source.DownstreamWriteTimeoutMs,
             AccessLogEnabled = source.AccessLogEnabled
         };
     }

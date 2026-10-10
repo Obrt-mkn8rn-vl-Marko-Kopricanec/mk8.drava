@@ -37,7 +37,14 @@ public static class ProxyTimeoutPolicy
     {
         ArgumentNullException.ThrowIfNull(timeouts);
         ArgumentNullException.ThrowIfNull(input);
-        return WithUpstreamTimeouts(timeouts, timeouts.UpstreamConnectTimeout, input.UpstreamResponseHeadTimeout);
+        ArgumentNullException.ThrowIfNull(input.FlowTimeouts, nameof(input));
+        var flow = input.FlowTimeouts;
+        return new RuntimeTimeouts(timeouts.ClientRequestHeadTimeout,
+            flow.ClientRequestBodyIdleTimeout ?? timeouts.ClientRequestBodyIdleTimeout,
+            flow.UpstreamConnectTimeout ?? timeouts.UpstreamConnectTimeout, input.UpstreamResponseHeadTimeout,
+            flow.UpstreamResponseBodyIdleTimeout ?? timeouts.UpstreamResponseBodyIdleTimeout,
+            flow.DownstreamWriteTimeout ?? timeouts.DownstreamWriteTimeout, timeouts.TlsHandshakeTimeout,
+            timeouts.ClientKeepAliveIdleTimeout, timeouts.UpstreamIdleConnectionLifetime, timeouts.TunnelIdleTimeout);
     }
 
     public static RuntimeTimeouts ApplyRetryAttemptTimeout(ProxyRouteTimeoutPolicyInput input, RuntimeTimeouts timeouts)

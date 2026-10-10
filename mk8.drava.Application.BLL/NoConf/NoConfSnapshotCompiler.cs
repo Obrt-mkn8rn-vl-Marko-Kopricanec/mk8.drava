@@ -88,7 +88,8 @@ public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses
         overrides.MaxRequestBodyBytes ?? baseline.Limits.MaxRequestBodyBytes,
         overrides.ClientRequestHeadTimeoutMs is { } requestTimeout ? TimeSpan.FromMilliseconds(requestTimeout) : baseline.Timeouts.ClientRequestHeadTimeout,
         overrides.UpstreamResponseHeadTimeoutMs is { } responseTimeout ? TimeSpan.FromMilliseconds(responseTimeout) : baseline.Timeouts.UpstreamResponseHeadTimeout,
-        overrides.AccessLogEnabled ?? baseline.Observability.AccessLogEnabled);
+        overrides.AccessLogEnabled ?? baseline.Observability.AccessLogEnabled,
+        ProxyConfigurationRuntimeMapper.ToRuntimeFlowTimeouts(overrides));
 
     private static SortedDictionary<string, List<InstanceIntent>> GroupInstances(RegistryState state)
     {

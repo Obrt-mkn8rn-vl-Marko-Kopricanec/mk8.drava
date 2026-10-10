@@ -10,6 +10,11 @@ public static class RuntimeRouteResolvedOptionsResponseMapper
     public static RuntimeRouteResolvedOptionsResponse FromProjection(BusinessRuntimeRouteResolvedOptionsProjection projection)
     {
         ArgumentNullException.ThrowIfNull(projection);
-        return new RuntimeRouteResolvedOptionsResponse(projection.MaxRequestBodyBytes, projection.ClientRequestHeadTimeout, projection.UpstreamResponseHeadTimeout, projection.AccessLogEnabled);
+        var flow = projection.FlowTimeouts;
+        return new RuntimeRouteResolvedOptionsResponse(projection.MaxRequestBodyBytes, projection.ClientRequestHeadTimeout, projection.UpstreamResponseHeadTimeout, projection.AccessLogEnabled)
+        {
+            FlowTimeouts = flow.IsEmpty ? null : new RuntimeRouteTimeoutOverridesResponse(flow.ClientRequestBodyIdleTimeout,
+                flow.UpstreamConnectTimeout, flow.UpstreamResponseBodyIdleTimeout, flow.DownstreamWriteTimeout),
+        };
     }
 }

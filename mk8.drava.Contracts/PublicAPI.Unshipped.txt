@@ -2707,3 +2707,23 @@ Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse.TrustedRoot.get
 Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse.TrustedRoot.init -> void
 Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.Deconstruct(out string! CertificatePath, out string! Sha256) -> void
 Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.RuntimeTrustedRootCertificateResponse(string! CertificatePath, string! Sha256) -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteResolvedOptionsResponse.FlowTimeouts.get -> Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse?
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteResolvedOptionsResponse.FlowTimeouts.init -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.<Clone>$() -> Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse!
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.ClientRequestBodyIdleTimeout.get -> System.TimeSpan?
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.ClientRequestBodyIdleTimeout.init -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.Deconstruct(out System.TimeSpan? ClientRequestBodyIdleTimeout, out System.TimeSpan? UpstreamConnectTimeout, out System.TimeSpan? UpstreamResponseBodyIdleTimeout, out System.TimeSpan? DownstreamWriteTimeout) -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.DownstreamWriteTimeout.get -> System.TimeSpan?
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.DownstreamWriteTimeout.init -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.Equals(Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse? other) -> bool
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.RuntimeRouteTimeoutOverridesResponse(System.TimeSpan? ClientRequestBodyIdleTimeout, System.TimeSpan? UpstreamConnectTimeout, System.TimeSpan? UpstreamResponseBodyIdleTimeout, System.TimeSpan? DownstreamWriteTimeout) -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.UpstreamConnectTimeout.get -> System.TimeSpan?
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.UpstreamConnectTimeout.init -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.UpstreamResponseBodyIdleTimeout.get -> System.TimeSpan?
+Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.UpstreamResponseBodyIdleTimeout.init -> void
+override Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.GetHashCode() -> int
+override Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.ToString() -> string!
+static Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.operator !=(Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse? left, Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse? right) -> bool
+static Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse.operator ==(Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse? left, Mk8.Drava.Contracts.Administration.V1.RuntimeRouteTimeoutOverridesResponse? right) -> bool

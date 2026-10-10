@@ -62,6 +62,22 @@ internal static class ConfigurationTests
         AssertEx.Throws<ArgumentNullException>(() => SiteConfigurationSource.FromLintInput(null!));
     }
 
+    private static void VerifyExplicitLongFlowTimeouts()
+    {
+        var shortTimeout = TimeSpan.FromSeconds(10);
+        var formerlyRejectedFlow = TimeSpan.FromMilliseconds(600001);
+        var runtime = new RuntimeTimeouts(shortTimeout, formerlyRejectedFlow, shortTimeout, shortTimeout,
+            formerlyRejectedFlow, formerlyRejectedFlow, shortTimeout, shortTimeout, shortTimeout, shortTimeout);
+        var projection = new RuntimeTimeoutsProjection(shortTimeout, formerlyRejectedFlow, shortTimeout, shortTimeout,
+            formerlyRejectedFlow, formerlyRejectedFlow, shortTimeout, shortTimeout, shortTimeout, shortTimeout);
+        AssertEx.Equal(formerlyRejectedFlow, runtime.ClientRequestBodyIdleTimeout);
+        AssertEx.Equal(formerlyRejectedFlow, runtime.UpstreamResponseBodyIdleTimeout);
+        AssertEx.Equal(formerlyRejectedFlow, runtime.DownstreamWriteTimeout);
+        AssertEx.Equal(formerlyRejectedFlow, projection.ClientRequestBodyIdleTimeout);
+        AssertEx.Equal(formerlyRejectedFlow, projection.UpstreamResponseBodyIdleTimeout);
+        AssertEx.Equal(formerlyRejectedFlow, projection.DownstreamWriteTimeout);
+    }
+
     public static void SiteOptionsAggregatorCopiesInputCollections()
     {
         var listenerSni = new List<SniCertificateOptions>
@@ -2299,15 +2315,16 @@ internal static class ConfigurationTests
         AssertRuntimeTimeoutsRejects(upstreamIdleConnectionLifetime: TimeSpan.FromMilliseconds(99));
         AssertRuntimeTimeoutsRejects(tunnelIdleTimeout: TimeSpan.FromMilliseconds(99));
         AssertRuntimeTimeoutsProjectionRejects(clientRequestHeadTimeout: TimeSpan.FromMilliseconds(600001));
-        AssertRuntimeTimeoutsProjectionRejects(clientRequestBodyIdleTimeout: TimeSpan.FromMilliseconds(600001));
+        AssertRuntimeTimeoutsProjectionRejects(clientRequestBodyIdleTimeout: TimeSpan.FromMilliseconds(86400001));
         AssertRuntimeTimeoutsProjectionRejects(upstreamConnectTimeout: TimeSpan.FromMilliseconds(600001));
         AssertRuntimeTimeoutsProjectionRejects(upstreamResponseHeadTimeout: TimeSpan.FromMilliseconds(600001));
-        AssertRuntimeTimeoutsProjectionRejects(upstreamResponseBodyIdleTimeout: TimeSpan.FromMilliseconds(600001));
-        AssertRuntimeTimeoutsProjectionRejects(downstreamWriteTimeout: TimeSpan.FromMilliseconds(600001));
+        AssertRuntimeTimeoutsProjectionRejects(upstreamResponseBodyIdleTimeout: TimeSpan.FromMilliseconds(86400001));
+        AssertRuntimeTimeoutsProjectionRejects(downstreamWriteTimeout: TimeSpan.FromMilliseconds(86400001));
         AssertRuntimeTimeoutsProjectionRejects(tlsHandshakeTimeout: TimeSpan.FromMilliseconds(600001));
         AssertRuntimeTimeoutsProjectionRejects(clientKeepAliveIdleTimeout: TimeSpan.FromMilliseconds(600001));
         AssertRuntimeTimeoutsProjectionRejects(upstreamIdleConnectionLifetime: TimeSpan.FromMilliseconds(600001));
         AssertRuntimeTimeoutsProjectionRejects(tunnelIdleTimeout: TimeSpan.FromMilliseconds(600001));
+        VerifyExplicitLongFlowTimeouts();
         AssertRuntimeObservabilityRejects(recentDiagnosticsCapacity: 0);
         AssertRuntimeObservabilityRejects(recentDiagnosticsCapacity: 10001);
         AssertRuntimeObservabilityRejects(useNullLogPersistence: true);

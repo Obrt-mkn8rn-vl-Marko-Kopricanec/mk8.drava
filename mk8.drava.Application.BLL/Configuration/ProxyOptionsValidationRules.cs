@@ -370,6 +370,18 @@ public static partial class ProxyOptionsValidationRules
         {
             ValidateOverrideTimeout(failures, $"{routePrefix}:Overrides:UpstreamResponseHeadTimeoutMs", overrides.UpstreamResponseHeadTimeoutMs.Value);
         }
+
+        if (overrides.UpstreamConnectTimeoutMs is { } connect)
+            ValidateOverrideTimeout(failures, $"{routePrefix}:Overrides:UpstreamConnectTimeoutMs", connect);
+        ValidateFlowTimeoutOverride(failures, $"{routePrefix}:Overrides:ClientRequestBodyIdleTimeoutMs", overrides.ClientRequestBodyIdleTimeoutMs);
+        ValidateFlowTimeoutOverride(failures, $"{routePrefix}:Overrides:UpstreamResponseBodyIdleTimeoutMs", overrides.UpstreamResponseBodyIdleTimeoutMs);
+        ValidateFlowTimeoutOverride(failures, $"{routePrefix}:Overrides:DownstreamWriteTimeoutMs", overrides.DownstreamWriteTimeoutMs);
+    }
+
+    private static void ValidateFlowTimeoutOverride(List<string> failures, string name, int? value)
+    {
+        if (value is < 100 or > 24 * 60 * 60 * 1000)
+            failures.Add($"{name} must be between 100 and 86400000 milliseconds.");
     }
 
     private static void ValidateOverrideTimeout(List<string> failures, string name, int value)

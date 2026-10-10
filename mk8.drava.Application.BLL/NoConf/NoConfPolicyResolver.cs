@@ -62,6 +62,10 @@ public static class NoConfPolicyResolver
                 MaxRequestBodyBytes = ChooseOptional("limits.maxRequestBodyBytes", static patch => patch.Limits?.MaxRequestBodyBytes),
                 ClientRequestHeadTimeoutMs = ChooseOptional("limits.clientRequestHeadTimeoutMs", static patch => patch.Limits?.ClientRequestHeadTimeoutMs),
                 UpstreamResponseHeadTimeoutMs = ChooseOptional("limits.upstreamResponseHeadTimeoutMs", static patch => patch.Limits?.UpstreamResponseHeadTimeoutMs),
+                ClientRequestBodyIdleTimeoutMs = ChooseOptional("limits.clientRequestBodyIdleTimeoutMs", static patch => patch.Limits?.ClientRequestBodyIdleTimeoutMs),
+                UpstreamConnectTimeoutMs = ChooseOptional("limits.upstreamConnectTimeoutMs", static patch => patch.Limits?.UpstreamConnectTimeoutMs),
+                UpstreamResponseBodyIdleTimeoutMs = ChooseOptional("limits.upstreamResponseBodyIdleTimeoutMs", static patch => patch.Limits?.UpstreamResponseBodyIdleTimeoutMs),
+                DownstreamWriteTimeoutMs = ChooseOptional("limits.downstreamWriteTimeoutMs", static patch => patch.Limits?.DownstreamWriteTimeoutMs),
                 AccessLogEnabled = ChooseOptional("limits.accessLogEnabled", static patch => patch.Limits?.AccessLogEnabled),
             },
         };

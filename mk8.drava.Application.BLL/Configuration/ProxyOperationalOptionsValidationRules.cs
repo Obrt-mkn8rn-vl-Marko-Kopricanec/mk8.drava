@@ -3,6 +3,7 @@ public static partial class ProxyOperationalOptionsValidationRules
 {
     private const int MinimumTimeoutMs = 100;
     private const int MaximumTimeoutMs = 10 * 60 * 1000;
+    private const int MaximumFlowTimeoutMs = 24 * 60 * 60 * 1000;
     private const int MinimumDiagnosticsCapacity = 1;
     private const int MaximumDiagnosticsCapacity = 10_000;
     private const long MinimumLogFileBytes = 4 * 1024;
@@ -15,6 +16,12 @@ public static partial class ProxyOperationalOptionsValidationRules
         {
             failures.Add($"Proxy operational timeout {name} must be between {MinimumTimeoutMs} and {MaximumTimeoutMs} milliseconds.");
         }
+    }
+
+    private static void ValidateFlowTimeout(List<string> failures, string name, int value)
+    {
+        if (value is < MinimumTimeoutMs or > MaximumFlowTimeoutMs)
+            failures.Add($"Proxy operational timeout {name} must be between 100 and 86400000 milliseconds.");
     }
 
     private static void ValidateConnectionLimits(List<string> failures, ProxyConnectionOptions options)
@@ -243,11 +250,11 @@ public static partial class ProxyOperationalOptionsValidationRules
         ArgumentNullException.ThrowIfNull(adminUrlPolicy);
         List<string> failures = [];
         ValidateTimeout(failures, nameof(options.Timeouts.ClientRequestHeadTimeoutMs), options.Timeouts.ClientRequestHeadTimeoutMs);
-        ValidateTimeout(failures, nameof(options.Timeouts.ClientRequestBodyIdleTimeoutMs), options.Timeouts.ClientRequestBodyIdleTimeoutMs);
+        ValidateFlowTimeout(failures, nameof(options.Timeouts.ClientRequestBodyIdleTimeoutMs), options.Timeouts.ClientRequestBodyIdleTimeoutMs);
         ValidateTimeout(failures, nameof(options.Timeouts.UpstreamConnectTimeoutMs), options.Timeouts.UpstreamConnectTimeoutMs);
         ValidateTimeout(failures, nameof(options.Timeouts.UpstreamResponseHeadTimeoutMs), options.Timeouts.UpstreamResponseHeadTimeoutMs);
-        ValidateTimeout(failures, nameof(options.Timeouts.UpstreamResponseBodyIdleTimeoutMs), options.Timeouts.UpstreamResponseBodyIdleTimeoutMs);
-        ValidateTimeout(failures, nameof(options.Timeouts.DownstreamWriteTimeoutMs), options.Timeouts.DownstreamWriteTimeoutMs);
+        ValidateFlowTimeout(failures, nameof(options.Timeouts.UpstreamResponseBodyIdleTimeoutMs), options.Timeouts.UpstreamResponseBodyIdleTimeoutMs);
+        ValidateFlowTimeout(failures, nameof(options.Timeouts.DownstreamWriteTimeoutMs), options.Timeouts.DownstreamWriteTimeoutMs);
         ValidateTimeout(failures, nameof(options.Timeouts.TlsHandshakeTimeoutMs), options.Timeouts.TlsHandshakeTimeoutMs);
         ValidateTimeout(failures, nameof(options.Timeouts.ClientKeepAliveIdleTimeoutMs), options.Timeouts.ClientKeepAliveIdleTimeoutMs);
         ValidateTimeout(failures, nameof(options.Timeouts.UpstreamIdleConnectionLifetimeMs), options.Timeouts.UpstreamIdleConnectionLifetimeMs);

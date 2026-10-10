@@ -88,9 +88,12 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null, DevelopmentFlowTimeoutSettings? flowTimeouts = null)
     {
         if (upstreamHttp2 && upstreamHttp3) throw new ArgumentException("Development upstream protocol must be unambiguous.", nameof(upstreamHttp3));
+        if (flowTimeouts is not null && (!manualRoute || upstreamHttp2 || upstreamHttp3 || verifiedUpstreamTls is not null ||
+            manualCache || routeBodyLimit is not null || responseHeadTimeoutMs is not null))
+            throw new ArgumentException("Development flow settings own two HTTP/1 manual routes and cannot replace overlapping configurations.", nameof(flowTimeouts));
         var directory = Path.Combine(Path.GetTempPath(), "drava_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var state = Directory.CreateDirectory(Path.Combine(directory, "app")).FullName;
@@ -107,7 +110,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var tlsPort = enrolledSite ? UnusedPort() : 0;
         var managementPort = administration ? UnusedPort() : 0;
         var relayAddress = relayNode ? LocalRelayAddress() : null;
-        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs, verifiedUpstreamTls).ConfigureAwait(false);
+        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs, verifiedUpstreamTls, flowTimeouts).ConfigureAwait(false);
         var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath) : null;
         DevelopmentProcess? gateway = null;
         try
@@ -136,7 +139,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         await File.WriteAllTextAsync(Path.Combine(evidence, "startup-failure.log"), exception.ToString()).ConfigureAwait(false);
     }
 
-    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery, string? relayAddress, DevelopmentLifecycleSettings lifecycleSettings, bool upstreamHttp2, bool manualCache, bool upstreamHttp3, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits, long? routeBodyLimit, int? responseHeadTimeoutMs, UpstreamTlsOptions? verifiedUpstreamTls)
+    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery, string? relayAddress, DevelopmentLifecycleSettings lifecycleSettings, bool upstreamHttp2, bool manualCache, bool upstreamHttp3, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits, long? routeBodyLimit, int? responseHeadTimeoutMs, UpstreamTlsOptions? verifiedUpstreamTls, DevelopmentFlowTimeoutSettings? flowTimeouts)
     {
         ControllerBootstrap? controller = null;
         if (enrolledSite)
@@ -168,11 +171,27 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             overrides = new { maxRequestBodyBytes = routeBodyLimit, upstreamResponseHeadTimeoutMs = responseHeadTimeoutMs },
             cache = new { enabled = manualCache, maxEntryBytes = 4096, maxTotalBytes = 8192, defaultTtlSeconds = 60, respectOriginCacheControl = true },
         })).ConfigureAwait(false);
+        if (flowTimeouts is not null)
+            await WriteFlowSettingsAsync(state, sites, host, port, upstreamPort, flowTimeouts).ConfigureAwait(false);
         var applicationPath = Path.Combine(directory, "application.json");
         var gatewayPath = Path.Combine(directory, "gateway.json");
         await File.WriteAllTextAsync(applicationPath, BootstrapFile.Serialize(applicationBootstrap)).ConfigureAwait(false);
         await File.WriteAllTextAsync(gatewayPath, BootstrapFile.Serialize(gatewayBootstrap)).ConfigureAwait(false);
         return (applicationPath, gatewayPath);
+    }
+
+    private static async Task WriteFlowSettingsAsync(string state, string sites, string host, int port, int upstreamPort, DevelopmentFlowTimeoutSettings settings)
+    {
+        await File.WriteAllTextAsync(Path.Combine(state, "config", "proxy.json"), JsonSerializer.Serialize(new ProxyOperationalOptions { Timeouts = settings.Global })).ConfigureAwait(false);
+        var origin = new UpstreamOptions { Name = "origin", Address = "127.0.0.1", Port = upstreamPort };
+        var site = new SiteOptions
+        {
+            Name = "flow", Host = host,
+            Listeners = [new ListenerOptions { Name = "http", Address = "127.0.0.1", Port = port }],
+            Routes = [new ProxyRouteOptions { Name = "events", Host = host, PathPrefix = "/events", Overrides = settings.Events, Upstreams = [origin] },
+                new ProxyRouteOptions { Name = "ordinary", Host = host, PathPrefix = "/", Upstreams = [origin] }],
+        };
+        await File.WriteAllTextAsync(Path.Combine(sites, "service.json"), JsonSerializer.Serialize(site)).ConfigureAwait(false);
     }
 
     private static async Task EnrollDevelopmentNodeAsync(string directory, string state, LocalSiteCertificateAuthority authority, string? relayAddress)
