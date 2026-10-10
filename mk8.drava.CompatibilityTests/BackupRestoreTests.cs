@@ -151,16 +151,7 @@ internal static class BackupRestoreTests
     public static void BackupAndRestoreResultsCopyInputCollections()
     {
         var generatedAtUtc = new DateTimeOffset(2026, 6, 12, 11, 30, 0, TimeSpan.Zero);
-        var file = new ProxyBackupFileSystemEntry("config/proxy.json", 10, generatedAtUtc);
-        var warning = new ProxyBackupFileSystemWarning("directory_unreadable", "logs");
-        var scanFiles = new List<ProxyBackupFileSystemEntry>
-        {
-            file
-        };
-        var scanWarnings = new List<ProxyBackupFileSystemWarning>
-        {
-            warning
-        };
+        CreateBackupScanInputs(generatedAtUtc, out var scanFiles, out var scanWarnings);
         var configErrors = new List<string>
         {
             "parse failed"
@@ -207,6 +198,25 @@ internal static class BackupRestoreTests
         manifestWarnings.Clear();
         restoreErrors.Clear();
         restoreWarnings.Clear();
+        VerifyBackupRestoreResultCopies(scan, configValidation, manifest, restoreValidation);
+        VerifyBackupRestoreResultGuards(generatedAtUtc, configValidation, manifest, restoreErrors);
+        VerifyBackupRestoreApiCopies(generatedAtUtc, manifest, restoreValidation);
+    }
+
+    private static void CreateBackupScanInputs(DateTimeOffset generatedAtUtc, out List<ProxyBackupFileSystemEntry> scanFiles, out List<ProxyBackupFileSystemWarning> scanWarnings)
+    {
+        var file = new ProxyBackupFileSystemEntry("config/proxy.json", 10, generatedAtUtc);
+        var warning = new ProxyBackupFileSystemWarning("directory_unreadable", "logs");
+        scanFiles = [
+            file
+        ];
+        scanWarnings = [
+            warning
+        ];
+    }
+
+    private static void VerifyBackupRestoreResultCopies(ProxyBackupFileSystemScanResult scan, ProxyRestoreConfigurationValidationResult configValidation, ProxyBackupManifest manifest, ProxyRestoreValidationResult restoreValidation)
+    {
         AssertEx.Equal("config/proxy.json", scan.Files[0].RelativePath);
         AssertEx.Equal("directory_unreadable", scan.Warnings[0].Code);
         AssertEx.Equal("parse failed", configValidation.Errors[0]);
@@ -227,6 +237,10 @@ internal static class BackupRestoreTests
         AssertEx.False(manifest.Warnings is ProxyBackupWarning[]);
         AssertEx.False(restoreValidation.Errors is ProxyRestoreValidationFinding[]);
         AssertEx.False(restoreValidation.Warnings is ProxyRestoreValidationFinding[]);
+    }
+
+    private static void VerifyBackupRestoreResultGuards(DateTimeOffset generatedAtUtc, ProxyRestoreConfigurationValidationResult configValidation, ProxyBackupManifest manifest, List<ProxyRestoreValidationFinding> restoreErrors)
+    {
         AssertEx.Throws<ArgumentException>(() => new ProxyBackupFileSystemEntry("", 10, generatedAtUtc));
         AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyBackupFileSystemEntry("config/proxy.json", -1, generatedAtUtc));
         AssertEx.Throws<ArgumentException>(() => new ProxyBackupManifestEntry("", "config", "must_backup", false, 10, generatedAtUtc));
@@ -264,6 +278,10 @@ internal static class BackupRestoreTests
         AssertEx.Throws<ArgumentNullException>(() => ProxyRestoreValidationResult.Completed(generatedAtUtc, activeConfigVersion: 3, configValidation, manifest, [null!], []));
         AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyRestoreValidationResult.Completed(generatedAtUtc, activeConfigVersion: 0, configValidation, manifest, [], []));
         AssertEx.Throws<ArgumentNullException>(() => ProxyRestoreValidationResult.Completed(generatedAtUtc, activeConfigVersion: 3, configValidation, manifest, restoreErrors, [null!]));
+    }
+
+    private static void VerifyBackupRestoreApiCopies(DateTimeOffset generatedAtUtc, ProxyBackupManifest manifest, ProxyRestoreValidationResult restoreValidation)
+    {
         var response = ProxyBackupManifestResponseMapper.FromManifest(manifest);
         AssertEx.False(response.Directories is ProxyBackupDirectoryStatusResponse[], "Backup manifest API directories should not expose a mutable array.");
         AssertEx.False(response.Entries is ProxyBackupManifestEntryResponse[], "Backup manifest API entries should not expose a mutable array.");
@@ -298,6 +316,11 @@ internal static class BackupRestoreTests
             validationResponse.Warnings[0]
         };
         var directValidationResponse = new ProxyRestoreValidationResponseBody(succeeded: false, generatedAtUtc, activeConfigVersion: 3, configValidationSucceeded: false, wouldBeConfigVersion: null, manifest: directManifestResponse, errors: responseErrors, warnings: restoreResponseWarnings);
+        VerifyBackupRestoreApiMutationIsolation(generatedAtUtc, responseDirectories, responseEntries, responseCounts, responseWarnings, responseErrors, restoreResponseWarnings, directManifestResponse, directValidationResponse);
+    }
+
+    private static void VerifyBackupRestoreApiMutationIsolation(DateTimeOffset generatedAtUtc, List<ProxyBackupDirectoryStatusResponse> responseDirectories, List<ProxyBackupManifestEntryResponse> responseEntries, List<ProxyBackupManifestCountResponse> responseCounts, List<ProxyBackupWarningResponse> responseWarnings, List<ProxyRestoreValidationFindingResponse> responseErrors, List<ProxyRestoreValidationFindingResponse> restoreResponseWarnings, ProxyBackupManifestResponse directManifestResponse, ProxyRestoreValidationResponseBody directValidationResponse)
+    {
         responseDirectories[0] = responseDirectories[0] with
         {
             RelativePath = "replacement-config"

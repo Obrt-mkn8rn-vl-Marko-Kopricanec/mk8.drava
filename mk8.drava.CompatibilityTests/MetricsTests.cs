@@ -123,6 +123,13 @@ internal static class MetricsTests
         http3ProtocolErrors.Clear();
         configLintFindings.Clear();
         routeMatchFailures.Clear();
+        VerifyMetricSnapshotCopies(snapshot);
+        VerifyMetricSnapshotGuards(requestFailures);
+        VerifyMetricsApiCollectionViews(snapshot);
+    }
+
+    private static void VerifyMetricSnapshotCopies(ProxyMetricsSnapshot snapshot)
+    {
         AssertEx.Equal(2L, snapshot.RequestClassifications.FailuresByKind["ConnectFailure"]);
         AssertEx.Equal("route-a", snapshot.RequestClassifications.ByRoute[0].Route);
         AssertEx.Equal("unsafe_method", snapshot.Resilience.RetrySkipped[0].Reason);
@@ -145,6 +152,10 @@ internal static class MetricsTests
         AssertEx.False(snapshot.Http3.ProtocolErrors is Dictionary<string, long>);
         AssertEx.False(snapshot.ConfigLint.Findings is ProxyConfigLintFindingMetricSnapshot[]);
         AssertEx.False(snapshot.RouteDiagnostics.DryRunFailures is ProxyRouteDryRunFailureSnapshot[]);
+    }
+
+    private static void VerifyMetricSnapshotGuards(Dictionary<string, long> requestFailures)
+    {
         AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyClientConnectionMetricsSnapshot(Accepted: -1, Active: 0, ClosedByIdleTimeout: 0, ClosedByMaxRequests: 0));
         AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyTrafficMetricsSnapshot(Requests: 0, BytesRead: -1, BytesWritten: 0));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyRequestClassificationMetricsSnapshot(requestFailures, [null!]));
@@ -172,6 +183,10 @@ internal static class MetricsTests
         AssertEx.Throws<ArgumentException>(() => new ProxyConfigLintFindingMetricSnapshot(null!, "route_shadowed", 1));
         AssertEx.Throws<ArgumentException>(() => new ProxyConfigLintFindingMetricSnapshot("warning", " ", 1));
         AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyConfigLintFindingMetricSnapshot("warning", "route_shadowed", -1));
+    }
+
+    private static void VerifyMetricsApiCollectionViews(ProxyMetricsSnapshot snapshot)
+    {
         var response = ProxyMetricsSnapshotResponseMapper.FromSnapshot(snapshot);
         AssertEx.False(response.RequestFailuresByKind is Dictionary<string, long>, "Metrics API request failures should not expose a mutable dictionary.");
         AssertEx.False(response.RequestsByRoute is ProxyRequestSeriesSnapshotResponse[], "Metrics API request series should not expose a mutable array.");
