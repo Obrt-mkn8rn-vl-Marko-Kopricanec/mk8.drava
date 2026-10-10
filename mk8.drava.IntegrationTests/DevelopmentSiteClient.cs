@@ -10,9 +10,11 @@ internal sealed class DevelopmentSiteClient : IDisposable
     private readonly X509Certificate2 _root;
     private readonly SocketsHttpHandler _handler;
     private readonly X509Certificate2? _enrollment;
+    private int _observedNoDelay = -1;
+    public bool? ObservedTcpNoDelay => Volatile.Read(ref _observedNoDelay) switch { 0 => false, 1 => true, _ => null };
     public HttpClient Client { get; }
 
-    public DevelopmentSiteClient(string rootPath, int port, string host, string? enrollmentPath = null)
+    public DevelopmentSiteClient(string rootPath, int port, string host, string? enrollmentPath = null, bool? tcpNoDelay = null)
     {
         _root = X509CertificateLoader.LoadCertificateFromFile(rootPath);
         _enrollment = enrollmentPath is null ? null : X509CertificateLoader.LoadPkcs12FromFile(enrollmentPath, password: null, X509KeyStorageFlags.EphemeralKeySet);
@@ -25,6 +27,8 @@ internal sealed class DevelopmentSiteClient : IDisposable
                 var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 try
                 {
+                    if (tcpNoDelay is { } noDelay) socket.NoDelay = noDelay;
+                    Volatile.Write(ref _observedNoDelay, socket.NoDelay ? 1 : 0);
                     await socket.ConnectAsync(new IPEndPoint(IPAddress.Loopback, port), token).ConfigureAwait(false);
                     return new NetworkStream(socket, ownsSocket: true);
                 }

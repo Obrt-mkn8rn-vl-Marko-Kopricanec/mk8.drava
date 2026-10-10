@@ -6,7 +6,9 @@ namespace Mk8.Drava.IntegrationTests;
 internal sealed class DevelopmentRepeatedBodyContent(long length) : HttpContent
 {
     private const int BufferBytes = 32 * 1024;
+    private long _serializedBytes;
     public bool SerializationStarted { get; private set; }
+    public long SerializedBytes => Interlocked.Read(ref _serializedBytes);
 
     protected override bool TryComputeLength(out long value) { value = length; return true; }
 
@@ -20,6 +22,7 @@ internal sealed class DevelopmentRepeatedBodyContent(long length) : HttpContent
         {
             var count = (int)Math.Min(buffer.Length, remaining);
             await stream.WriteAsync(buffer.AsMemory(0, count), cancellationToken).ConfigureAwait(false);
+            Interlocked.Add(ref _serializedBytes, count);
             remaining -= count;
         }
     }

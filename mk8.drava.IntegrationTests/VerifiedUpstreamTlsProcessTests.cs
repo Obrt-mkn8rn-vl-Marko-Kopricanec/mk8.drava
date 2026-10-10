@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Cryptography;
@@ -6,17 +7,28 @@ using Microsoft.AspNetCore.Http.Features;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.UnitTests;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Mk8.Drava.IntegrationTests;
 
 [Collection(DevelopmentSubprocessTests.Name)]
-public sealed class VerifiedUpstreamTlsProcessTests
+public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
 {
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task GatewayAndApplicationPreserveSignedFieldsAndKnownLengthThroughVerifiedOriginTlsAsync(bool expectContinue)
+    public Task GatewayAndApplicationPreserveSignedFieldsAndKnownLengthThroughVerifiedOriginTlsAsync(bool expectContinue) =>
+        RunVerifiedUploadAsync(expectContinue, tcpNoDelay: null);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task GatewayAndApplicationPreserveSignedFieldsWithFrameworkTcpNoDelayAsync(bool expectContinue) =>
+        RunVerifiedUploadAsync(expectContinue, tcpNoDelay: true);
+
+    private async Task RunVerifiedUploadAsync(bool expectContinue, bool? tcpNoDelay)
     {
+        ArgumentNullException.ThrowIfNull(output);
         const long bodyBytes = 30L * 1024 * 1024;
         const string rawTarget = "/container/mail/a%2Fb.bin?sig=a%2Bb%2Fc%3D&spr=https";
         using var directory = new RegistryStateDirectory();
@@ -24,15 +36,18 @@ public sealed class VerifiedUpstreamTlsProcessTests
         var tls = await PreparePolicyAsync(directory.Path, certificates).ConfigureAwait(true);
         var names = new ConcurrentQueue<string?>();
         var completed = 0;
+        var headersValidated = 0;
+        long receivedBytes = 0;
         var upstream = await DevelopmentHttpUpstream.StartAsync(async context =>
         {
-            await ValidateUploadAsync(context, bodyBytes, rawTarget).ConfigureAwait(false);
+            await ValidateUploadAsync(context, bodyBytes, rawTarget, count => Interlocked.Exchange(ref receivedBytes, count),
+                () => Volatile.Write(ref headersValidated, 1)).ConfigureAwait(false);
             Interlocked.Increment(ref completed);
         }, certificates.Leaf, names.Enqueue).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true, verifiedUpstreamTls: tls).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
-        using var client = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.TlsPort, "svc.site.test");
+        using var client = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.TlsPort, "svc.site.test", tcpNoDelay: tcpNoDelay);
         using var content = new DevelopmentRepeatedBodyContent(bodyBytes);
         using var request = new HttpRequestMessage(HttpMethod.Put, new Uri(rawTarget, UriKind.Relative)) { Content = content };
         request.Headers.Host = "svc.site.test";
@@ -40,11 +55,22 @@ public sealed class VerifiedUpstreamTlsProcessTests
         request.Headers.Add("Authorization", "SharedKey synthetic:development-signature");
         request.Headers.Add("x-ms-version", "2026-06-06");
         request.Headers.IfNoneMatch.ParseAdd("*");
-        using var response = await client.Client.SendAsync(request).ConfigureAwait(true);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal("\"development-etag\"", response.Headers.ETag?.Tag);
-        Assert.Equal(1, Volatile.Read(ref completed));
-        Assert.Contains("backend.drava.invalid", names, StringComparer.Ordinal);
+        var watch = Stopwatch.StartNew();
+        try
+        {
+            using var response = await client.Client.SendAsync(request).ConfigureAwait(true);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            Assert.Equal("\"development-etag\"", response.Headers.ETag?.Tag);
+            Assert.Equal(1, Volatile.Read(ref completed));
+            Assert.Contains("backend.drava.invalid", names, StringComparer.Ordinal);
+        }
+        finally
+        {
+            // This is a bounded counter snapshot before fixture teardown, not a settled-origin completion claim.
+            output.WriteLine("expect_continue={0}; expected_bytes={1}; client_written_bytes={2}; origin_read_bytes={3}; origin_headers_validated={4}; origin_completed={5}; sni_observations={6}; send_elapsed_ms={7}; actual_tcp_no_delay={8}",
+                expectContinue, bodyBytes, content.SerializedBytes, Interlocked.Read(ref receivedBytes), Volatile.Read(ref headersValidated),
+                Volatile.Read(ref completed), names.Count, watch.Elapsed.TotalMilliseconds, client.ObservedTcpNoDelay);
+        }
     }
 
     [Fact]
@@ -77,7 +103,7 @@ public sealed class VerifiedUpstreamTlsProcessTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static async Task ValidateUploadAsync(HttpContext context, long bodyBytes, string rawTarget)
+    private static async Task ValidateUploadAsync(HttpContext context, long bodyBytes, string rawTarget, Action<long> observeBodyBytes, Action observeHeaders)
     {
         Assert.True(context.Request.IsHttps);
         Assert.Equal("PUT", context.Request.Method);
@@ -89,6 +115,7 @@ public sealed class VerifiedUpstreamTlsProcessTests
         Assert.Equal(bodyBytes, context.Request.ContentLength);
         var admission = context.Features.Get<IHttpMaxRequestBodySizeFeature>() ?? throw new InvalidOperationException("The development origin has no body admission feature.");
         admission.MaxRequestBodySize = bodyBytes;
+        observeHeaders();
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[32 * 1024];
         long received = 0;
@@ -96,6 +123,7 @@ public sealed class VerifiedUpstreamTlsProcessTests
         while ((count = await context.Request.Body.ReadAsync(buffer, context.RequestAborted).ConfigureAwait(false)) != 0)
         {
             received += count;
+            observeBodyBytes(received);
             hash.AppendData(buffer.AsSpan(0, count));
         }
         Assert.Equal(bodyBytes, received);
