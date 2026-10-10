@@ -42,6 +42,7 @@ public sealed class HopByHopHeaderPolicy
         return false;
     }
 
+    #pragma warning disable CA1822 // Preserve the instance contract of this constructor-injected policy service.
     public IReadOnlyList<ProxyHeaderField> FilterForForwarding(IReadOnlyList<ProxyHeaderField> headers, bool preserveTransferEncoding, bool preserveTrailer, bool preserveTeTrailers = false)
     {
         ArgumentNullException.ThrowIfNull(headers);
@@ -93,4 +94,5 @@ public sealed class HopByHopHeaderPolicy
 
         return filtered;
     }
+    #pragma warning restore CA1822
 }

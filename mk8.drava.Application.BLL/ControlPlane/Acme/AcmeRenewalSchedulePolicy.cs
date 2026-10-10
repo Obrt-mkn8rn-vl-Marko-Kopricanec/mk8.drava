@@ -1,6 +1,7 @@
 namespace Mk8.Drava.Application.BLL.ControlPlane.Acme;
 public sealed class AcmeRenewalSchedulePolicy
 {
+    #pragma warning disable CA1822 // Preserve the instance contract of this constructor-injected policy service.
     public TimeSpan ResolveDelay(AcmeRenewalScheduleInputReadResult input)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -16,4 +17,5 @@ public sealed class AcmeRenewalSchedulePolicy
 
         return TimeSpan.FromHours(12);
     }
+    #pragma warning restore CA1822
 }

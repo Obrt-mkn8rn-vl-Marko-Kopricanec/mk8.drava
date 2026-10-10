@@ -5,12 +5,15 @@ using Mk8.Drava.Application.BLL.ControlPlane.Http1;
 namespace Mk8.Drava.Application.BLL.ControlPlane.Upgrades;
 public sealed class UpgradeRequestPolicy
 {
+    #pragma warning disable CA1822 // Preserve the instance contract of this constructor-injected policy service.
     public bool IsUpgradeRequest(Http1RequestHead requestHead)
     {
         ArgumentNullException.ThrowIfNull(requestHead);
         return HopByHopHeaderPolicy.HasConnectionToken(requestHead.Headers, "upgrade") || HasHeader(requestHead.Headers, "Upgrade");
     }
+    #pragma warning restore CA1822
 
+    #pragma warning disable CA1822 // Preserve the instance contract of this constructor-injected policy service.
     public UpgradeRequestValidationDecision Validate(Http1RequestHead requestHead)
     {
         ArgumentNullException.ThrowIfNull(requestHead);
@@ -58,6 +61,7 @@ public sealed class UpgradeRequestPolicy
 
         return UpgradeRequestValidationDecision.Accepted(new UpgradeRequestInfo(protocol, isWebSocket, webSocketKey));
     }
+    #pragma warning restore CA1822
 
     public static string? GetHeaderValue(IReadOnlyList<ProxyHeaderField> headers, string name)
     {

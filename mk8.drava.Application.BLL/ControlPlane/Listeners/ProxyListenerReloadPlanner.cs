@@ -1,6 +1,7 @@
 namespace Mk8.Drava.Application.BLL.ControlPlane.Listeners;
 public sealed class ProxyListenerReloadPlanner
 {
+    #pragma warning disable CA1822 // Preserve the instance contract of this constructor-injected policy service.
     public ProxyListenerReloadPlan CreatePlan(IReadOnlyDictionary<string, ProxyTcpListenerReloadTarget> currentTcpListeners, IReadOnlyDictionary<string, ProxyTcpListenerReloadTarget> desiredTcpListeners, IReadOnlyDictionary<string, ProxyQuicListenerReloadTarget> currentQuicListeners, IReadOnlyDictionary<string, ProxyQuicListenerReloadTarget> desiredQuicListeners)
     {
         ArgumentNullException.ThrowIfNull(currentTcpListeners);
@@ -9,6 +10,7 @@ public sealed class ProxyListenerReloadPlanner
         ArgumentNullException.ThrowIfNull(desiredQuicListeners);
         return new ProxyListenerReloadPlan(BuildTcpListenerDiff(currentTcpListeners, desiredTcpListeners), BuildQuicListenerDiff(currentQuicListeners, desiredQuicListeners));
     }
+    #pragma warning restore CA1822
 
     private static ProxyListenerDiff BuildTcpListenerDiff(IReadOnlyDictionary<string, ProxyTcpListenerReloadTarget> currentListeners, IReadOnlyDictionary<string, ProxyTcpListenerReloadTarget> desiredListeners)
     {

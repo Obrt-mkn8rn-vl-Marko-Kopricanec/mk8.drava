@@ -5,6 +5,7 @@ using System.Globalization;
 namespace Mk8.Drava.Application.BLL.ControlPlane.Routing;
 public sealed class ProxyRouteActionPolicy
 {
+    #pragma warning disable CA1822 // Preserve the instance contract of this constructor-injected policy service.
     public RouteActionDecision Evaluate(ProxyRouteActionInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -32,6 +33,7 @@ public sealed class ProxyRouteActionPolicy
             _ => RouteActionDecision.Proxy
         };
     }
+    #pragma warning restore CA1822
 
     private static GeneratedRouteResponse BuildRouteRedirect(ProxyRouteRedirectActionInput redirect, string requestTarget)
     {

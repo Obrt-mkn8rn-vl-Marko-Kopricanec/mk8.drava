@@ -1,6 +1,7 @@
 namespace Mk8.Drava.Application.BLL.ControlPlane.Routing;
 public sealed class PathRewritePolicy
 {
+    #pragma warning disable CA1822 // Preserve the instance contract of this constructor-injected policy service.
     public string Apply(PathRewritePolicyInput input, string target, string path)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -18,6 +19,7 @@ public sealed class PathRewritePolicy
 
         return target;
     }
+    #pragma warning restore CA1822
 
     private static string RewriteTarget(string target, string oldPrefix, string newPrefix)
     {

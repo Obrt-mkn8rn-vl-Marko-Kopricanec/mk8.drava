@@ -8,6 +8,7 @@ namespace Mk8.Drava.Application.BLL.ControlPlane.Metrics;
 public sealed partial class PrometheusMetricsExporter
 {
     public const string ContentType = "text/plain; version=0.0.4; charset=utf-8";
+    #pragma warning disable CA1822 // Preserve the instance contract of this constructor-injected policy service.
     public string Export(ProxyMetricsExportInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -62,6 +63,7 @@ public sealed partial class PrometheusMetricsExporter
         AppendAuthenticationAndAcmeMetrics(builder, adminAuth, acmeRenewals, acme);
         return builder.ToString();
     }
+    #pragma warning restore CA1822
 
     private static void AppendAuthenticationAndAcmeMetrics(StringBuilder builder, ProxyAdminAuthMetricsSnapshot adminAuth, ProxyAcmeRenewalMetricsSnapshot acmeRenewals, IReadOnlyList<AcmeCertificateLifecycleStatus> acme)
     {
