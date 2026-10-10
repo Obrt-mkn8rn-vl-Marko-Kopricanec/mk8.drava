@@ -1,3 +1,5 @@
+using Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Hosting;
+using Mk8.Drava.Application.INF.Runtime;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -295,13 +297,80 @@ internal static class ListenerRebindingTests
         }
     }
 
-    private static IHost BuildProxyHost(string dataDirectory)
+    public static async Task DisposalBeforeStartupRequiresNoActiveSnapshotAsync()
+    {
+        using var temp = TemporaryDirectory.Create();
+        using var guard = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var host = BuildProxyHost(temp.Path);
+        var listener = host.Services.GetRequiredService<ProxyListenerService>();
+        AssertEx.False(host.Services.GetRequiredService<ProxyConfigurationStore>().HasActiveSnapshot);
+        try
+        {
+            await ((IAsyncDisposable)host).DisposeAsync().AsTask().WaitAsync(guard.Token).ConfigureAwait(false);
+            await listener.StopAsync(guard.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            await ((IAsyncDisposable)host).DisposeAsync().AsTask().WaitAsync(guard.Token).ConfigureAwait(false);
+        }
+    }
+
+    public static async Task CanceledPreparationReleasesItsUncommittedPortAsync()
+    {
+        using var temp = TemporaryDirectory.Create();
+        using var guard = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var mainPort = GetFreeTcpPort();
+        var extraPort = GetFreeTcpPort();
+        var upstreamPort = GetFreeTcpPort();
+        WriteSite(temp.Path, [new ListenerSpec("main", mainPort)], upstreamPort);
+        var logger = new CancelPreparationLogger();
+        var host = BuildProxyHost(temp.Path, services => services.AddSingleton<ILogger<ProxyListenerService>>(logger));
+        try
+        {
+            await host.StartAsync(guard.Token).ConfigureAwait(false);
+            logger.CancelPrepared = true;
+            WriteSite(temp.Path, [new ListenerSpec("main", mainPort), new ListenerSpec("extra", extraPort)], upstreamPort);
+            var reload = host.Services.GetRequiredService<IProxyConfigurationReloadOperations<ProxyConfigurationProjection>>();
+            await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await reload.ReloadAsync(guard.Token).ConfigureAwait(false)).ConfigureAwait(false);
+            AssertEx.Equal(1, logger.Cancellations);
+            using var rebound = OccupyPort(extraPort);
+            AssertEx.Equal(1, host.Services.GetRequiredService<ProxyRuntimeState>().Snapshot().Listeners.Count(static listener => listener.State == ProxyListenerState.Active));
+        }
+        finally
+        {
+            logger.CancelPrepared = false;
+            try { await host.StopAsync(guard.Token).ConfigureAwait(false); }
+            finally { await ((IAsyncDisposable)host).DisposeAsync().AsTask().WaitAsync(guard.Token).ConfigureAwait(false); }
+        }
+    }
+
+    private sealed class CancelPreparationLogger : ILogger<ProxyListenerService>
+    {
+        public bool CancelPrepared { get; set; }
+        public int Cancellations { get; private set; }
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (CancelPrepared && eventId.Id == 10041)
+            {
+                Cancellations++;
+                throw new OperationCanceledException("Controlled cancellation after a listener bind and before activation.");
+            }
+        }
+    }
+
+    private static IHost BuildProxyHost(string dataDirectory, Action<IServiceCollection>? configure = null)
     {
         return Host.CreateDefaultBuilder().ConfigureAppConfiguration(builder =>
         {
             builder.Sources.Clear();
             builder.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { [$"{MdravaDataDirectoryOptions.SectionName}:DataDirectory"] = dataDirectory });
-        }).ConfigureLogging(logging => logging.ClearProviders()).ConfigureServices((context, services) => services.AddProxyDataPlane(context.Configuration)).Build();
+        }).ConfigureLogging(logging => logging.ClearProviders()).ConfigureServices((context, services) =>
+        {
+            services.AddProxyDataPlane(context.Configuration);
+            configure?.Invoke(services);
+        }).Build();
     }
 
     private static void WriteSite(string dataDirectory, IReadOnlyList<ListenerSpec> listeners, int upstreamPort)

@@ -35,7 +35,7 @@ using Microsoft.Extensions.Logging;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Hosting;
-internal sealed partial class ProxyListenerService : BackgroundService, IProxyListenerReloadApplier
+internal sealed partial class ProxyListenerService : BackgroundService, IProxyListenerReloadApplier, IAsyncDisposable
 {
     private readonly IProxyActiveConfigurationSnapshotReader _configurationStore;
     private readonly IRouteMatcher _routeMatcher;
@@ -66,8 +66,7 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ProxyListenerService> _logger;
     private readonly ILogger<ClientConnection> _connectionLogger;
-    private readonly SemaphoreSlim _reloadGate = new(1, 1);
-    private readonly CancellationTokenSource _serviceStopping = new();
+    private readonly NativeListenerLifetime _lifetime;
     private readonly Dictionary<string, ManagedListener> _listeners = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, ManagedQuicListener> _quicListeners = new(StringComparer.OrdinalIgnoreCase);
     public ProxyListenerService(IProxyActiveConfigurationSnapshotReader configurationStore, IRouteMatcher routeMatcher, IUpstreamSelector upstreamSelector, UpstreamHealthStore healthStore, ProxyForwarder forwarder, UpgradeForwarder upgradeForwarder, UpgradeRequestPolicy upgradeRequestPolicy, ForwardedHeadersPolicy forwardedHeadersPolicy, ProxyRouteActionPolicy routeActionPolicy, PathRewritePolicy pathRewritePolicy, ResponseCacheStore cacheStore, Http3AltSvcPolicy altSvcPolicy, CircuitBreakerStore circuitBreakerStore, AcmeHttp01ChallengeResponder acmeChallengeResponder, TlsConnectionAuthenticator tlsAuthenticator, IHttp3QuicListenerFactory quicListenerFactory, ProxyMetrics metrics, RequestIdGenerator requestIdGenerator, AccessLogEmitter accessLogEmitter, ProxyAdmissionController admission, ProxyShutdownCoordinator shutdown, UpstreamConnectionPool upstreamConnectionPool, Http3UpstreamConnectionPool http3UpstreamConnectionPool, ClientRateLimiter rateLimiter, ProxyRuntimeState runtimeState, ProxyListenerReloadPlanner reloadPlanner, TimeProvider timeProvider, ILogger<ProxyListenerService> logger, ILogger<ClientConnection> connectionLogger)
@@ -101,35 +100,38 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
         _timeProvider = timeProvider;
         _logger = logger;
         _connectionLogger = connectionLogger;
+        _lifetime = new NativeListenerLifetime(StopListenersAsync, DisposeBase);
     }
 
     public async ValueTask<ProxyListenerReloadResult> ApplyReloadAsync(ProxyConfigurationSnapshot snapshot, Func<ProxyConfigurationSnapshot, ProxyConfigurationSnapshot> activateSnapshot, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(activateSnapshot);
         ArgumentNullException.ThrowIfNull(snapshot);
-        await _reloadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        using var reload = await _lifetime.EnterReloadAsync(cancellationToken).ConfigureAwait(false);
+        _metrics.ListenerReloadAttempted();
+        var attemptedAt = _timeProvider.GetUtcNow();
+        var plan = CreateListenerReloadPlan(snapshot);
+        var diff = plan.TcpDiff;
+        var quicDiff = plan.QuicDiff;
+        Dictionary<string, ManagedListener> pending = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, ManagedQuicListener> pendingQuic = new(StringComparer.OrdinalIgnoreCase);
+        List<string> listenerErrors = [];
+        var transferred = false;
+        var preparedClosed = false;
         try
         {
-            _metrics.ListenerReloadAttempted();
-            var attemptedAt = _timeProvider.GetUtcNow();
-            var plan = CreateListenerReloadPlan(snapshot);
-            var nextListeners = plan.DesiredTcpListeners;
-            var nextQuicListeners = plan.DesiredQuicListeners;
-            var diff = plan.TcpDiff;
-            var quicDiff = plan.QuicDiff;
-            Dictionary<string, ManagedListener> pending = new(StringComparer.OrdinalIgnoreCase);
-            Dictionary<string, ManagedQuicListener> pendingQuic = new(StringComparer.OrdinalIgnoreCase);
-            List<string> listenerErrors = [];
             try
             {
-                PrepareTcpListeners(nextListeners, diff, pending);
+                PrepareTcpListeners(plan.DesiredTcpListeners, diff, pending);
             }
             catch (Exception exception)when (exception is SocketException or IOException or InvalidOperationException)
             {
-                return await FailTcpPreparationAsync(exception, attemptedAt, plan, diff, quicDiff, pending, pendingQuic).ConfigureAwait(false);
+                var failure = await FailTcpPreparationAsync(exception, attemptedAt, plan, diff, quicDiff, pending, pendingQuic).ConfigureAwait(false);
+                preparedClosed = true;
+                return failure;
             }
 
-            await PrepareQuicListenersAsync(snapshot, nextQuicListeners, quicDiff, pendingQuic, listenerErrors, cancellationToken).ConfigureAwait(false);
+            await PrepareQuicListenersAsync(snapshot, plan.DesiredQuicListeners, quicDiff, pendingQuic, listenerErrors, cancellationToken).ConfigureAwait(false);
 
             ProxyConfigurationSnapshot activeSnapshot;
             try
@@ -140,17 +142,15 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
             catch (Exception exception) // Isolated fault boundary.
             #pragma warning restore CA1031
             {
-                await DisposePreparedListenersAsync(pending, pendingQuic).ConfigureAwait(false);
-
-                _metrics.ListenerReloadFailed();
-                var result = BuildReloadResult(ProxyListenerReloadApplicationState.Failed, attemptedAt, diff, quicDiff, pending, pendingQuic, [SafeError(exception)], plan.CurrentTcpListeners, plan.CurrentQuicListeners);
-                UpdateRuntimeState(result);
-                return result;
+                var failure = await FailActivationAsync(exception, attemptedAt, plan, diff, quicDiff, pending, pendingQuic).ConfigureAwait(false);
+                preparedClosed = true;
+                return failure;
             }
 
             List<ManagedListener> oldHandles = [];
             List<ManagedQuicListener> oldQuicHandles = [];
-            CommitPreparedListeners(nextListeners, nextQuicListeners, diff, quicDiff, pending, pendingQuic, oldHandles, oldQuicHandles);
+            CommitPreparedListeners(plan.DesiredTcpListeners, plan.DesiredQuicListeners, diff, quicDiff, pending, pendingQuic, oldHandles, oldQuicHandles);
+            transferred = true;
 
             ActivatePreparedListeners(diff, quicDiff, pending, pendingQuic);
 
@@ -160,8 +160,18 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
         }
         finally
         {
-            _reloadGate.Release();
+            if (!transferred && !preparedClosed)
+                await DisposePreparedListenersAsync(pending, pendingQuic).ConfigureAwait(false);
         }
+    }
+
+    private async ValueTask<ProxyListenerReloadResult> FailActivationAsync(Exception exception, DateTimeOffset attemptedAt, ListenerReloadPlan plan, ProxyListenerDiff diff, ProxyListenerDiff quicDiff, Dictionary<string, ManagedListener> pending, Dictionary<string, ManagedQuicListener> pendingQuic)
+    {
+        await DisposePreparedListenersAsync(pending, pendingQuic).ConfigureAwait(false);
+        _metrics.ListenerReloadFailed();
+        var result = BuildReloadResult(ProxyListenerReloadApplicationState.Failed, attemptedAt, diff, quicDiff, pending, pendingQuic, [SafeError(exception)], plan.CurrentTcpListeners, plan.CurrentQuicListeners);
+        UpdateRuntimeState(result);
+        return result;
     }
 
     private async ValueTask<ProxyListenerReloadResult> FailTcpPreparationAsync(Exception exception, DateTimeOffset attemptedAt, ListenerReloadPlan plan, ProxyListenerDiff diff, ProxyListenerDiff quicDiff, Dictionary<string, ManagedListener> pending, Dictionary<string, ManagedQuicListener> pendingQuic)
@@ -317,12 +327,12 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
     {
         foreach (var key in diff.Added.Concat(diff.Changed))
         {
-            pending[key].Activate(this, _serviceStopping.Token);
+            pending[key].Activate(this, _lifetime.StoppingToken);
         }
 
         foreach (var key in quicDiff.Added.Concat(quicDiff.Changed))
         {
-            pendingQuic[key].Activate(this, _serviceStopping.Token);
+            pendingQuic[key].Activate(this, _lifetime.StoppingToken);
         }
     }
 
@@ -382,10 +392,49 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
         }
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
+    public override Task StopAsync(CancellationToken cancellationToken) => _lifetime.StopAsync(cancellationToken);
+
+    public ValueTask DisposeAsync() => _lifetime.DisposeAsync();
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2215", Justification = "Base.Dispose is the DisposeBase callback of the shared lifetime owner and runs exactly once after stop and admitted users settle. A direct eager base call on the pending synchronous-refusal path would cancel/dispose before that join. Async and completed synchronous disposal use the same owner.")]
+    public override void Dispose() => _lifetime.Dispose();
+
+    private void DisposeBase() => base.Dispose();
+
+    private async Task StopListenersAsync()
     {
-        await _serviceStopping.CancelAsync().ConfigureAwait(false);
-        var snapshot = _configurationStore.Snapshot;
+        try
+        {
+            var read = _configurationStore.ReadSnapshot();
+            if (read is ProxyConfigurationSnapshotReadResult.AvailableResult available)
+            {
+                await StopActiveListenersAsync(available.Snapshot).ConfigureAwait(false);
+            }
+            else
+            {
+                lock (_listeners)
+                    if (_listeners.Count != 0) throw new InvalidOperationException("TCP listeners exist without an active configuration.");
+                lock (_quicListeners)
+                    if (_quicListeners.Count != 0) throw new InvalidOperationException("QUIC listeners exist without an active configuration.");
+            }
+        }
+        finally
+        {
+            try { UpdateRuntimeState(lastReload: null); }
+            finally
+            {
+                try { await base.StopAsync(CancellationToken.None).ConfigureAwait(false); }
+                finally
+                {
+                    _upstreamConnectionPool.Dispose();
+                    await _http3UpstreamConnectionPool.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+        }
+    }
+
+    private async Task StopActiveListenersAsync(ProxyConfigurationSnapshot snapshot)
+    {
         var shutdownToken = _shutdown.BeginShutdown(snapshot.Limits.ShutdownGracePeriod);
         if (_shutdown.StartedAtUtc is not null && _shutdown.DeadlineUtc is not null)
         {
@@ -394,40 +443,20 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
 
         ManagedListener[] listeners;
         ManagedQuicListener[] quicListeners;
-        await _reloadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        lock (_listeners)
         {
-            lock (_listeners)
-            {
-                listeners = _listeners.Values.ToArray();
-                _listeners.Clear();
-            }
-
-            lock (_quicListeners)
-            {
-                quicListeners = _quicListeners.Values.ToArray();
-                _quicListeners.Clear();
-            }
+            listeners = _listeners.Values.ToArray();
+            _listeners.Clear();
         }
-        finally
+        lock (_quicListeners)
         {
-            _reloadGate.Release();
+            quicListeners = _quicListeners.Values.ToArray();
+            _quicListeners.Clear();
         }
 
-        foreach (var listener in listeners)
-        {
-            await listener.StopAcceptingAsync(snapshot.Limits.ShutdownGracePeriod, shutdownToken).ConfigureAwait(false);
-        }
-
-        foreach (var listener in quicListeners)
-        {
-            await listener.StopAcceptingAsync(snapshot.Limits.ShutdownGracePeriod, shutdownToken).ConfigureAwait(false);
-        }
-
-        UpdateRuntimeState(null);
-        await base.StopAsync(cancellationToken).ConfigureAwait(false);
-        _upstreamConnectionPool.Dispose();
-        await _http3UpstreamConnectionPool.DisposeAsync().ConfigureAwait(false);
+        var tcpStops = listeners.Select(listener => listener.StopAcceptingAsync(snapshot.Limits.ShutdownGracePeriod, shutdownToken).AsTask());
+        var quicStops = quicListeners.Select(listener => listener.StopAcceptingAsync(snapshot.Limits.ShutdownGracePeriod, shutdownToken).AsTask());
+        await Task.WhenAll(tcpStops.Concat(quicStops)).ConfigureAwait(false);
     }
 
     private ListenerReloadPlan CreateListenerReloadPlan(ProxyConfigurationSnapshot snapshot)
@@ -606,7 +635,7 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
                 }
 
                 var connectionTask = RunConnectionAsync(clientSocket, requestSnapshot, requestListener, acceptedAdmission, _shutdown.Token);
-                handle.AddConnectionTask(connectionTask);
+                handle.AddConnectionTask(connectionTask, clientSocket);
             }
         }
         catch (Exception exception)when (exception is SocketException or IOException)
@@ -666,7 +695,7 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
                 }
 
                 var connectionTask = RunQuicConnectionAsync(connection, requestSnapshot, requestListener, acceptedAdmission, _shutdown.Token);
-                handle.AddConnectionTask(connectionTask);
+                handle.AddConnectionTask(connectionTask, connection);
             }
         }
         catch (Exception exception)when (exception is QuicException or SocketException or IOException)
@@ -788,7 +817,7 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
     private sealed record ListenerReloadPlan(IReadOnlyDictionary<string, RuntimeListener> DesiredTcpListeners, IReadOnlyDictionary<string, RuntimeListener> DesiredQuicListeners, IReadOnlyDictionary<string, ManagedListener> CurrentTcpListeners, IReadOnlyDictionary<string, ManagedQuicListener> CurrentQuicListeners, ProxyListenerDiff TcpDiff, ProxyListenerDiff QuicDiff);
     private sealed class ManagedListener
     {
-        private readonly ConcurrentDictionary<Task, byte> _connectionTasks = new();
+        private readonly ConcurrentDictionary<Task, Socket> _connectionTasks = new();
         private readonly Lock _gate = new();
         private readonly TimeProvider _timeProvider;
         private RuntimeListener _listener;
@@ -865,9 +894,9 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
             }
         }
 
-        public void AddConnectionTask(Task task)
+        public void AddConnectionTask(Task task, Socket socket)
         {
-            _connectionTasks.TryAdd(task, 0);
+            _connectionTasks.TryAdd(task, socket);
             _ = task.ContinueWith(completed => _connectionTasks.TryRemove(completed, out _), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
@@ -877,37 +906,46 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
             lock (_gate)
             {
                 if (_state is not ProxyListenerState.Stopped and not ProxyListenerState.Failed)
-                {
                     _state = ProxyListenerState.Draining;
-                }
-
                 acceptTask = _acceptTask;
             }
-
+            try
+            {
             Socket.Dispose();
-            if (acceptTask is not null)
+                if (acceptTask is not null) await acceptTask.ConfigureAwait(false);
+            }
+            finally
             {
-                try
+                try { await DrainConnectionsAsync(drainGracePeriod, cancellationToken).ConfigureAwait(false); }
+                finally
                 {
-                    await acceptTask.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)
-                {
+                    lock (_gate)
+                    {
+                        _state = ProxyListenerState.Stopped;
+                        _stoppedAtUtc = _timeProvider.GetUtcNow();
+                    }
                 }
             }
+        }
 
-            var activeTasks = _connectionTasks.Keys.ToArray();
-            if (activeTasks.Length > 0)
+        private async Task DrainConnectionsAsync(TimeSpan drainGracePeriod, CancellationToken cancellationToken)
+        {
+            var active = _connectionTasks.ToArray();
+            if (active.Length == 0) return;
+            var allConnections = Task.WhenAll(active.Select(static entry => entry.Key));
+            try
             {
-                var allConnections = Task.WhenAll(activeTasks);
-                var timeout = Task.Delay(drainGracePeriod, _timeProvider, cancellationToken);
-                await Task.WhenAny(allConnections, timeout).ConfigureAwait(false);
+                await allConnections.WaitAsync(drainGracePeriod, _timeProvider, cancellationToken).ConfigureAwait(false);
             }
-
-            lock (_gate)
+            catch (TimeoutException)
             {
-                _state = ProxyListenerState.Stopped;
-                _stoppedAtUtc = _timeProvider.GetUtcNow();
+                foreach (var entry in active) entry.Value.Dispose();
+                await allConnections.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                foreach (var entry in active) entry.Value.Dispose();
+                await allConnections.ConfigureAwait(false);
             }
         }
 
@@ -945,7 +983,7 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
 
     private sealed class ManagedQuicListener
     {
-        private readonly ConcurrentDictionary<Task, byte> _connectionTasks = new();
+        private readonly ConcurrentDictionary<Task, QuicConnection> _connectionTasks = new();
         private readonly Lock _gate = new();
         private readonly TimeProvider _timeProvider;
         private RuntimeListener _listener;
@@ -1023,9 +1061,9 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
             }
         }
 
-        public void AddConnectionTask(Task task)
+        public void AddConnectionTask(Task task, QuicConnection connection)
         {
-            _connectionTasks.TryAdd(task, 0);
+            _connectionTasks.TryAdd(task, connection);
             _ = task.ContinueWith(completed => _connectionTasks.TryRemove(completed, out _), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
@@ -1035,41 +1073,46 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
             lock (_gate)
             {
                 if (_state is not ProxyListenerState.Stopped and not ProxyListenerState.Failed)
-                {
                     _state = ProxyListenerState.Draining;
-                }
-
                 acceptTask = _acceptTask;
             }
-
-            if (ListenerHandle is not null)
+            try
             {
-                await ListenerHandle.DisposeAsync().ConfigureAwait(false);
+            if (ListenerHandle is not null) await ListenerHandle.DisposeAsync().ConfigureAwait(false);
+                if (acceptTask is not null) await acceptTask.ConfigureAwait(false);
             }
-
-            if (acceptTask is not null)
+            finally
             {
-                try
+                try { await DrainConnectionsAsync(drainGracePeriod, cancellationToken).ConfigureAwait(false); }
+                finally
                 {
-                    await acceptTask.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)
-                {
+                    lock (_gate)
+                    {
+                        _state = ProxyListenerState.Stopped;
+                        _stoppedAtUtc = _timeProvider.GetUtcNow();
+                    }
                 }
             }
+        }
 
-            var activeTasks = _connectionTasks.Keys.ToArray();
-            if (activeTasks.Length > 0)
+        private async Task DrainConnectionsAsync(TimeSpan drainGracePeriod, CancellationToken cancellationToken)
+        {
+            var active = _connectionTasks.ToArray();
+            if (active.Length == 0) return;
+            var allConnections = Task.WhenAll(active.Select(static entry => entry.Key));
+            try
             {
-                var allConnections = Task.WhenAll(activeTasks);
-                var timeout = Task.Delay(drainGracePeriod, _timeProvider, cancellationToken);
-                await Task.WhenAny(allConnections, timeout).ConfigureAwait(false);
+                await allConnections.WaitAsync(drainGracePeriod, _timeProvider, cancellationToken).ConfigureAwait(false);
             }
-
-            lock (_gate)
+            catch (TimeoutException)
             {
-                _state = ProxyListenerState.Stopped;
-                _stoppedAtUtc = _timeProvider.GetUtcNow();
+                await Task.WhenAll(active.Select(static entry => entry.Value.DisposeAsync().AsTask())).ConfigureAwait(false);
+                await allConnections.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                await Task.WhenAll(active.Select(static entry => entry.Value.DisposeAsync().AsTask())).ConfigureAwait(false);
+                await allConnections.ConfigureAwait(false);
             }
         }
 

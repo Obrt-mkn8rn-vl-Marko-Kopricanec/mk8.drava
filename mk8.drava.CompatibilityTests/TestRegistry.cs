@@ -16,6 +16,14 @@ internal static class TestRegistry
         tests.Add(Test("HTTP/3 scenario cleanup joins stop failure and asynchronous host disposal", ClientHttp3Tests.ScenarioCleanupJoinsStopFailureAndAsyncHostDisposalAsync, TestTaxonomy.Http3));
         tests.AddRange(ResilienceAndHttp1Proxy());
         tests.AddRange(OperatorRuntimeAndLimits());
+        tests.Add(Test("Listener stop joins admitted reloads and refuses new ones", NativeListenerLifetimeTests.StopJoinsAdmittedReloadsAndRefusesNewOnesAsync, TestTaxonomy.Limits));
+        tests.Add(Test("Canceled listener reload wait releases lifetime admission", NativeListenerLifetimeTests.CanceledReloadWaitDoesNotRetainAdmissionAsync, TestTaxonomy.Limits));
+        tests.Add(Test("Caller cancellation preserves shared listener stop and disposal", NativeListenerLifetimeTests.CallerCancellationDoesNotCancelSharedStopOrDisposalAsync, TestTaxonomy.Limits));
+        tests.Add(Test("Listener stop failure remains shared through repeated disposal", NativeListenerLifetimeTests.StopFailureIsRetainedByRepeatedStopAndDisposalAsync, TestTaxonomy.Limits));
+        tests.Add(Test("Listener cancellation callback failure still joins owned work", NativeListenerLifetimeTests.ThrowingCancellationCallbackStillJoinsReloadAndStopWorkAsync, TestTaxonomy.Limits));
+        tests.Add(Test("Synchronous listener disposal refuses to block unsettled work", NativeListenerLifetimeTests.SynchronousDisposeNeverBlocksUnsettledWorkAsync, TestTaxonomy.Limits));
+        tests.Add(Test("Listener disposal before startup requires no active snapshot", ListenerRebindingTests.DisposalBeforeStartupRequiresNoActiveSnapshotAsync, TestTaxonomy.Config, TestTaxonomy.Limits));
+        tests.Add(Test("Canceled listener preparation releases its uncommitted port", ListenerRebindingTests.CanceledPreparationReleasesItsUncommittedPortAsync, TestTaxonomy.Config, TestTaxonomy.Limits, TestTaxonomy.SecurityNegativePaths));
         return tests.ToArray();
     }
 
