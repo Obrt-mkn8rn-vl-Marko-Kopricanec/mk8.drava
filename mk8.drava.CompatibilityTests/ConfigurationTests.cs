@@ -80,32 +80,7 @@ internal static class ConfigurationTests
 
     public static void SiteOptionsAggregatorCopiesInputCollections()
     {
-        var listenerSni = new List<SniCertificateOptions>
-        {
-            new()
-            {
-                HostName = "home.test",
-                CertificateId = "home-cert"
-            }
-        };
-        var upstreamFailures = new List<int>
-        {
-            503
-        };
-        var upstreams = new List<UpstreamOptions>
-        {
-            new()
-            {
-                Name = "primary",
-                Address = "127.0.0.1",
-                Port = 5000,
-                CircuitBreaker = new ProxyCircuitBreakerOptions
-                {
-                    Enabled = true,
-                    FailureStatusCodes = new System.Collections.ObjectModel.Collection<int>(upstreamFailures)
-                }
-            }
-        };
+        CreateCopyTestListenerAndUpstreams(out var listenerSni, out var upstreamFailures, out var upstreams);
         var removeRequestHeaders = new List<string>
         {
             "X-Remove"
@@ -136,6 +111,76 @@ internal static class ConfigurationTests
         {
             504
         };
+        var site = CreateCopyTestSite(listenerSni, upstreams, siteSetRequestHeader, removeRequestHeaders, cacheMethods, retryStatusCodes, routeSetResponseHeader, routeCacheMethods, routeRetryStatusCodes);
+        var aggregated = SiteOptionsAggregator.ToProxyOptions([SiteConfigurationSource.FromFile("sites/home.json", site)]);
+        site.Listeners.Clear();
+        listenerSni.Add(new SniCertificateOptions { HostName = "api.test", CertificateId = "api-cert" });
+        site.Upstreams.Clear();
+        upstreamFailures.Add(504);
+        removeRequestHeaders.Add("X-Late");
+        cacheMethods.Add("POST");
+        retryStatusCodes.Add(503);
+        routeCacheMethods.Add("PUT");
+        routeRetryStatusCodes.Add(500);
+        VerifyAggregatedCopyIsolation(aggregated, siteSetRequestHeader, routeSetResponseHeader);
+    }
+
+    private static void CreateCopyTestListenerAndUpstreams(out List<SniCertificateOptions> listenerSni, out List<int> upstreamFailures, out List<UpstreamOptions> upstreams)
+    {
+        listenerSni = [
+            new()
+            {
+                HostName = "home.test",
+                CertificateId = "home-cert"
+            }
+        ];
+        upstreamFailures = [
+            503
+        ];
+        upstreams = [
+            new()
+            {
+                Name = "primary",
+                Address = "127.0.0.1",
+                Port = 5000,
+                CircuitBreaker = new ProxyCircuitBreakerOptions
+                {
+                    Enabled = true,
+                    FailureStatusCodes = new System.Collections.ObjectModel.Collection<int>(upstreamFailures)
+                }
+            }
+        ];
+    }
+
+    private static void VerifyAggregatedCopyIsolation(ProxyOptions aggregated, ProxyHeaderSetOptions siteSetRequestHeader, ProxyHeaderSetOptions routeSetResponseHeader)
+    {
+        AssertEx.Equal(1, aggregated.Listeners.Count);
+        AssertEx.Equal(1, aggregated.Listeners[0].SniCertificates.Count);
+        AssertEx.Equal("home.test", aggregated.Listeners[0].SniCertificates[0].HostName);
+        AssertEx.Equal(2, aggregated.Routes.Count);
+        AssertEx.Equal(1, aggregated.Routes[0].Upstreams.Count);
+        AssertEx.Equal(1, aggregated.Routes[0].Upstreams[0].CircuitBreaker.FailureStatusCodes.Count);
+        AssertEx.Equal(503, aggregated.Routes[0].Upstreams[0].CircuitBreaker.FailureStatusCodes[0]);
+        AssertEx.Equal(1, aggregated.Routes[0].HeaderPolicy.RemoveRequestHeaders.Count);
+        AssertEx.Equal("X-Remove", aggregated.Routes[0].HeaderPolicy.RemoveRequestHeaders[0]);
+        AssertEx.Equal(1, aggregated.Routes[0].HeaderPolicy.SetRequestHeaders.Count);
+        AssertEx.Equal("X-Site", aggregated.Routes[0].HeaderPolicy.SetRequestHeaders[0].Name);
+        AssertEx.False(ReferenceEquals(siteSetRequestHeader, aggregated.Routes[0].HeaderPolicy.SetRequestHeaders[0]));
+        AssertEx.Equal(1, aggregated.Routes[0].HeaderPolicy.SetResponseHeaders.Count);
+        AssertEx.Equal("X-Route", aggregated.Routes[0].HeaderPolicy.SetResponseHeaders[0].Name);
+        AssertEx.False(ReferenceEquals(routeSetResponseHeader, aggregated.Routes[0].HeaderPolicy.SetResponseHeaders[0]));
+        AssertEx.Equal(1, aggregated.Routes[0].Cache.Methods.Count);
+        AssertEx.Equal("HEAD", aggregated.Routes[0].Cache.Methods[0]);
+        AssertEx.Equal(1, aggregated.Routes[0].Retry.RetryOnStatusCodes.Count);
+        AssertEx.Equal(504, aggregated.Routes[0].Retry.RetryOnStatusCodes[0]);
+        AssertEx.Equal(1, aggregated.Routes[1].Cache.Methods.Count);
+        AssertEx.Equal("GET", aggregated.Routes[1].Cache.Methods[0]);
+        AssertEx.Equal(1, aggregated.Routes[1].Retry.RetryOnStatusCodes.Count);
+        AssertEx.Equal(502, aggregated.Routes[1].Retry.RetryOnStatusCodes[0]);
+    }
+
+    private static SiteOptions CreateCopyTestSite(List<SniCertificateOptions> listenerSni, List<UpstreamOptions> upstreams, ProxyHeaderSetOptions siteSetRequestHeader, List<string> removeRequestHeaders, List<string> cacheMethods, List<int> retryStatusCodes, ProxyHeaderSetOptions routeSetResponseHeader, List<string> routeCacheMethods, List<int> routeRetryStatusCodes)
+    {
         var site = new SiteOptions
         {
             Name = "home",
@@ -185,39 +230,7 @@ internal static class ConfigurationTests
 
             ]
         };
-        var aggregated = SiteOptionsAggregator.ToProxyOptions([SiteConfigurationSource.FromFile("sites/home.json", site)]);
-        site.Listeners.Clear();
-        listenerSni.Add(new SniCertificateOptions { HostName = "api.test", CertificateId = "api-cert" });
-        site.Upstreams.Clear();
-        upstreamFailures.Add(504);
-        removeRequestHeaders.Add("X-Late");
-        cacheMethods.Add("POST");
-        retryStatusCodes.Add(503);
-        routeCacheMethods.Add("PUT");
-        routeRetryStatusCodes.Add(500);
-        AssertEx.Equal(1, aggregated.Listeners.Count);
-        AssertEx.Equal(1, aggregated.Listeners[0].SniCertificates.Count);
-        AssertEx.Equal("home.test", aggregated.Listeners[0].SniCertificates[0].HostName);
-        AssertEx.Equal(2, aggregated.Routes.Count);
-        AssertEx.Equal(1, aggregated.Routes[0].Upstreams.Count);
-        AssertEx.Equal(1, aggregated.Routes[0].Upstreams[0].CircuitBreaker.FailureStatusCodes.Count);
-        AssertEx.Equal(503, aggregated.Routes[0].Upstreams[0].CircuitBreaker.FailureStatusCodes[0]);
-        AssertEx.Equal(1, aggregated.Routes[0].HeaderPolicy.RemoveRequestHeaders.Count);
-        AssertEx.Equal("X-Remove", aggregated.Routes[0].HeaderPolicy.RemoveRequestHeaders[0]);
-        AssertEx.Equal(1, aggregated.Routes[0].HeaderPolicy.SetRequestHeaders.Count);
-        AssertEx.Equal("X-Site", aggregated.Routes[0].HeaderPolicy.SetRequestHeaders[0].Name);
-        AssertEx.False(ReferenceEquals(siteSetRequestHeader, aggregated.Routes[0].HeaderPolicy.SetRequestHeaders[0]));
-        AssertEx.Equal(1, aggregated.Routes[0].HeaderPolicy.SetResponseHeaders.Count);
-        AssertEx.Equal("X-Route", aggregated.Routes[0].HeaderPolicy.SetResponseHeaders[0].Name);
-        AssertEx.False(ReferenceEquals(routeSetResponseHeader, aggregated.Routes[0].HeaderPolicy.SetResponseHeaders[0]));
-        AssertEx.Equal(1, aggregated.Routes[0].Cache.Methods.Count);
-        AssertEx.Equal("HEAD", aggregated.Routes[0].Cache.Methods[0]);
-        AssertEx.Equal(1, aggregated.Routes[0].Retry.RetryOnStatusCodes.Count);
-        AssertEx.Equal(504, aggregated.Routes[0].Retry.RetryOnStatusCodes[0]);
-        AssertEx.Equal(1, aggregated.Routes[1].Cache.Methods.Count);
-        AssertEx.Equal("GET", aggregated.Routes[1].Cache.Methods[0]);
-        AssertEx.Equal(1, aggregated.Routes[1].Retry.RetryOnStatusCodes.Count);
-        AssertEx.Equal(502, aggregated.Routes[1].Retry.RetryOnStatusCodes[0]);
+        return site;
     }
 
     public static void SiteOptionsAggregatorCopiesMergedListenerSniEntries()
@@ -424,23 +437,32 @@ internal static class ConfigurationTests
         sourceFiles.Clear();
         errors.Clear();
         fileErrors.Clear();
-        AssertEx.Equal("sites/home.json", discovery.Files[0].Path);
-        AssertEx.Equal("tests/config", discovery.CreatedPaths[0]);
-        AssertEx.Equal("tests/config/sites", discovery.ExistingPaths[0]);
-        AssertEx.False(discovery.Files is ProxyConfigurationFileDiscovery[], "Discovery files should not expose a mutable array.");
-        AssertEx.False(discovery.CreatedPaths is string[], "Discovery created paths should not expose a mutable array.");
-        AssertEx.False(discovery.ExistingPaths is string[], "Discovery existing paths should not expose a mutable array.");
-        AssertEx.Equal("sites/replacement.json", discoveryWithReplacementFiles.Files[0].Path);
-        AssertEx.Equal("tests/config", discoveryWithReplacementFiles.CreatedPaths[0]);
-        AssertEx.Equal("tests/config/sites", discoveryWithReplacementFiles.ExistingPaths[0]);
-        AssertEx.False(discoveryWithReplacementFiles.Files is ProxyConfigurationFileDiscovery[], "Discovery replacement files should not expose a mutable array.");
-        AssertEx.Throws<ArgumentException>(() => new ProxyConfigurationFileDiscovery(" ", "json", "loaded", null));
-        AssertEx.Throws<ArgumentException>(() => new ProxyConfigurationFileDiscovery("sites/home.json", " ", "loaded", null));
-        AssertEx.Throws<ArgumentException>(() => new ProxyConfigurationFileDiscovery("sites/home.json", "json", " ", null));
-        AssertEx.Throws<ArgumentException>(() => new ProxyConfigurationFileDiscovery("sites/home.json", "json", "loaded", " "));
-        AssertEx.Throws<ArgumentException>(() => new ProxyFilesystemLayout(" ", "tests/config", "tests/config/sites", "tests/logs", "tests/certs", "tests/state", "tests/config/proxy.json"));
-        AssertEx.Throws<ArgumentException>(() => new ProxyFilesystemLayout("tests", " ", "tests/config/sites", "tests/logs", "tests/certs", "tests/state", "tests/config/proxy.json"));
-        AssertEx.Throws<ArgumentException>(() => new ProxyFilesystemLayout("tests", "tests/config", "tests/config/sites", "tests/logs", "tests/certs", "tests/state", " "));
+        VerifyDiscoveryCopiesAndGuards(discovery, discoveryWithReplacementFiles);
+        VerifyManagementResultCopies(valid, invalid, normalize, loadFailed, loadValidated, reloadFailed);
+        VerifyManagementResultGuards(discovery);
+        VerifyNormalizeResponseCopies(normalize);
+        VerifyValidationResponseCopies(invalid);
+        VerifyReloadResponseCopies(apiReloadFailed);
+        VerifyDiscoveryResponseCopies(discovery);
+    }
+
+    private static void VerifyManagementResultGuards(ProxyConfigurationDiscovery discovery)
+    {
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationNormalizeResult.Failed("json", [null!]));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationValidationResult.Valid(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: 2, [null!], discovery));
+        AssertEx.Throws<ArgumentException>(() => ProxyConfigurationValidationResult.Valid(sourceDirectory: " ", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: 2, ["sites/home.json"], discovery));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationValidationResult.Valid(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: 2, ["sites/home.json"], discovery: null!));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationValidationResult.Invalid(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: null, ["sites/home.json"], discovery, [null!], []));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationValidationResult.Invalid(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: null, ["sites/home.json"], discovery, [], [null!]));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigurationLoadResult.FailedResult(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, sourceFiles: [null!], discovery, fileErrors: [ProxyConfigurationFileError.ForPath("sites/home.json", "parse failed")], wouldBeVersion: null));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigurationLoadResult.FailedResult(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, sourceFiles: ["sites/home.json"], discovery, fileErrors: [null!], wouldBeVersion: null));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigurationLoadResult.ValidatedResult(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, sourceFiles: [null!], discovery, wouldBeVersion: 2));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationReloadResult<TestConfigurationProjection>.LoadFailed(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, loadedAtUtc: DateTimeOffset.UnixEpoch, discovery, [null!], [], activeConfiguration: null));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationReloadResult<TestConfigurationProjection>.LoadFailed(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, loadedAtUtc: DateTimeOffset.UnixEpoch, discovery, [], [null!], activeConfiguration: null));
+    }
+
+    private static void VerifyManagementResultCopies(ProxyConfigurationValidationResult valid, ProxyConfigurationValidationResult invalid, ProxyConfigurationNormalizeResult normalize, ProxyConfigurationLoadResult.FailedResult loadFailed, ProxyConfigurationLoadResult.ValidatedResult loadValidated, ProxyConfigurationReloadResult<TestConfigurationProjection> reloadFailed)
+    {
         AssertEx.Equal("sites/home.json", valid.SourceFiles[0]);
         AssertEx.False(valid.SourceFiles is string[], "Validation source files should not expose a mutable array.");
         AssertEx.Equal("sites/home.json", invalid.SourceFiles[0]);
@@ -465,17 +487,31 @@ internal static class ConfigurationTests
         AssertEx.Equal("sites/home.json", reloadFailed.FileErrors[0].Path);
         AssertEx.False(reloadFailed.Errors is string[], "Reload errors should not expose a mutable array.");
         AssertEx.False(reloadFailed.FileErrors is ProxyConfigurationFileError[], "Reload file errors should not expose a mutable array.");
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationNormalizeResult.Failed("json", [null!]));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationValidationResult.Valid(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: 2, [null!], discovery));
-        AssertEx.Throws<ArgumentException>(() => ProxyConfigurationValidationResult.Valid(sourceDirectory: " ", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: 2, ["sites/home.json"], discovery));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationValidationResult.Valid(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: 2, ["sites/home.json"], discovery: null!));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationValidationResult.Invalid(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: null, ["sites/home.json"], discovery, [null!], []));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationValidationResult.Invalid(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, lastSuccessfulLoadAtUtc: DateTimeOffset.UnixEpoch, wouldBeVersion: null, ["sites/home.json"], discovery, [], [null!]));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigurationLoadResult.FailedResult(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, sourceFiles: [null!], discovery, fileErrors: [ProxyConfigurationFileError.ForPath("sites/home.json", "parse failed")], wouldBeVersion: null));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigurationLoadResult.FailedResult(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, sourceFiles: ["sites/home.json"], discovery, fileErrors: [null!], wouldBeVersion: null));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigurationLoadResult.ValidatedResult(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, sourceFiles: [null!], discovery, wouldBeVersion: 2));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationReloadResult<TestConfigurationProjection>.LoadFailed(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, loadedAtUtc: DateTimeOffset.UnixEpoch, discovery, [null!], [], activeConfiguration: null));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationReloadResult<TestConfigurationProjection>.LoadFailed(sourceDirectory: "data", attemptedAtUtc: DateTimeOffset.UnixEpoch, activeVersion: 1, loadedAtUtc: DateTimeOffset.UnixEpoch, discovery, [], [null!], activeConfiguration: null));
+    }
+
+    private static void VerifyDiscoveryCopiesAndGuards(ProxyConfigurationDiscovery discovery, ProxyConfigurationDiscovery discoveryWithReplacementFiles)
+    {
+        AssertEx.Equal("sites/home.json", discovery.Files[0].Path);
+        AssertEx.Equal("tests/config", discovery.CreatedPaths[0]);
+        AssertEx.Equal("tests/config/sites", discovery.ExistingPaths[0]);
+        AssertEx.False(discovery.Files is ProxyConfigurationFileDiscovery[], "Discovery files should not expose a mutable array.");
+        AssertEx.False(discovery.CreatedPaths is string[], "Discovery created paths should not expose a mutable array.");
+        AssertEx.False(discovery.ExistingPaths is string[], "Discovery existing paths should not expose a mutable array.");
+        AssertEx.Equal("sites/replacement.json", discoveryWithReplacementFiles.Files[0].Path);
+        AssertEx.Equal("tests/config", discoveryWithReplacementFiles.CreatedPaths[0]);
+        AssertEx.Equal("tests/config/sites", discoveryWithReplacementFiles.ExistingPaths[0]);
+        AssertEx.False(discoveryWithReplacementFiles.Files is ProxyConfigurationFileDiscovery[], "Discovery replacement files should not expose a mutable array.");
+        AssertEx.Throws<ArgumentException>(() => new ProxyConfigurationFileDiscovery(" ", "json", "loaded", null));
+        AssertEx.Throws<ArgumentException>(() => new ProxyConfigurationFileDiscovery("sites/home.json", " ", "loaded", null));
+        AssertEx.Throws<ArgumentException>(() => new ProxyConfigurationFileDiscovery("sites/home.json", "json", " ", null));
+        AssertEx.Throws<ArgumentException>(() => new ProxyConfigurationFileDiscovery("sites/home.json", "json", "loaded", " "));
+        AssertEx.Throws<ArgumentException>(() => new ProxyFilesystemLayout(" ", "tests/config", "tests/config/sites", "tests/logs", "tests/certs", "tests/state", "tests/config/proxy.json"));
+        AssertEx.Throws<ArgumentException>(() => new ProxyFilesystemLayout("tests", " ", "tests/config/sites", "tests/logs", "tests/certs", "tests/state", "tests/config/proxy.json"));
+        AssertEx.Throws<ArgumentException>(() => new ProxyFilesystemLayout("tests", "tests/config", "tests/config/sites", "tests/logs", "tests/certs", "tests/state", " "));
+    }
+
+    private static void VerifyNormalizeResponseCopies(ProxyConfigurationNormalizeResult normalize)
+    {
         var normalizeResponse = ProxyConfigurationNormalizeResponseMapper.FromResult(normalize);
         AssertEx.False(normalizeResponse.Errors is string[], "Normalize API errors should not expose a mutable array.");
         AssertEx.False(normalizeResponse.FileErrors is ProxyConfigurationFileErrorResponse[], "Normalize API file errors should not expose a mutable array.");
@@ -501,6 +537,10 @@ internal static class ConfigurationTests
         AssertEx.Equal("sites/home.json", directNormalizeResponse.FileErrors[0].Path);
         AssertEx.False(directNormalizeResponse.Errors is string[], "Direct normalize API errors should not expose a mutable array.");
         AssertEx.False(directNormalizeResponse.FileErrors is ProxyConfigurationFileErrorResponse[], "Direct normalize API file errors should not expose a mutable array.");
+    }
+
+    private static void VerifyValidationResponseCopies(ProxyConfigurationValidationResult invalid)
+    {
         var validationResponse = ProxyConfigurationValidationResponseMapper.FromResult(invalid);
         AssertEx.False(validationResponse.SourceFiles is string[], "Validation API source files should not expose a mutable array.");
         AssertEx.False(validationResponse.Errors is string[], "Validation API errors should not expose a mutable array.");
@@ -537,6 +577,10 @@ internal static class ConfigurationTests
         AssertEx.False(directValidationResponse.SourceFiles is string[], "Direct validation API source files should not expose a mutable array.");
         AssertEx.False(directValidationResponse.Errors is string[], "Direct validation API errors should not expose a mutable array.");
         AssertEx.False(directValidationResponse.FileErrors is ProxyConfigurationFileErrorResponse[], "Direct validation API file errors should not expose a mutable array.");
+    }
+
+    private static void VerifyReloadResponseCopies(ProxyConfigurationReloadResult<ProxyConfigurationProjection> apiReloadFailed)
+    {
         var reloadResponse = ProxyConfigurationReloadResponseMapper.FromResult(apiReloadFailed);
         AssertEx.False(reloadResponse.Errors is string[], "Reload API errors should not expose a mutable array.");
         AssertEx.False(reloadResponse.FileErrors is ProxyConfigurationFileErrorResponse[], "Reload API file errors should not expose a mutable array.");
@@ -563,6 +607,10 @@ internal static class ConfigurationTests
         AssertEx.Equal("sites/home.json", directReloadResponse.FileErrors[0].Path);
         AssertEx.False(directReloadResponse.Errors is string[], "Direct reload API errors should not expose a mutable array.");
         AssertEx.False(directReloadResponse.FileErrors is ProxyConfigurationFileErrorResponse[], "Direct reload API file errors should not expose a mutable array.");
+    }
+
+    private static void VerifyDiscoveryResponseCopies(ProxyConfigurationDiscovery discovery)
+    {
         var discoveryResponse = ProxyConfigurationDiscoveryResponseMapper.FromDiscovery(discovery);
         AssertEx.False(discoveryResponse.Files is ProxyConfigurationFileDiscoveryResponse[], "Discovery API files should not expose a mutable array.");
         AssertEx.False(discoveryResponse.CreatedPaths is string[], "Discovery API created paths should not expose a mutable array.");
@@ -1826,6 +1874,11 @@ internal static class ConfigurationTests
         AssertEx.Equal(1, projection.Version);
         AssertEx.Equal("home", projection.Routes[0].Name);
         AssertEx.Equal(1, projection.SourceFiles.Count);
+        VerifyInspectionUsesReadModels(projection);
+    }
+
+    private static void VerifyInspectionUsesReadModels(ProxyConfigurationProjection projection)
+    {
         object acme = projection.Acme;
         AssertEx.True(acme is RuntimeAcmeProjection);
         AssertEx.False(acme is RuntimeAcmeOptions);
