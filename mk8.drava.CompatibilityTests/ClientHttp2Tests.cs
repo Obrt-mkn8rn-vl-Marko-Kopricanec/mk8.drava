@@ -38,9 +38,9 @@ internal static class ClientHttp2Tests
             {
                 using var client = new TcpClient();
                 await client.ConnectAsync(IPAddress.Loopback, proxyPort, timeout.Token).ConfigureAwait(false);
-                var tls = new SslStream(client.GetStream(), false, (_, _, _, _) => true);
+                var tls = new SslStream(client.GetStream(), false, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx")));
                 await using var tlsDisposal = tls.ConfigureAwait(false);
-                await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "home.test", EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13, ApplicationProtocols = [SslApplicationProtocol.Http11] }, timeout.Token).ConfigureAwait(false);
+                await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "home.test", EnabledSslProtocols = SslProtocols.None, ApplicationProtocols = [SslApplicationProtocol.Http11] }, timeout.Token).ConfigureAwait(false);
                 AssertEx.Equal(SslApplicationProtocol.Http11, tls.NegotiatedApplicationProtocol);
                 await tls.WriteAsync(Encoding.ASCII.GetBytes("GET /http1 HTTP/1.1\r\nHost: home.test\r\nConnection: close\r\n\r\n"), timeout.Token).ConfigureAwait(false);
                 var response = await ReadToEndAsync(tls, timeout.Token).ConfigureAwait(false);
@@ -176,14 +176,14 @@ internal static class ClientHttp2Tests
             await host.StartAsync(timeout.Token).ConfigureAwait(false);
             try
             {
-                var activeClient = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
+                var activeClient = (await Http2TestClient.ConnectAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx")), timeout.Token).ConfigureAwait(false));
                 await using var activeClientDisposal = activeClient.ConfigureAwait(false);
                 var before = await activeClient.SendRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/before-reload" }, timeout.Token).ConfigureAwait(false);
                 var beforeSubject = activeClient.RemoteCertificateSubject;
                 TestCertificates.WriteSelfSignedPfx(Path.Combine(dataDirectory, "certs", "home.pfx"), "home-reloaded.test");
                 var reload = await host.Services.GetRequiredService<IProxyConfigurationReloadOperations<ProxyConfigurationProjection>>().ReloadAsync(timeout.Token).ConfigureAwait(false);
                 var afterOnActiveConnection = await activeClient.SendRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/after-reload-active" }, timeout.Token).ConfigureAwait(false);
-                var newClient = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
+                var newClient = (await Http2TestClient.ConnectAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx"), allowNameMismatch: true), timeout.Token).ConfigureAwait(false));
                 await using var newClientDisposal = newClient.ConfigureAwait(false);
                 var newSubject = newClient.RemoteCertificateSubject;
                 var afterOnNewConnection = await newClient.SendRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/after-reload-new" }, timeout.Token).ConfigureAwait(false);
@@ -213,18 +213,19 @@ internal static class ClientHttp2Tests
         try
         {
             WriteCertificateConfig(dataDirectory);
+            var originalCertificate = TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx"));
             SiteWithStaticRoute(dataDirectory, proxyPort, 0);
             using var host = BuildProxyHost(dataDirectory);
             await host.StartAsync(timeout.Token).ConfigureAwait(false);
             try
             {
-                var beforeClient = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
+                var beforeClient = (await Http2TestClient.ConnectAsync(proxyPort, originalCertificate, timeout.Token).ConfigureAwait(false));
                 await using var beforeClientDisposal = beforeClient.ConfigureAwait(false);
                 var beforeSubject = beforeClient.RemoteCertificateSubject;
                 TestCertificates.WriteSelfSignedPfx(Path.Combine(dataDirectory, "certs", "home.pfx"), "home-reloaded.test");
                 await File.WriteAllTextAsync(Path.Combine(dataDirectory, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
                 var reload = await host.Services.GetRequiredService<IProxyConfigurationReloadOperations<ProxyConfigurationProjection>>().ReloadAsync(timeout.Token).ConfigureAwait(false);
-                var afterClient = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
+                var afterClient = (await Http2TestClient.ConnectAsync(proxyPort, originalCertificate, timeout.Token).ConfigureAwait(false));
                 await using var afterClientDisposal = afterClient.ConfigureAwait(false);
                 var afterSubject = afterClient.RemoteCertificateSubject;
                 var response = await afterClient.SendRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/after-failed-reload" }, timeout.Token).ConfigureAwait(false);
@@ -302,7 +303,7 @@ internal static class ClientHttp2Tests
             await host.StartAsync(timeout.Token).ConfigureAwait(false);
             try
             {
-                var client = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
+                var client = (await Http2TestClient.ConnectAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx")), timeout.Token).ConfigureAwait(false));
                 await using var clientDisposal = client.ConfigureAwait(false);
                 var first = await client.SendRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/cache" }, timeout.Token).ConfigureAwait(false);
                 var second = await client.SendRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/cache" }, timeout.Token).ConfigureAwait(false);
@@ -342,7 +343,7 @@ internal static class ClientHttp2Tests
             await host.StartAsync(timeout.Token).ConfigureAwait(false);
             try
             {
-                var client = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
+                var client = (await Http2TestClient.ConnectAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx")), timeout.Token).ConfigureAwait(false));
                 await using var clientDisposal = client.ConfigureAwait(false);
                 var response = await client.SendRequestAsync(new Http2RequestSpec { Authority = "home.test", Path = "/retry" }, timeout.Token).ConfigureAwait(false);
                 var upstreamRequest = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
@@ -465,7 +466,7 @@ internal static class ClientHttp2Tests
                 string upstreamRequest;
                 SslApplicationProtocol negotiatedProtocol;
                 {
-                    var client = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
+                    var client = (await Http2TestClient.ConnectAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx")), timeout.Token).ConfigureAwait(false));
                     await using var clientDisposal = client.ConfigureAwait(false);
                     var request = new Http2RequestSpec();
                     configureRequest(request);
@@ -507,7 +508,7 @@ internal static class ClientHttp2Tests
             {
                 T value;
                 {
-                    var client = (await Http2TestClient.ConnectAsync(proxyPort, timeout.Token).ConfigureAwait(false));
+                    var client = (await Http2TestClient.ConnectAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx")), timeout.Token).ConfigureAwait(false));
                     await using var clientDisposal = client.ConfigureAwait(false);
                     value = await exercise(client, host, timeout.Token).ConfigureAwait(false);
                 }
@@ -1055,12 +1056,12 @@ internal static class ClientHttp2Tests
             }
         }
 
-        public static async Task<Http2TestClient> ConnectAsync(int port, CancellationToken cancellationToken)
+        public static async Task<Http2TestClient> ConnectAsync(int port, RemoteCertificateValidationCallback certificateValidation, CancellationToken cancellationToken)
         {
             var client = new TcpClient();
             await client.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
-            var stream = new SslStream(client.GetStream(), false, (_, _, _, _) => true);
-            await stream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "home.test", EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13, ApplicationProtocols = [SslApplicationProtocol.Http2] }, cancellationToken).ConfigureAwait(false);
+            var stream = new SslStream(client.GetStream(), false, certificateValidation);
+            await stream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "home.test", EnabledSslProtocols = SslProtocols.None, ApplicationProtocols = [SslApplicationProtocol.Http2] }, cancellationToken).ConfigureAwait(false);
             var http2 = new Http2TestClient(client, stream);
             await http2.InitializeAsync(cancellationToken).ConfigureAwait(false);
             return http2;

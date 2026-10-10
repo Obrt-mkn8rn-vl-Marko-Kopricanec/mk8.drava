@@ -1,3 +1,4 @@
+using System.Net.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
@@ -5,6 +6,24 @@ using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 namespace Mk8.Drava.CompatibilityTests;
 internal static class TestCertificates
 {
+    // Pin only the generated leaf for this owned loopback fixture; no system trust-store mutation.
+    public static RemoteCertificateValidationCallback PinServerCertificate(string path, string? password = null, bool allowNameMismatch = false)
+    {
+        using var expected = X509CertificateLoader.LoadPkcs12FromFile(path, password, X509KeyStorageFlags.EphemeralKeySet);
+        var fingerprint = expected.GetCertHash(HashAlgorithmName.SHA256);
+        var notBefore = expected.NotBefore.ToUniversalTime();
+        var notAfter = expected.NotAfter.ToUniversalTime();
+        var allowedErrors = SslPolicyErrors.RemoteCertificateChainErrors;
+        if (allowNameMismatch) allowedErrors |= SslPolicyErrors.RemoteCertificateNameMismatch;
+        return (_, certificate, _, errors) =>
+        {
+            if (certificate is null || (errors & ~allowedErrors) != SslPolicyErrors.None) return false;
+            var now = DateTime.UtcNow;
+            return now >= notBefore && now <= notAfter
+                && CryptographicOperations.FixedTimeEquals(fingerprint, certificate.GetCertHash(HashAlgorithmName.SHA256));
+        };
+    }
+
     public static void WriteSelfSignedPfx(string path, string subjectName, string? password = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

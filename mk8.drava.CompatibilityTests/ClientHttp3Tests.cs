@@ -100,7 +100,7 @@ internal static partial class ClientHttp3Tests
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "tcp", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var response = await SendHttp1TlsRequestAsync(port, "/alt", timeout.Token).ConfigureAwait(false);
+            var response = await SendHttp1TlsRequestAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "/alt", timeout.Token).ConfigureAwait(false);
             var status = new ProxyStatusController(host.Services.GetRequiredService<ProxyStatusAdministrationService>())
             {
                 ControllerContext = new ControllerContext
@@ -203,7 +203,7 @@ internal static partial class ClientHttp3Tests
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             var before = await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
             var beforeSubject = "";
-            var activeConnection = (await ConnectHttp3Async(port, timeout.Token, subject => beforeSubject = subject).ConfigureAwait(false));
+            var activeConnection = (await ConnectHttp3Async(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), timeout.Token, subject => beforeSubject = subject).ConfigureAwait(false));
             await using var activeConnectionDisposal = activeConnection.ConfigureAwait(false);
             {
                 var beforeStream = (await activeConnection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, timeout.Token).ConfigureAwait(false));
@@ -227,7 +227,7 @@ internal static partial class ClientHttp3Tests
             }
 
             var afterSubject = "";
-            var afterResponse = await SendHttp3RequestAsync(port, "GET", "/after-cert", timeout.Token, certificateSubjectObserver: subject => afterSubject = subject).ConfigureAwait(false);
+            var afterResponse = await SendHttp3RequestAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret", allowNameMismatch: true), "GET", "/after-cert", timeout.Token, certificateSubjectObserver: subject => afterSubject = subject).ConfigureAwait(false);
             ProxyConfigurationReloadResultAssertions.Reloaded(reload, string.Join("; ", reload.Errors));
             AssertEx.Equal("200", HeaderValue(afterResponse.Headers, ":status"));
             AssertEx.Equal("cert-live", afterResponse.Body);
@@ -252,6 +252,7 @@ internal static partial class ClientHttp3Tests
         using var temp = TemporaryDirectory.Create();
         var port = GetFreeTcpUdpPort();
         WriteCertificateConfig(temp.Path);
+        var originalCertificate = TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret");
         WriteHttp3Site(temp.Path, port, "http1AndHttp3", staticBody: "cert-live");
         using var host = BuildProxyHost(temp.Path);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -261,13 +262,13 @@ internal static partial class ClientHttp3Tests
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             var before = await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
             var beforeSubject = "";
-            var beforeResponse = await SendHttp3RequestAsync(port, "GET", "/before-failed-cert", timeout.Token, certificateSubjectObserver: subject => beforeSubject = subject).ConfigureAwait(false);
+            var beforeResponse = await SendHttp3RequestAsync(port, originalCertificate, "GET", "/before-failed-cert", timeout.Token, certificateSubjectObserver: subject => beforeSubject = subject).ConfigureAwait(false);
             TestCertificates.WriteSelfSignedPfx(Path.Combine(temp.Path, "certs", "home.pfx"), "localhost-reloaded", "secret");
             await File.WriteAllTextAsync(Path.Combine(temp.Path, "config", "sites", "broken.json"), "{ nope").ConfigureAwait(false);
             var reload = await host.Services.GetRequiredService<IProxyConfigurationReloadOperations<ProxyConfigurationProjection>>().ReloadAsync(timeout.Token).ConfigureAwait(false);
             var after = await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
             var afterSubject = "";
-            var afterResponse = await SendHttp3RequestAsync(port, "GET", "/after-failed-cert", timeout.Token, certificateSubjectObserver: subject => afterSubject = subject).ConfigureAwait(false);
+            var afterResponse = await SendHttp3RequestAsync(port, originalCertificate, "GET", "/after-failed-cert", timeout.Token, certificateSubjectObserver: subject => afterSubject = subject).ConfigureAwait(false);
             ProxyConfigurationReloadResultAssertions.Failed(reload);
             AssertEx.Equal("200", HeaderValue(beforeResponse.Headers, ":status"));
             AssertEx.Equal("200", HeaderValue(afterResponse.Headers, ":status"));
@@ -368,7 +369,7 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "tcp", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var response = await SendHttp1TlsRequestAsync(port, "/alt", timeout.Token).ConfigureAwait(false);
+            var response = await SendHttp1TlsRequestAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "/alt", timeout.Token).ConfigureAwait(false);
             AssertEx.False(response.Contains("Alt-Svc:", StringComparison.OrdinalIgnoreCase));
         }
         finally
@@ -395,7 +396,7 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var response = await SendHttp1TlsRequestAsync(port, "/alt", timeout.Token).ConfigureAwait(false);
+            var response = await SendHttp1TlsRequestAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "/alt", timeout.Token).ConfigureAwait(false);
             var status = new ProxyStatusController(host.Services.GetRequiredService<ProxyStatusAdministrationService>())
             {
                 ControllerContext = new ControllerContext
@@ -429,7 +430,7 @@ internal static partial class ClientHttp3Tests
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "tcp", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Failed, timeout.Token).ConfigureAwait(false);
-            var response = await SendHttp1TlsRequestAsync(port, "/alt", timeout.Token).ConfigureAwait(false);
+            var response = await SendHttp1TlsRequestAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "/alt", timeout.Token).ConfigureAwait(false);
             AssertEx.False(response.Contains("Alt-Svc:", StringComparison.OrdinalIgnoreCase), response);
         }
         finally
@@ -595,7 +596,7 @@ internal static partial class ClientHttp3Tests
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
             for (var index = 0; index < 3; index++)
             {
-                var response = await SendHttp3RequestAsync(port, "GET", $"/missing-{index}", timeout.Token).ConfigureAwait(false);
+                var response = await SendHttp3RequestAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "GET", $"/missing-{index}", timeout.Token).ConfigureAwait(false);
                 AssertEx.Equal("404", HeaderValue(response.Headers, ":status"));
                 AssertEx.Equal("Not Found", response.Body);
             }
@@ -717,7 +718,7 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var connection = (await ConnectHttp3Async(proxyPort, timeout.Token).ConfigureAwait(false));
+            var connection = (await ConnectHttp3Async(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), timeout.Token).ConfigureAwait(false));
             await using var connectionDisposal = connection.ConfigureAwait(false);
             var stream = (await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, timeout.Token).ConfigureAwait(false));
             await using var streamDisposal = stream.ConfigureAwait(false);
@@ -769,9 +770,9 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var first = await SendHttp3RequestAsync(proxyPort, "GET", "/cache?x=1", timeout.Token).ConfigureAwait(false);
+            var first = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "GET", "/cache?x=1", timeout.Token).ConfigureAwait(false);
             var upstreamRequest = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
-            var second = await SendHttp3RequestAsync(proxyPort, "GET", "/cache?x=1", timeout.Token).ConfigureAwait(false);
+            var second = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "GET", "/cache?x=1", timeout.Token).ConfigureAwait(false);
             var metrics = host.Services.GetRequiredService<ProxyMetrics>().Snapshot();
             AssertEx.Equal("cached", first.Body);
             AssertEx.Equal("cached", second.Body);
@@ -814,8 +815,8 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var first = await SendHttp3RequestAsync(proxyPort, "GET", "/large", timeout.Token).ConfigureAwait(false);
-            var second = await SendHttp3RequestAsync(proxyPort, "GET", "/large", timeout.Token).ConfigureAwait(false);
+            var first = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "GET", "/large", timeout.Token).ConfigureAwait(false);
+            var second = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "GET", "/large", timeout.Token).ConfigureAwait(false);
             var upstreamRequests = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
             AssertEx.Equal("first-large", first.Body);
             AssertEx.Equal("second-big", second.Body);
@@ -850,7 +851,7 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var response = await SendHttp3RequestAsync(proxyPort, "GET", "/retry", timeout.Token).ConfigureAwait(false);
+            var response = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "GET", "/retry", timeout.Token).ConfigureAwait(false);
             var upstreamRequest = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
             var metrics = host.Services.GetRequiredService<ProxyMetrics>().Snapshot();
             AssertEx.Equal("200", HeaderValue(response.Headers, ":status"));
@@ -953,9 +954,9 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var put = await SendHttp3RequestAsync(proxyPort, "PUT", "/items/1", timeout.Token, body: "put-body").ConfigureAwait(false);
-            var patch = await SendHttp3RequestAsync(proxyPort, "PATCH", "/items/1", timeout.Token, body: "patch-body").ConfigureAwait(false);
-            var delete = await SendHttp3RequestAsync(proxyPort, "DELETE", "/items/1", timeout.Token, body: "delete-body").ConfigureAwait(false);
+            var put = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "PUT", "/items/1", timeout.Token, body: "put-body").ConfigureAwait(false);
+            var patch = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "PATCH", "/items/1", timeout.Token, body: "patch-body").ConfigureAwait(false);
+            var delete = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "DELETE", "/items/1", timeout.Token, body: "delete-body").ConfigureAwait(false);
             var upstreamRequests = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
             AssertEx.Equal("put", put.Body);
             AssertEx.Equal("patch", patch.Body);
@@ -1062,7 +1063,7 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var response = await SendHttp3RequestAsync(proxyPort, "GET", "/retry-body", timeout.Token, body: "not-replayable").ConfigureAwait(false);
+            var response = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), "GET", "/retry-body", timeout.Token, body: "not-replayable").ConfigureAwait(false);
             var metrics = host.Services.GetRequiredService<ProxyMetrics>().Snapshot();
             var status = HeaderValue(response.Headers, ":status");
             AssertEx.True(status is "502" or "504", status);
@@ -1174,7 +1175,7 @@ internal static partial class ClientHttp3Tests
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
         await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-        var connection = (await ConnectHttp3Async(port, timeout.Token).ConfigureAwait(false));
+        var connection = (await ConnectHttp3Async(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), timeout.Token).ConfigureAwait(false));
         await using var connectionDisposal = connection.ConfigureAwait(false);
         {
             var badStream = (await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, timeout.Token).ConfigureAwait(false));
@@ -1216,7 +1217,7 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var connection = (await ConnectHttp3Async(port, timeout.Token).ConfigureAwait(false));
+            var connection = (await ConnectHttp3Async(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), timeout.Token).ConfigureAwait(false));
             await using var connectionDisposal = connection.ConfigureAwait(false);
             var badStream = (await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, timeout.Token).ConfigureAwait(false));
             await using var badStreamDisposal = badStream.ConfigureAwait(false);
@@ -1277,7 +1278,7 @@ internal static partial class ClientHttp3Tests
         {
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var connection = (await ConnectHttp3Async(port, timeout.Token).ConfigureAwait(false));
+            var connection = (await ConnectHttp3Async(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), timeout.Token).ConfigureAwait(false));
             await using var connectionDisposal = connection.ConfigureAwait(false);
             for (var index = 0; index < 8; index++)
             {
@@ -1626,7 +1627,7 @@ internal static partial class ClientHttp3Tests
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
         await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-        var response = await SendHttp3RequestAsync(port, method, target, timeout.Token, includeBodyData: includeBodyData, dataBeforeHeaders: dataBeforeHeaders, settingsAfterHeaders: settingsAfterHeaders, goAwayAfterHeaders: goAwayAfterHeaders, duplicateHeadersAfterHeaders: duplicateHeadersAfterHeaders, unknownFrameBeforeHeaders: unknownFrameBeforeHeaders, maxPushAfterHeaders: maxPushAfterHeaders).ConfigureAwait(false);
+        var response = await SendHttp3RequestAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), method, target, timeout.Token, includeBodyData: includeBodyData, dataBeforeHeaders: dataBeforeHeaders, settingsAfterHeaders: settingsAfterHeaders, goAwayAfterHeaders: goAwayAfterHeaders, duplicateHeadersAfterHeaders: duplicateHeadersAfterHeaders, unknownFrameBeforeHeaders: unknownFrameBeforeHeaders, maxPushAfterHeaders: maxPushAfterHeaders).ConfigureAwait(false);
         var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
         await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
         var metrics = metricsStore.Snapshot();
@@ -1646,7 +1647,7 @@ internal static partial class ClientHttp3Tests
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
         await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-        var response = await SendHttp3RawHeaderBlockAsync(port, headerBlock, timeout.Token).ConfigureAwait(false);
+        var response = await SendHttp3RawHeaderBlockAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), headerBlock, timeout.Token).ConfigureAwait(false);
         var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
         await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
         var metrics = metricsStore.Snapshot();
@@ -1666,7 +1667,7 @@ internal static partial class ClientHttp3Tests
         await host.StartAsync(timeout.Token).ConfigureAwait(false);
         var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
         await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-        var response = await SendHttp3RequestAsync(port, headers, timeout.Token).ConfigureAwait(false);
+        var response = await SendHttp3RequestAsync(port, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), headers, timeout.Token).ConfigureAwait(false);
         var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
         await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
         var metrics = metricsStore.Snapshot();
@@ -1690,7 +1691,7 @@ internal static partial class ClientHttp3Tests
             await host.StartAsync(timeout.Token).ConfigureAwait(false);
             var runtime = host.Services.GetRequiredService<ProxyRuntimeState>();
             await WaitForListenerAsync(runtime, "main", "quic", ProxyListenerState.Active, timeout.Token).ConfigureAwait(false);
-            var response = await SendHttp3RequestAsync(proxyPort, method, target, timeout.Token, body: requestBody).ConfigureAwait(false);
+            var response = await SendHttp3RequestAsync(proxyPort, TestCertificates.PinServerCertificate(Path.Combine(temp.Path, "certs", "home.pfx"), "secret"), method, target, timeout.Token, body: requestBody).ConfigureAwait(false);
             var upstreamRequest = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
             var metricsStore = host.Services.GetRequiredService<ProxyMetrics>();
             await WaitForHttp3StreamsToDrainAsync(metricsStore, timeout.Token).ConfigureAwait(false);
@@ -1708,9 +1709,9 @@ internal static partial class ClientHttp3Tests
         }
     }
 
-    private static async Task<Http3Response> SendHttp3RequestAsync(int port, string method, string target, CancellationToken cancellationToken, bool includeBodyData = false, bool dataBeforeHeaders = false, string? body = null, bool settingsAfterHeaders = false, bool goAwayAfterHeaders = false, bool duplicateHeadersAfterHeaders = false, bool unknownFrameBeforeHeaders = false, bool maxPushAfterHeaders = false, Action<string>? certificateSubjectObserver = null)
+    private static async Task<Http3Response> SendHttp3RequestAsync(int port, RemoteCertificateValidationCallback certificateValidation, string method, string target, CancellationToken cancellationToken, bool includeBodyData = false, bool dataBeforeHeaders = false, string? body = null, bool settingsAfterHeaders = false, bool goAwayAfterHeaders = false, bool duplicateHeadersAfterHeaders = false, bool unknownFrameBeforeHeaders = false, bool maxPushAfterHeaders = false, Action<string>? certificateSubjectObserver = null)
     {
-        var connection = (await ConnectHttp3Async(port, cancellationToken, certificateSubjectObserver).ConfigureAwait(false));
+        var connection = (await ConnectHttp3Async(port, certificateValidation, cancellationToken, certificateSubjectObserver).ConfigureAwait(false));
         await using var connectionDisposal = connection.ConfigureAwait(false);
         var stream = (await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false));
         await using var streamDisposal = stream.ConfigureAwait(false);
@@ -1721,9 +1722,9 @@ internal static partial class ClientHttp3Tests
         return response;
     }
 
-    private static async Task<Http3Response> SendHttp3RequestAsync(int port, IReadOnlyList<ProxyHeaderField> headers, CancellationToken cancellationToken)
+    private static async Task<Http3Response> SendHttp3RequestAsync(int port, RemoteCertificateValidationCallback certificateValidation, IReadOnlyList<ProxyHeaderField> headers, CancellationToken cancellationToken)
     {
-        var connection = (await ConnectHttp3Async(port, cancellationToken).ConfigureAwait(false));
+        var connection = (await ConnectHttp3Async(port, certificateValidation, cancellationToken).ConfigureAwait(false));
         await using var connectionDisposal = connection.ConfigureAwait(false);
         var stream = (await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false));
         await using var streamDisposal = stream.ConfigureAwait(false);
@@ -1734,9 +1735,9 @@ internal static partial class ClientHttp3Tests
         return response;
     }
 
-    private static async Task<Http3Response> SendHttp3RawHeaderBlockAsync(int port, byte[] headerBlock, CancellationToken cancellationToken)
+    private static async Task<Http3Response> SendHttp3RawHeaderBlockAsync(int port, RemoteCertificateValidationCallback certificateValidation, byte[] headerBlock, CancellationToken cancellationToken)
     {
-        var connection = (await ConnectHttp3Async(port, cancellationToken).ConfigureAwait(false));
+        var connection = (await ConnectHttp3Async(port, certificateValidation, cancellationToken).ConfigureAwait(false));
         await using var connectionDisposal = connection.ConfigureAwait(false);
         var stream = (await connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken).ConfigureAwait(false));
         await using var streamDisposal = stream.ConfigureAwait(false);
@@ -1866,10 +1867,11 @@ internal static partial class ClientHttp3Tests
         return DecodeHttp3Response(await ReadToEndAsync(stream, cancellationToken).ConfigureAwait(false));
     }
 
-    private static ValueTask<QuicConnection> ConnectHttp3Async(int port, CancellationToken cancellationToken, Action<string>? certificateSubjectObserver = null)
+    private static ValueTask<QuicConnection> ConnectHttp3Async(int port, RemoteCertificateValidationCallback certificateValidation, CancellationToken cancellationToken, Action<string>? certificateSubjectObserver = null)
     {
-        return QuicConnection.ConnectAsync(new QuicClientConnectionOptions { RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, port), ClientAuthenticationOptions = new SslClientAuthenticationOptions { TargetHost = "localhost", ApplicationProtocols = [Http3Alpn], RemoteCertificateValidationCallback = (_, certificate, _, _) =>
+        return QuicConnection.ConnectAsync(new QuicClientConnectionOptions { RemoteEndPoint = new IPEndPoint(IPAddress.Loopback, port), ClientAuthenticationOptions = new SslClientAuthenticationOptions { TargetHost = "localhost", ApplicationProtocols = [Http3Alpn], RemoteCertificateValidationCallback = (sender, certificate, chain, errors) =>
         {
+            if (!certificateValidation(sender, certificate, chain, errors)) return false;
             if (certificate is not null && certificateSubjectObserver is not null)
             {
                 certificateSubjectObserver(certificate.Subject);
@@ -1879,13 +1881,13 @@ internal static partial class ClientHttp3Tests
         } }, MaxInboundBidirectionalStreams = 4, MaxInboundUnidirectionalStreams = 4, IdleTimeout = TimeSpan.FromSeconds(5), HandshakeTimeout = TimeSpan.FromSeconds(5), DefaultCloseErrorCode = 0x100, DefaultStreamErrorCode = 0x100 }, cancellationToken);
     }
 
-    private static async Task<string> SendHttp1TlsRequestAsync(int port, string target, CancellationToken cancellationToken)
+    private static async Task<string> SendHttp1TlsRequestAsync(int port, RemoteCertificateValidationCallback certificateValidation, string target, CancellationToken cancellationToken)
     {
         using var client = new TcpClient();
         await client.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
-        var tls = new SslStream(client.GetStream(), false, static (_, _, _, _) => true);
+        var tls = new SslStream(client.GetStream(), false, certificateValidation);
         await using var tlsDisposal = tls.ConfigureAwait(false);
-        await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "localhost", EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13, ApplicationProtocols = [SslApplicationProtocol.Http11] }, cancellationToken).ConfigureAwait(false);
+        await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "localhost", EnabledSslProtocols = SslProtocols.None, ApplicationProtocols = [SslApplicationProtocol.Http11] }, cancellationToken).ConfigureAwait(false);
         await tls.WriteAsync(Encoding.ASCII.GetBytes($"GET {target} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"), cancellationToken).ConfigureAwait(false);
         return Encoding.ASCII.GetString(await ReadToEndAsync(tls, cancellationToken).ConfigureAwait(false));
     }

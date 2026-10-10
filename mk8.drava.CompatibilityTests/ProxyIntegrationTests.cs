@@ -788,7 +788,7 @@ internal static class ProxyIntegrationTests
             await host.StartAsync(timeout.Token).ConfigureAwait(false);
             using var client = new TcpClient();
             await client.ConnectAsync(IPAddress.Loopback, proxyPort, timeout.Token).ConfigureAwait(false);
-            var tlsStream = new SslStream(client.GetStream(), false, (_, _, _, _) => true);
+            var tlsStream = new SslStream(client.GetStream(), false, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx")));
             await using var tlsStreamDisposal = tlsStream.ConfigureAwait(false);
             try
             {
@@ -1457,7 +1457,7 @@ internal static class ProxyIntegrationTests
                 await client.ConnectAsync(IPAddress.Loopback, proxyPort, timeout.Token).ConfigureAwait(false);
                 if (https)
                 {
-                    var tlsStream = new SslStream(client.GetStream(), false, (_, _, _, _) => true);
+                    var tlsStream = new SslStream(client.GetStream(), false, TestCertificates.PinServerCertificate(Path.Combine(dataDirectory, "certs", "home.pfx")));
                     await using var tlsStreamDisposal = tlsStream.ConfigureAwait(false);
                     await tlsStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "home.test" }, timeout.Token).ConfigureAwait(false);
                     clientObservation = await clientHandler(tlsStream, timeout.Token).ConfigureAwait(false);
@@ -1676,7 +1676,9 @@ internal static class ProxyIntegrationTests
             {
                 using var client = new TcpClient();
                 await client.ConnectAsync(IPAddress.Loopback, proxyPort, timeout.Token).ConfigureAwait(false);
-                var tlsStream = new SslStream(client.GetStream(), false, (_, _, _, _) => true);
+                var tlsStream = new SslStream(client.GetStream(), false, TestCertificates.PinServerCertificate(
+                    Path.Combine(dataDirectory, "certs", string.Equals(targetHost, "alt.test", StringComparison.OrdinalIgnoreCase) && configureAltSni ? "alt.pfx" : "home.pfx"),
+                    allowNameMismatch: string.IsNullOrEmpty(targetHost) || string.Equals(targetHost, "unmatched.test", StringComparison.Ordinal)));
                 await using var tlsStreamDisposal = tlsStream.ConfigureAwait(false);
                 await tlsStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = targetHost }, timeout.Token).ConfigureAwait(false);
                 using var remoteCertificate = new X509Certificate2(tlsStream.RemoteCertificate!);

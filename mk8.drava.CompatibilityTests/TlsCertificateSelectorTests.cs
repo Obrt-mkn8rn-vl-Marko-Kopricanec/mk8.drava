@@ -1,9 +1,43 @@
+using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests;
 internal static class TlsCertificateSelectorTests
 {
+    public static void FixtureCertificatePinRejectsUnexpectedMissingExpiredAndWrongNameCertificates()
+    {
+        using var temp = new CertificatePinFixtureDirectory();
+        var path = Path.Combine(temp.Path, "expected.pfx");
+        TestCertificates.WriteSelfSignedPfx(path, "pin.test");
+        using var expected = X509CertificateLoader.LoadPkcs12FromFile(path, password: null, X509KeyStorageFlags.EphemeralKeySet);
+        using var unrelated = Certificate("pin.test");
+        var validate = TestCertificates.PinServerCertificate(path);
+        var sender = new object();
+        AssertEx.True(validate(sender, expected, chain: null, SslPolicyErrors.RemoteCertificateChainErrors));
+        AssertEx.False(validate(sender, unrelated, chain: null, SslPolicyErrors.RemoteCertificateChainErrors));
+        AssertEx.False(validate(sender, certificate: null, chain: null, SslPolicyErrors.RemoteCertificateNotAvailable));
+        AssertEx.False(validate(sender, expected, chain: null, SslPolicyErrors.RemoteCertificateNameMismatch));
+        var selectionOnly = TestCertificates.PinServerCertificate(path, allowNameMismatch: true);
+        AssertEx.True(selectionOnly(sender, expected, chain: null, SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateChainErrors));
+        AssertEx.False(selectionOnly(sender, unrelated, chain: null, SslPolicyErrors.RemoteCertificateNameMismatch));
+        // Overwriting fixture storage never changes an already captured certificate pin.
+        TestCertificates.WriteSelfSignedPfx(path, "pin.test");
+        using var replaced = X509CertificateLoader.LoadPkcs12FromFile(path, password: null, X509KeyStorageFlags.EphemeralKeySet);
+        AssertEx.True(validate(sender, expected, chain: null, SslPolicyErrors.RemoteCertificateChainErrors));
+        AssertEx.False(validate(sender, replaced, chain: null, SslPolicyErrors.RemoteCertificateChainErrors));
+        var expiredPath = Path.Combine(temp.Path, "expired.pfx");
+        File.WriteAllBytes(expiredPath, TestCertificates.CreateSelfSignedPfxBytesForValidity("pin.test", password: null,
+            DateTimeOffset.UtcNow.AddDays(-10), DateTimeOffset.UtcNow.AddDays(-5)));
+        using var expired = X509CertificateLoader.LoadPkcs12FromFile(expiredPath, password: null, X509KeyStorageFlags.EphemeralKeySet);
+        AssertEx.False(TestCertificates.PinServerCertificate(expiredPath)(sender, expired, chain: null, SslPolicyErrors.RemoteCertificateChainErrors));
+        var futurePath = Path.Combine(temp.Path, "future.pfx");
+        File.WriteAllBytes(futurePath, TestCertificates.CreateSelfSignedPfxBytesForValidity("pin.test", password: null,
+            DateTimeOffset.UtcNow.AddDays(5), DateTimeOffset.UtcNow.AddDays(10)));
+        using var future = X509CertificateLoader.LoadPkcs12FromFile(futurePath, password: null, X509KeyStorageFlags.EphemeralKeySet);
+        AssertEx.False(TestCertificates.PinServerCertificate(futurePath)(sender, future, chain: null, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
     public static void RuntimeCertificateFactoryBuildsManualAndAcmeCertificates()
     {
         using var manualCertificate = Certificate("manual.test");
