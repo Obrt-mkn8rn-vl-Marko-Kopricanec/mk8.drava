@@ -1052,7 +1052,6 @@ internal sealed partial class Http2ClientConnection : IDisposable
         }
     }
 
-    private readonly record struct HeaderField(string Name, string Value);
     private readonly record struct Http2Frame(Http2FrameType Type, byte Flags, int StreamId, ReadOnlyMemory<byte> Payload);
     private enum Http2FrameType : byte
     {

@@ -1311,21 +1311,14 @@ internal static class ClientHttp2Tests
                 WriteLiteralWithIndexedName(memory, 4, request.Path);
             }
 
-            foreach (var header in request.Headers)
+            foreach (var (name, value) in request.Headers)
             {
-                if (header.Name.StartsWith(':'))
-                {
-                    WriteLiteral(memory, header.Name, header.Value);
-                }
-                else
-                {
-                    WriteLiteral(memory, header.Name, header.Value);
-                }
+                WriteLiteral(memory, name, value);
             }
 
-            foreach (var header in request.HuffmanValueHeaders)
+            foreach (var (name, value) in request.HuffmanValueHeaders)
             {
-                WriteLiteralWithHuffmanValue(memory, header.Name, header.Value);
+                WriteLiteralWithHuffmanValue(memory, name, value);
             }
 
             return memory.ToArray();

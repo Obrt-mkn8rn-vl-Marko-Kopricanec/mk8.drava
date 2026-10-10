@@ -512,7 +512,7 @@ internal static class UpstreamHttp3Tests
                         return observation;
                     }
 
-                    await WriteResponseAsync(stream, statusCode, responseHeaders, responseBody, cancellationToken, malformedResponseHeaders, closeAfterResponseHeaders).ConfigureAwait(false);
+                    await WriteResponseAsync(stream, statusCode, responseHeaders, responseBody, malformedResponseHeaders, closeAfterResponseHeaders, cancellationToken).ConfigureAwait(false);
                     return observation;
                 }
             }
@@ -598,7 +598,7 @@ internal static class UpstreamHttp3Tests
                 await Task.Delay(responseDelay.Value, streamStop).ConfigureAwait(false);
             }
 
-            await WriteResponseAsync(stream, 200, responseHeaders, responseBody, streamStop, malformedResponseHeaders: false).ConfigureAwait(false);
+            await WriteResponseAsync(stream, 200, responseHeaders, responseBody, malformedResponseHeaders: false, closeAfterHeaders: false, cancellationToken: streamStop).ConfigureAwait(false);
             resetCanRun.TrySetResult();
             if (Interlocked.Increment(ref completed) >= requestCount)
             {
@@ -751,7 +751,7 @@ internal static class UpstreamHttp3Tests
         }
     }
 
-    private static async ValueTask WriteResponseAsync(QuicStream stream, int statusCode, IReadOnlyList<(string Name, string Value)> responseHeaders, ReadOnlyMemory<byte> responseBody, CancellationToken cancellationToken, bool malformedResponseHeaders, bool closeAfterHeaders = false)
+    private static async ValueTask WriteResponseAsync(QuicStream stream, int statusCode, IReadOnlyList<(string Name, string Value)> responseHeaders, ReadOnlyMemory<byte> responseBody, bool malformedResponseHeaders, bool closeAfterHeaders, CancellationToken cancellationToken)
     {
         List<ProxyHeaderField> headers = malformedResponseHeaders ? [] : [new(":status", statusCode.ToString(System.Globalization.CultureInfo.InvariantCulture))];
         foreach (var header in responseHeaders)
