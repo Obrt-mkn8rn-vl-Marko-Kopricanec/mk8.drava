@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Mk8.Drava.Application.BLL.ControlPlane.Http1;
-public static partial class Http1RequestParser
+public static class Http1RequestParser
 {
     private abstract record Http1RequestFramingAnalysisResult
     {
@@ -104,7 +104,46 @@ public static partial class Http1RequestParser
             return false;
         }
 
-        var requestLineLength = IndexOfCrlf(requestHeadBytes);
+        if (!TryReadRequestLine(requestHeadBytes, limits, out var requestLineLength, out var methodBytes, out var targetBytes, out var versionBytes, out error))
+            return false;
+
+        List<ProxyHeaderField> headers = [];
+        List<string> contentLengthValues = [];
+        List<string> transferEncodingValues = [];
+        if (!TryReadRequestHeaders(requestHeadBytes, requestLineLength + 2, limits, headers, contentLengthValues, transferEncodingValues, out var host, out error))
+            return false;
+
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            error = Http1ParseError.MissingHost;
+            return false;
+        }
+
+        var method = Encoding.ASCII.GetString(methodBytes);
+        var target = Encoding.ASCII.GetString(targetBytes);
+        var version = Encoding.ASCII.GetString(versionBytes);
+        var path = ExtractPath(target);
+        var framingAnalysis = AnalyzeRequestFraming(contentLengthValues, transferEncodingValues);
+        if (framingAnalysis is Http1RequestFramingAnalysisResult.Rejected rejectedFraming)
+        {
+            error = rejectedFraming.Error;
+            return false;
+        }
+
+        var framing = ((Http1RequestFramingAnalysisResult.Accepted)framingAnalysis).Framing;
+        requestHead = new Http1RequestHead(method, target, path, version, host, framing, headers);
+        return true;
+    }
+
+    private static bool TryReadRequestLine(ReadOnlySpan<byte> requestHeadBytes, Http1RequestParseLimits limits,
+        out int requestLineLength, out ReadOnlySpan<byte> methodBytes, out ReadOnlySpan<byte> targetBytes,
+        out ReadOnlySpan<byte> versionBytes, out Http1ParseError error)
+    {
+        methodBytes = default;
+        targetBytes = default;
+        versionBytes = default;
+        error = Http1ParseError.None;
+        requestLineLength = IndexOfCrlf(requestHeadBytes);
         if (requestLineLength <= 0)
         {
             error = Http1ParseError.InvalidRequestLine;
@@ -133,9 +172,9 @@ public static partial class Http1RequestParser
         }
 
         secondSpace += firstSpace + 1;
-        var methodBytes = requestLine[..firstSpace];
-        var targetBytes = requestLine[(firstSpace + 1)..secondSpace];
-        var versionBytes = requestLine[(secondSpace + 1)..];
+        methodBytes = requestLine[..firstSpace];
+        targetBytes = requestLine[(firstSpace + 1)..secondSpace];
+        versionBytes = requestLine[(secondSpace + 1)..];
         if (!AsciiEquals(versionBytes, "HTTP/1.1") && !AsciiEquals(versionBytes, "HTTP/1.0"))
         {
             error = Http1ParseError.UnsupportedVersion;
@@ -154,45 +193,30 @@ public static partial class Http1RequestParser
             return false;
         }
 
-        string? host = null;
-        List<ProxyHeaderField> headers = [];
-        List<string> contentLengthValues = [];
-        List<string> transferEncodingValues = [];
-        var nextLineStart = requestLineLength + 2;
+        return true;
+    }
+
+    private static bool TryReadRequestHeaders(ReadOnlySpan<byte> requestHeadBytes, int nextLineStart, Http1RequestParseLimits limits,
+        List<ProxyHeaderField> headers, List<string> contentLengthValues, List<string> transferEncodingValues,
+        out string? host, out Http1ParseError error)
+    {
+        host = null;
+        error = Http1ParseError.None;
         while (nextLineStart < requestHeadBytes.Length)
         {
             var remaining = requestHeadBytes[nextLineStart..];
             var lineLength = IndexOfCrlf(remaining);
-            if (lineLength < 0)
-            {
-                error = Http1ParseError.InvalidHeaderLine;
-                return false;
-            }
+            if (lineLength < 0) { error = Http1ParseError.InvalidHeaderLine; return false; }
 
-            if (lineLength == 0)
-            {
-                break;
-            }
+            if (lineLength == 0) break;
 
-            if (lineLength > limits.MaxHeaderLineBytes)
-            {
-                error = Http1ParseError.HeaderLineTooLarge;
-                return false;
-            }
+            if (lineLength > limits.MaxHeaderLineBytes) { error = Http1ParseError.HeaderLineTooLarge; return false; }
 
-            if (headers.Count >= limits.MaxHeaderCount)
-            {
-                error = Http1ParseError.HeaderCountExceeded;
-                return false;
-            }
+            if (headers.Count >= limits.MaxHeaderCount) { error = Http1ParseError.HeaderCountExceeded; return false; }
 
             var headerLine = remaining[..lineLength];
             var colon = headerLine.IndexOf((byte)':');
-            if (colon <= 0)
-            {
-                error = Http1ParseError.InvalidHeaderLine;
-                return false;
-            }
+            if (colon <= 0) { error = Http1ParseError.InvalidHeaderLine; return false; }
 
             var header = new Http1Header(Trim(headerLine[..colon]), Trim(headerLine[(colon + 1)..]));
             var headerName = Encoding.ASCII.GetString(header.Name);
@@ -214,25 +238,6 @@ public static partial class Http1RequestParser
             nextLineStart += lineLength + 2;
         }
 
-        if (string.IsNullOrWhiteSpace(host))
-        {
-            error = Http1ParseError.MissingHost;
-            return false;
-        }
-
-        var method = Encoding.ASCII.GetString(methodBytes);
-        var target = Encoding.ASCII.GetString(targetBytes);
-        var version = Encoding.ASCII.GetString(versionBytes);
-        var path = ExtractPath(target);
-        var framingAnalysis = AnalyzeRequestFraming(contentLengthValues, transferEncodingValues);
-        if (framingAnalysis is Http1RequestFramingAnalysisResult.Rejected rejectedFraming)
-        {
-            error = rejectedFraming.Error;
-            return false;
-        }
-
-        var framing = ((Http1RequestFramingAnalysisResult.Accepted)framingAnalysis).Framing;
-        requestHead = new Http1RequestHead(method, target, path, version, host, framing, headers);
         return true;
     }
 
@@ -321,13 +326,13 @@ public static partial class Http1RequestParser
                 return false;
             }
 
-            var next = value * 10 + digit - (byte)'0';
-            if (next < value)
+            var numericDigit = digit - (byte)'0';
+            if (value > (long.MaxValue - numericDigit) / 10)
             {
                 return false;
             }
 
-            value = next;
+            value = (value * 10) + numericDigit;
         }
 
         return true;

@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Mk8.Drava.Application.BLL.ControlPlane.Http1;
-public static partial class Http1ResponseParser
+public static class Http1ResponseParser
 {
     private static Http1ResponseFramingAnalysisResult AnalyzeResponseFraming(string requestMethod, int statusCode, List<string> contentLengthValues, List<string> transferEncodingValues)
     {
@@ -76,36 +76,9 @@ public static partial class Http1ResponseParser
     {
         responseHead = null;
         error = Http1ParseError.None;
-        var statusLineLength = IndexOfCrlf(responseHeadBytes);
-        if (statusLineLength <= 0)
-        {
-            error = Http1ParseError.InvalidStatusLine;
+        if (!TryReadStatusLine(responseHeadBytes, out var statusLineLength, out var statusCode, out var reasonPhrase, out error))
             return false;
-        }
 
-        var statusLine = responseHeadBytes[..statusLineLength];
-        var firstSpace = statusLine.IndexOf((byte)' ');
-        if (firstSpace <= 0)
-        {
-            error = Http1ParseError.InvalidStatusLine;
-            return false;
-        }
-
-        var versionBytes = statusLine[..firstSpace];
-        if (!AsciiEquals(versionBytes, "HTTP/1.1"))
-        {
-            error = Http1ParseError.UnsupportedVersion;
-            return false;
-        }
-
-        var statusAndReason = statusLine[(firstSpace + 1)..];
-        if (statusAndReason.Length < 3 || !TryParseStatusCode(statusAndReason[..3], out var statusCode))
-        {
-            error = Http1ParseError.InvalidStatusLine;
-            return false;
-        }
-
-        var reasonPhrase = statusAndReason.Length > 3 && statusAndReason[3] == (byte)' ' ? Encoding.ASCII.GetString(statusAndReason[4..]) : "";
         List<ProxyHeaderField> headers = [];
         List<string> contentLengthValues = [];
         List<string> transferEncodingValues = [];
@@ -160,6 +133,45 @@ public static partial class Http1ResponseParser
         return true;
     }
 
+    private static bool TryReadStatusLine(ReadOnlySpan<byte> responseHeadBytes, out int statusLineLength,
+        out int statusCode, out string reasonPhrase, out Http1ParseError error)
+    {
+        statusCode = 0;
+        reasonPhrase = "";
+        error = Http1ParseError.None;
+        statusLineLength = IndexOfCrlf(responseHeadBytes);
+        if (statusLineLength <= 0)
+        {
+            error = Http1ParseError.InvalidStatusLine;
+            return false;
+        }
+
+        var statusLine = responseHeadBytes[..statusLineLength];
+        var firstSpace = statusLine.IndexOf((byte)' ');
+        if (firstSpace <= 0)
+        {
+            error = Http1ParseError.InvalidStatusLine;
+            return false;
+        }
+
+        var versionBytes = statusLine[..firstSpace];
+        if (!AsciiEquals(versionBytes, "HTTP/1.1"))
+        {
+            error = Http1ParseError.UnsupportedVersion;
+            return false;
+        }
+
+        var statusAndReason = statusLine[(firstSpace + 1)..];
+        if (statusAndReason.Length < 3 || !TryParseStatusCode(statusAndReason[..3], out statusCode))
+        {
+            error = Http1ParseError.InvalidStatusLine;
+            return false;
+        }
+
+        reasonPhrase = statusAndReason.Length > 3 && statusAndReason[3] == (byte)' ' ? Encoding.ASCII.GetString(statusAndReason[4..]) : "";
+        return true;
+    }
+
     public static bool IsInformational(Http1ResponseHead responseHead)
     {
         ArgumentNullException.ThrowIfNull(responseHead);
@@ -168,7 +180,7 @@ public static partial class Http1ResponseParser
 
     public static bool IsNoBodyResponse(string requestMethod, int statusCode)
     {
-        return string.Equals(requestMethod, "HEAD", StringComparison.Ordinal) || statusCode is >= 100 and <= 199 or 204 or 304;
+        return string.Equals(requestMethod, "HEAD", StringComparison.Ordinal) || (statusCode is >= 100 and <= 199 or 204 or 304);
     }
 
     private static bool TryParseStatusCode(ReadOnlySpan<byte> bytes, out int statusCode)
@@ -186,7 +198,7 @@ public static partial class Http1ResponseParser
                 return false;
             }
 
-            statusCode = statusCode * 10 + digit - (byte)'0';
+            statusCode = (statusCode * 10) + digit - (byte)'0';
         }
 
         return true;
