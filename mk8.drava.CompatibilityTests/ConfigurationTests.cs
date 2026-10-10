@@ -2913,7 +2913,7 @@ internal static class ConfigurationTests
               "pathPrefix": "/",
               "loadBalancingPolicy": "round-robin",
               "healthCheck": {
-                "enabled": {{healthCheckEnabled.ToString().ToLowerInvariant()}},
+                "enabled": {{(healthCheckEnabled ? "true" : "false")}},
                 "path": "/health",
                 "intervalSeconds": {{healthIntervalSeconds}},
                 "timeoutSeconds": {{healthTimeoutSeconds}},
@@ -3015,11 +3015,11 @@ internal static class ConfigurationTests
                 "maxActiveUpgradedTunnels": {{maxActiveUpgradedTunnels}}
               },
               "observability": {
-                "accessLogEnabled": {{accessLogEnabled.ToString().ToLowerInvariant()}},
+                "accessLogEnabled": {{(accessLogEnabled ? "true" : "false")}},
                 "recentDiagnosticsCapacity": {{recentDiagnosticsCapacity}},
                 "logPersistence": {
-                  "accessLogEnabled": {{accessLogFileEnabled.ToString().ToLowerInvariant()}},
-                  "adminAuditEnabled": {{adminAuditLogFileEnabled.ToString().ToLowerInvariant()}},
+                  "accessLogEnabled": {{(accessLogFileEnabled ? "true" : "false")}},
+                  "adminAuditEnabled": {{(adminAuditLogFileEnabled ? "true" : "false")}},
                   "maxFileBytes": {{logMaxFileBytes}},
                   "maxFiles": {{logMaxFiles}}
                 }
@@ -3037,7 +3037,7 @@ internal static class ConfigurationTests
                 "shutdownGracePeriodSeconds": {{shutdownGracePeriodSeconds}}
               },
               "forwardedHeaders": {
-                "enabled": {{forwardedHeadersEnabled.ToString().ToLowerInvariant()}},
+                "enabled": {{(forwardedHeadersEnabled ? "true" : "false")}},
                 "trustedProxies": {{trustedProxiesJson}}
               },
               "certificates": {{certificatesJson}}

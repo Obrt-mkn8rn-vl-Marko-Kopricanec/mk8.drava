@@ -1191,7 +1191,7 @@ internal static class OperatorStatusTests
     private static ProxyListenerStatus ListenerStatus(RuntimeListener listener, ProxyListenerState state)
     {
         var identity = listener.Identity;
-        return new ProxyListenerStatus(listener.Name, identity.Key, identity.BindKey, "tcp", listener.Address, listener.Port, listener.Transport.ToString().ToLowerInvariant(), listener.Transport == RuntimeListenerTransport.Https, listener.Protocols.ToConfigText(), listener.Http3.ToStatus(), listener.Http2Limits.MaxConcurrentStreams, listener.Http2Limits.MaxHeaderListBytes, listener.Http2Limits.MaxFrameSize, state, ActiveConnections: 0, state == ProxyListenerState.Active ? DateTimeOffset.UtcNow : null, state == ProxyListenerState.Active ? null : DateTimeOffset.UtcNow, state == ProxyListenerState.Failed ? "bind_failed" : null);
+        return new ProxyListenerStatus(listener.Name, identity.Key, identity.BindKey, "tcp", listener.Address, listener.Port, RuntimeListenerTransportScheme.FromTransport(listener.Transport), listener.Transport == RuntimeListenerTransport.Https, listener.Protocols.ToConfigText(), listener.Http3.ToStatus(), listener.Http2Limits.MaxConcurrentStreams, listener.Http2Limits.MaxHeaderListBytes, listener.Http2Limits.MaxFrameSize, state, ActiveConnections: 0, state == ProxyListenerState.Active ? DateTimeOffset.UtcNow : null, state == ProxyListenerState.Active ? null : DateTimeOffset.UtcNow, state == ProxyListenerState.Failed ? "bind_failed" : null);
     }
 
     private static RuntimeRoute StaticRoute(RuntimeCachePolicy? cache = null)

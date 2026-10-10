@@ -50,7 +50,9 @@ public sealed partial class CircuitBreakerStore
 
     private static string NormalizeReason(string reason)
     {
+        #pragma warning disable CA1308 // Failure reasons are emitted as canonical lower-case underscore status labels; uppercase would change the observable diagnostic contract.
         return string.IsNullOrWhiteSpace(reason) ? "unknown" : reason.Trim().ToLowerInvariant().Replace(' ', '_');
+        #pragma warning restore CA1308
     }
 
     private sealed class MutableCircuitState

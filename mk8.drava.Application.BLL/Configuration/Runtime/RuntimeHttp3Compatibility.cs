@@ -47,21 +47,24 @@ public sealed record RuntimeHttp3Compatibility
             return RuntimeListenerProtocolParseResult.Accepted(RuntimeListenerProtocols.Http1);
         }
 
-        switch (protocols.Trim().ToLowerInvariant())
+        var token = protocols.Trim();
+        if (token.Any(static character => !char.IsAscii(character))) return RuntimeListenerProtocolParseResult.Rejected;
+
+        switch (token.ToUpperInvariant())
         {
-            case "http1":
+            case "HTTP1":
                 return RuntimeListenerProtocolParseResult.Accepted(RuntimeListenerProtocols.Http1);
-            case "http2":
+            case "HTTP2":
                 return RuntimeListenerProtocolParseResult.Accepted(RuntimeListenerProtocols.Http2);
-            case "http1andhttp2":
+            case "HTTP1ANDHTTP2":
                 return RuntimeListenerProtocolParseResult.Accepted(RuntimeListenerProtocols.Http1AndHttp2);
-            case "http3":
+            case "HTTP3":
                 return RuntimeListenerProtocolParseResult.Accepted(RuntimeListenerProtocols.Http3);
-            case "http1andhttp3":
+            case "HTTP1ANDHTTP3":
                 return RuntimeListenerProtocolParseResult.Accepted(RuntimeListenerProtocols.Http1AndHttp3);
-            case "http2andhttp3":
+            case "HTTP2ANDHTTP3":
                 return RuntimeListenerProtocolParseResult.Accepted(RuntimeListenerProtocols.Http2AndHttp3);
-            case "http1andhttp2andhttp3":
+            case "HTTP1ANDHTTP2ANDHTTP3":
                 return RuntimeListenerProtocolParseResult.Accepted(RuntimeListenerProtocols.Http1AndHttp2AndHttp3);
             default:
                 return RuntimeListenerProtocolParseResult.Rejected;
@@ -75,17 +78,19 @@ public sealed record RuntimeHttp3Compatibility
 
     public static RuntimeHttp3EnablementParseResult ParseEnablement(string? enablement)
     {
-        var explicitlyConfigured = !string.IsNullOrWhiteSpace(enablement);
-        if (!explicitlyConfigured)
+        if (string.IsNullOrWhiteSpace(enablement))
         {
             return RuntimeHttp3EnablementParseResult.Accepted(RuntimeHttp3Enablement.Default, explicitlyConfigured: false);
         }
 
-        switch (enablement!.Trim().ToLowerInvariant())
+        var token = enablement.Trim();
+        if (token.Any(static character => !char.IsAscii(character))) return RuntimeHttp3EnablementParseResult.Rejected(explicitlyConfigured: true);
+
+        switch (token.ToUpperInvariant())
         {
-            case "default":
+            case "DEFAULT":
                 return RuntimeHttp3EnablementParseResult.Accepted(RuntimeHttp3Enablement.Default, explicitlyConfigured: true);
-            case "disabled":
+            case "DISABLED":
                 return RuntimeHttp3EnablementParseResult.Accepted(RuntimeHttp3Enablement.Disabled, explicitlyConfigured: true);
             default:
                 return RuntimeHttp3EnablementParseResult.Rejected(explicitlyConfigured: true);

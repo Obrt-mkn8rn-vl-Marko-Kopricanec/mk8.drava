@@ -492,7 +492,7 @@ public static partial class ProxyOptionsValidationRules
             ValidateListenerProtocols(failures, prefix, listener, isHttps);
             ValidateListenerLimits(failures, prefix, listener);
 
-            var bindKey = $"{listener.Address.Trim().ToLowerInvariant()}|{listener.Port}|{listener.Transport.Trim().ToLowerInvariant()}";
+            var bindKey = $"{listener.Address.Trim()}|{listener.Port}|{listener.Transport.Trim()}";
             if (listener.Enabled && !listenerBinds.Add(bindKey))
             {
                 failures.Add($"{prefix}:Listener bind {listener.Address}:{listener.Port}/{listener.Transport} is duplicated.");

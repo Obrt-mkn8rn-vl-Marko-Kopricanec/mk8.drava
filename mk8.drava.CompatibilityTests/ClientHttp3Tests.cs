@@ -2046,11 +2046,11 @@ internal static partial class ClientHttp3Tests
 
     private static RuntimeListener TestHttp3Listener(string protocols, RuntimeHttp3AltSvcOptions? http3AltSvc = null)
     {
-        return new RuntimeListener("main", "127.0.0.1", 8443, true, RuntimeListenerTransport.Https, "default", [], 512, 32 * 1024, 32 * 1024, 1024, 64 * 1024, protocols.ToLowerInvariant() switch
+        return new RuntimeListener("main", "127.0.0.1", 8443, true, RuntimeListenerTransport.Https, "default", [], 512, 32 * 1024, 32 * 1024, 1024, 64 * 1024, protocols switch
         {
-            "http1andhttp2andhttp3" => RuntimeListenerProtocols.Http1AndHttp2AndHttp3,
-            "http1andhttp3" => RuntimeListenerProtocols.Http1AndHttp3,
-            "http2andhttp3" => RuntimeListenerProtocols.Http2AndHttp3,
+            var value when string.Equals(value, "http1andhttp2andhttp3", StringComparison.OrdinalIgnoreCase) => RuntimeListenerProtocols.Http1AndHttp2AndHttp3,
+            var value when string.Equals(value, "http1andhttp3", StringComparison.OrdinalIgnoreCase) => RuntimeListenerProtocols.Http1AndHttp3,
+            var value when string.Equals(value, "http2andhttp3", StringComparison.OrdinalIgnoreCase) => RuntimeListenerProtocols.Http2AndHttp3,
             _ => RuntimeListenerProtocols.Http3
         }, RuntimeHttp3Enablement.Default, http3AltSvc ?? RuntimeHttp3AltSvcOptions.Disabled, RuntimeHttp2Limits.Default);
     }
@@ -2112,7 +2112,7 @@ internal static partial class ClientHttp3Tests
                   "transport": "https",
                   "protocols": "{{protocols}}",
                   "http3Enablement": "{{http3Enablement}}",
-                  "http3AltSvcEnabled": {{altSvcEnabled.ToString().ToLowerInvariant()}},
+                  "http3AltSvcEnabled": {{(altSvcEnabled ? "true" : "false")}},
                   "http3AltSvcMaxAgeSeconds": {{altSvcMaxAgeSeconds}},
                   "defaultCertificateId": "home-cert"
                 }

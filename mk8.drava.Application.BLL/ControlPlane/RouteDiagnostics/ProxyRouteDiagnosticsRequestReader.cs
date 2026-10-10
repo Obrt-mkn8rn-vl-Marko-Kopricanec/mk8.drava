@@ -147,7 +147,9 @@ public static partial class ProxyRouteDiagnosticsRequestReader
 
     private static string NormalizeScheme(string value)
     {
+        #pragma warning disable CA1308 // The accepted dry-run scheme/protocol vocabulary and projections are canonical lower-case; invalid input must retain existing rejection semantics.
         return string.IsNullOrWhiteSpace(value) ? "http" : value.Trim().ToLowerInvariant();
+        #pragma warning restore CA1308
     }
 
     private static string NormalizeMethod(string value)
@@ -173,7 +175,9 @@ public static partial class ProxyRouteDiagnosticsRequestReader
 
     private static string? NormalizeProtocol(string? value)
     {
+        #pragma warning disable CA1308 // The accepted dry-run scheme/protocol vocabulary and projections are canonical lower-case; invalid input must retain existing rejection semantics.
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+        #pragma warning restore CA1308
     }
 
     private static bool ContainsControl(string value)

@@ -782,7 +782,7 @@ internal static class CacheTests
               "host": "*",
               "pathPrefix": "/",
               "cache": {
-                "enabled": {{cacheEnabled.ToString().ToLowerInvariant()}},
+                "enabled": {{(cacheEnabled ? "true" : "false")}},
                 "maxEntryBytes": {{maxEntryBytes}},
                 "maxTotalBytes": 1048576,
                 "defaultTtlSeconds": 60,

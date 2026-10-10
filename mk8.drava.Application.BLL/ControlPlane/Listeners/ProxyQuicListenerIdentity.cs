@@ -6,6 +6,8 @@ public sealed record ProxyQuicListenerIdentity(string Name, string Address, int 
 
     private static string Normalize(string value)
     {
+        #pragma warning disable CA1308 // This public status identity shares the exact canonical lower-case QUIC key format with RuntimeQuicListenerIdentity.
         return value.Trim().ToLowerInvariant();
+        #pragma warning restore CA1308
     }
 }

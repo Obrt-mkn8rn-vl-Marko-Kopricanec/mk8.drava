@@ -27,6 +27,8 @@ public sealed record RuntimeListenerIdentity
 
     private static string Normalize(string value)
     {
+        #pragma warning disable CA1308 // Listener Key/BindKey are externally projected canonical lower-case identities; changing their representation would alter reload/status identities.
         return value.Trim().ToLowerInvariant();
+        #pragma warning restore CA1308
     }
 }

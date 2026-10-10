@@ -251,11 +251,15 @@ public sealed partial class ResponseCacheStore : IProxyCacheControl
         AppendPart(builder, scope.RouteHost);
         AppendPart(builder, requestHead.Method.ToUpperInvariant());
         AppendPart(builder, scope.Scheme);
+        #pragma warning disable CA1308 // Existing cache key text canonicalizes Host/header names to lower case while preserving raw target and header values; keep its byte representation and isolation.
         AppendPart(builder, requestHead.Host.ToLowerInvariant());
+        #pragma warning restore CA1308
         AppendPart(builder, upstreamTarget);
         foreach (var varyHeader in scope.Policy.VaryByHeaders.OrderBy(static header => header, StringComparer.OrdinalIgnoreCase))
         {
+            #pragma warning disable CA1308 // Existing cache key text canonicalizes Host/header names to lower case while preserving raw target and header values; keep its byte representation and isolation.
             AppendPart(builder, varyHeader.ToLowerInvariant());
+            #pragma warning restore CA1308
             AppendPart(builder, JoinHeaderValues(requestHead.Headers, varyHeader));
         }
 

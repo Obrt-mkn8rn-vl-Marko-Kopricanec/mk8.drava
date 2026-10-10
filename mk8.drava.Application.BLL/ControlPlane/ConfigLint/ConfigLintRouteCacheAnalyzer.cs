@@ -14,7 +14,7 @@ public static class ConfigLintRouteCacheAnalyzer
 
     private static bool LooksPrivate(ProxyConfigLintRoute route)
     {
-        var path = route.PathPrefix.ToLowerInvariant();
-        return path.Contains("admin", StringComparison.Ordinal) || path.Contains("auth", StringComparison.Ordinal) || path.Contains("account", StringComparison.Ordinal) || path.Contains("private", StringComparison.Ordinal) || path.Contains("profile", StringComparison.Ordinal) || path.Contains("user", StringComparison.Ordinal) || route.CacheVaryByHeaders.Any(static header => string.Equals(header, "Authorization", StringComparison.OrdinalIgnoreCase) || string.Equals(header, "Cookie", StringComparison.OrdinalIgnoreCase));
+        var path = route.PathPrefix;
+        return path.Contains("admin", StringComparison.OrdinalIgnoreCase) || path.Contains("auth", StringComparison.OrdinalIgnoreCase) || path.Contains("account", StringComparison.OrdinalIgnoreCase) || path.Contains("private", StringComparison.OrdinalIgnoreCase) || path.Contains("profile", StringComparison.OrdinalIgnoreCase) || path.Contains("user", StringComparison.OrdinalIgnoreCase) || route.CacheVaryByHeaders.Any(static header => string.Equals(header, "Authorization", StringComparison.OrdinalIgnoreCase) || string.Equals(header, "Cookie", StringComparison.OrdinalIgnoreCase));
     }
 }

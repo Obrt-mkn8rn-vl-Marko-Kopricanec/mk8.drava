@@ -775,7 +775,7 @@ internal static class ResilienceTests
               "retry": {
                 "enabled": true,
                 "maxAttempts": {{maxAttempts}},
-                "retryOnConnectFailure": {{retryOnConnectFailure.ToString().ToLowerInvariant()}},
+                "retryOnConnectFailure": {{(retryOnConnectFailure ? "true" : "false")}},
                 "retryMethods": ["GET", "HEAD"],
                 "retryBackoffMilliseconds": 0
               },

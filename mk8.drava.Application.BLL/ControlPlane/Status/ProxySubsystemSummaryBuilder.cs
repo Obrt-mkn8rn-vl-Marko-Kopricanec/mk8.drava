@@ -98,7 +98,9 @@ public static partial class ProxySubsystemSummaryBuilder
 
     private static string NormalizeAcmeReason(string? value)
     {
+        #pragma warning disable CA1308 // Normalize the imported status vocabulary to canonical lower-case labels and preserve unknown-value classification.
         return value?.Trim().ToLowerInvariant() switch
+        #pragma warning restore CA1308
         {
             "attempting" => "attempting",
             "disabled" => ProxyStatusText.Disabled,

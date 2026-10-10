@@ -25,6 +25,8 @@ public sealed record RuntimeQuicListenerIdentity
 
     private static string Normalize(string value)
     {
+        #pragma warning disable CA1308 // QUIC Key/BindKey are externally projected canonical lower-case identities shared with reload/status; preserve the imported identity format.
         return value.Trim().ToLowerInvariant();
+        #pragma warning restore CA1308
     }
 }
