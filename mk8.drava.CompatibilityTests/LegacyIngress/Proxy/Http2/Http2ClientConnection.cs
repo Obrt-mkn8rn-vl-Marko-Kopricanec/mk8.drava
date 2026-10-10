@@ -360,39 +360,7 @@ internal sealed partial class Http2ClientConnection : IDisposable
                 return;
             }
 
-            var routeMatch = _routeMatcher.Match(_routeCandidates, ProxyRouteMatchRuntimeMapper.ToRequest(requestHead));
-            if (routeMatch is null)
-            {
-                await WriteGeneratedResponseAsync(stream.Id, 404, "Not Found", context, ProxyFailureKind.NoMatchingRoute, requestHead.Method, cancellationToken).ConfigureAwait(false);
-                CompleteContext(ref context);
-                return;
-            }
-
-            var route = ProxyRouteMatchRuntimeMapper.SelectRoute(_configurationSnapshot.Routes, routeMatch);
-            context.SetRoute(ProxyRequestContextRuntimeMapper.ToRequestRoute(route));
-            if (await TryHandleGeneratedRouteActionAsync(stream.Id, route, requestHead, context, cancellationToken).ConfigureAwait(false))
-            {
-                CompleteContext(ref context);
-                return;
-            }
-
-            if (await TryRejectKnownLengthRequestBodyAsync(stream.Id, route, requestHead, context, cancellationToken).ConfigureAwait(false))
-            {
-                CompleteContext(ref context);
-                return;
-            }
-
-            var upstreamTarget = _pathRewritePolicy.Apply(ProxyPathRewriteRuntimeMapper.ToPolicyInput(route), requestHead.Target, requestHead.Path);
-            var effectiveTimeouts = ProxyTimeoutPolicy.ApplyRouteTimeouts(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), _configurationSnapshot.Timeouts);
-            if (await TryHandleCacheHitAsync(stream.Id, route, requestHead, upstreamTarget, context, cancellationToken).ConfigureAwait(false))
-            {
-                CompleteContext(ref context);
-                return;
-            }
-
-            var result = await ForwardWithRetriesAsync(stream.Id, stream.Body.ToArray(), requestHead, route, effectiveTimeouts, _configurationSnapshot.ConnectionLimits, _configurationSnapshot.Limits, upstreamTarget, forwardedHeaders, context, context.RequestId, cancellationToken).ConfigureAwait(false);
-            ApplyForwardingResult(context, result);
-            CompleteContext(ref context);
+            await RouteAcceptedRequestAsync(stream, requestHead, forwardedHeaders, context, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)when (exception is SocketException or IOException)
         {
@@ -400,6 +368,43 @@ internal sealed partial class Http2ClientConnection : IDisposable
             context.RecordClientDisconnect();
             CompleteContext(ref context);
         }
+    }
+
+    private async ValueTask RouteAcceptedRequestAsync(StreamState stream, Http1RequestHead requestHead, ForwardedHeadersContext forwardedHeaders, ProxyRequestContext context, CancellationToken cancellationToken)
+    {
+        var routeMatch = _routeMatcher.Match(_routeCandidates, ProxyRouteMatchRuntimeMapper.ToRequest(requestHead));
+        if (routeMatch is null)
+        {
+            await WriteGeneratedResponseAsync(stream.Id, 404, "Not Found", context, ProxyFailureKind.NoMatchingRoute, requestHead.Method, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref context);
+            return;
+        }
+
+        var route = ProxyRouteMatchRuntimeMapper.SelectRoute(_configurationSnapshot.Routes, routeMatch);
+        context.SetRoute(ProxyRequestContextRuntimeMapper.ToRequestRoute(route));
+        if (await TryHandleGeneratedRouteActionAsync(stream.Id, route, requestHead, context, cancellationToken).ConfigureAwait(false))
+        {
+            CompleteContext(ref context);
+            return;
+        }
+
+        if (await TryRejectKnownLengthRequestBodyAsync(stream.Id, route, requestHead, context, cancellationToken).ConfigureAwait(false))
+        {
+            CompleteContext(ref context);
+            return;
+        }
+
+        var upstreamTarget = _pathRewritePolicy.Apply(ProxyPathRewriteRuntimeMapper.ToPolicyInput(route), requestHead.Target, requestHead.Path);
+        var effectiveTimeouts = ProxyTimeoutPolicy.ApplyRouteTimeouts(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), _configurationSnapshot.Timeouts);
+        if (await TryHandleCacheHitAsync(stream.Id, route, requestHead, upstreamTarget, context, cancellationToken).ConfigureAwait(false))
+        {
+            CompleteContext(ref context);
+            return;
+        }
+
+        var result = await ForwardWithRetriesAsync(stream.Id, stream.Body.ToArray(), requestHead, route, effectiveTimeouts, _configurationSnapshot.ConnectionLimits, _configurationSnapshot.Limits, upstreamTarget, forwardedHeaders, context, context.RequestId, cancellationToken).ConfigureAwait(false);
+        ApplyForwardingResult(context, result);
+        CompleteContext(ref context);
     }
 
     private async ValueTask<bool> TryHandleGeneratedRouteActionAsync(int streamId, RuntimeRoute route, Http1RequestHead requestHead, ProxyRequestContext context, CancellationToken cancellationToken)
@@ -447,37 +452,10 @@ internal sealed partial class Http2ClientConnection : IDisposable
 
         Dictionary<string, string> pseudo = new(StringComparer.Ordinal);
         List<ProxyHeaderField> regularHeaders = [];
-        var regularHeaderSeen = false;
-        foreach (var header in headers)
+        var headerRejection = CollectDecodedRequestHeaders(headers, pseudo, regularHeaders);
+        if (headerRejection is not null)
         {
-            if (header.Name.Length == 0)
-            {
-                return Http2RequestBuildResult.Reject("empty_header_name");
-            }
-
-            if (header.Name.Any(static character => char.IsAsciiLetterUpper(character)))
-            {
-                return Http2RequestBuildResult.Reject("uppercase_header_name");
-            }
-
-            if (header.Name[0] == ':')
-            {
-                if (regularHeaderSeen || pseudo.ContainsKey(header.Name) || !Http2HeaderPolicy.IsAllowedRequestPseudoHeader(header.Name))
-                {
-                    return Http2RequestBuildResult.Reject("invalid_pseudo_header");
-                }
-
-                pseudo[header.Name] = header.Value;
-                continue;
-            }
-
-            regularHeaderSeen = true;
-            if (Http2HeaderPolicy.IsForbiddenRequestHeader(header.Name, header.Value))
-            {
-                return Http2RequestBuildResult.Reject("forbidden_header");
-            }
-
-            regularHeaders.Add(new ProxyHeaderField(header.Name, header.Value));
+            return headerRejection;
         }
 
         if (!pseudo.TryGetValue(":method", out var method) || !pseudo.TryGetValue(":scheme", out var scheme) || !pseudo.TryGetValue(":path", out var target))
@@ -522,6 +500,44 @@ internal sealed partial class Http2ClientConnection : IDisposable
         }
 
         return Http2RequestBuildResult.Accept(new Http1RequestHead(method, target, ExtractPath(target), "HTTP/2", authority, framing, regularHeaders));
+    }
+
+    private static Http2RequestBuildResult.Rejected? CollectDecodedRequestHeaders(IReadOnlyList<ProxyHeaderField> headers, Dictionary<string, string> pseudo, List<ProxyHeaderField> regularHeaders)
+    {
+        var regularHeaderSeen = false;
+        foreach (var header in headers)
+        {
+            if (header.Name.Length == 0)
+            {
+                return Http2RequestBuildResult.Reject("empty_header_name");
+            }
+
+            if (header.Name.Any(static character => char.IsAsciiLetterUpper(character)))
+            {
+                return Http2RequestBuildResult.Reject("uppercase_header_name");
+            }
+
+            if (header.Name[0] == ':')
+            {
+                if (regularHeaderSeen || pseudo.ContainsKey(header.Name) || !Http2HeaderPolicy.IsAllowedRequestPseudoHeader(header.Name))
+                {
+                    return Http2RequestBuildResult.Reject("invalid_pseudo_header");
+                }
+
+                pseudo[header.Name] = header.Value;
+                continue;
+            }
+
+            regularHeaderSeen = true;
+            if (Http2HeaderPolicy.IsForbiddenRequestHeader(header.Name, header.Value))
+            {
+                return Http2RequestBuildResult.Reject("forbidden_header");
+            }
+
+            regularHeaders.Add(new ProxyHeaderField(header.Name, header.Value));
+        }
+
+        return null;
     }
 
     private abstract record Http2RequestBuildResult
@@ -584,15 +600,7 @@ internal sealed partial class Http2ClientConnection : IDisposable
             var selection = _upstreamSelector.Select(ProxyUpstreamSelectionRuntimeMapper.ToSelectionRoute(route));
             if (selection is null)
             {
-                if (ProxyRetryPolicy.DidExhaustAttemptsBeforeUpstreamSelection(attempt))
-                {
-                    _metrics.RetryExhausted();
-                }
-
-                var failureResponse = ProxyGeneratedFailurePolicy.BuildFailureResponse(ProxyFailureKind.NoHealthyUpstream);
-                ProxyGeneratedFailureMetrics.Record(_metrics, failureResponse);
-                await WriteGeneratedResponseAsync(streamId, failureResponse, context, requestHead.Method, cancellationToken).ConfigureAwait(false);
-                return failureResponse.ToForwardingResult();
+                return await WriteNoUpstreamFailureAsync(attempt, streamId, context, requestHead, cancellationToken).ConfigureAwait(false);
             }
 
             context.SetUpstream(ProxyRequestContextRuntimeMapper.ToRequestUpstream(selection.Upstream));
@@ -613,15 +621,7 @@ internal sealed partial class Http2ClientConnection : IDisposable
                 continue;
             }
 
-            if (retryAttempt is ProxyRetryAttemptDecision.SkippedDecision skippedAttempt)
-            {
-                _metrics.RetrySkipped(skippedAttempt.Reason);
-            }
-
-            if (retryAllowed && ProxyRetryPolicy.DidExhaustAttempts(retryOutcome, result, attempt, maxAttempts))
-            {
-                _metrics.RetryExhausted();
-            }
+            RecordStoppedRetryAttempt(retryAttempt, retryAllowed, retryOutcome, result, attempt, maxAttempts);
 
             if (suppressGeneratedFailureResponse && result is ForwardingResult.FailureResult { ResponseStarted: false } suppressedFailure)
             {
@@ -638,6 +638,32 @@ internal sealed partial class Http2ClientConnection : IDisposable
         }
 
         return ProxyRetryPolicy.RequireCompletedAttemptResult(lastResult);
+    }
+
+    private void RecordStoppedRetryAttempt(ProxyRetryAttemptDecision retryAttempt, bool retryAllowed, ProxyRetryOutcomeInput retryOutcome, ForwardingResult result, int attempt, int maxAttempts)
+    {
+        if (retryAttempt is ProxyRetryAttemptDecision.SkippedDecision skippedAttempt)
+        {
+            _metrics.RetrySkipped(skippedAttempt.Reason);
+        }
+
+        if (retryAllowed && ProxyRetryPolicy.DidExhaustAttempts(retryOutcome, result, attempt, maxAttempts))
+        {
+            _metrics.RetryExhausted();
+        }
+    }
+
+    private async ValueTask<ForwardingResult> WriteNoUpstreamFailureAsync(int attempt, int streamId, ProxyRequestContext context, Http1RequestHead requestHead, CancellationToken cancellationToken)
+    {
+        if (ProxyRetryPolicy.DidExhaustAttemptsBeforeUpstreamSelection(attempt))
+        {
+            _metrics.RetryExhausted();
+        }
+
+        var failureResponse = ProxyGeneratedFailurePolicy.BuildFailureResponse(ProxyFailureKind.NoHealthyUpstream);
+        ProxyGeneratedFailureMetrics.Record(_metrics, failureResponse);
+        await WriteGeneratedResponseAsync(streamId, failureResponse, context, requestHead.Method, cancellationToken).ConfigureAwait(false);
+        return failureResponse.ToForwardingResult();
     }
 
     private async ValueTask<ForwardingResult> WriteSuppressedFailureAsync(int streamId, ForwardingResult.FailureResult result, ProxyRequestContext context, string method, CancellationToken cancellationToken)
