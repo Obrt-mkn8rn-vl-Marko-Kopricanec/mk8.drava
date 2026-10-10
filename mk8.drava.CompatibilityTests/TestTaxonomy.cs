@@ -28,7 +28,7 @@ internal static class TestTaxonomy
 
     public static string CanonicalCategory(string category)
     {
-        return CategoryLookup.TryGetValue(category, out var canonical) ? canonical : throw new ArgumentException($"Unknown test category: {category}");
+        return CategoryLookup.TryGetValue(category, out var canonical) ? canonical : throw new ArgumentException($"Unknown test category: {category}", nameof(category));
     }
 
     public static IReadOnlySet<string> CanonicalCategories(params string[] categories)
@@ -41,7 +41,7 @@ internal static class TestTaxonomy
 
         if (canonical.Count == 0)
         {
-            throw new ArgumentException("Each test registration must declare at least one correctness category.");
+            throw new ArgumentException("Each test registration must declare at least one correctness category.", nameof(categories));
         }
 
         return canonical;

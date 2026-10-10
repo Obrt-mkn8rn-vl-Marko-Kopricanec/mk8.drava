@@ -27,7 +27,7 @@ internal sealed record TestRunOptions(IReadOnlySet<string> Categories, bool List
             {
                 if (index + 1 >= args.Length)
                 {
-                    throw new ArgumentException($"{arg} requires a file path.");
+                    throw new ArgumentException($"{arg} requires a file path.", nameof(args));
                 }
 
                 summaryFile = args[++index];
@@ -38,7 +38,7 @@ internal sealed record TestRunOptions(IReadOnlySet<string> Categories, bool List
             {
                 if (index + 1 >= args.Length)
                 {
-                    throw new ArgumentException($"{arg} requires a category value.");
+                    throw new ArgumentException($"{arg} requires a category value.", nameof(args));
                 }
 
                 AddCategories(args[++index], categories);
@@ -66,7 +66,7 @@ internal sealed record TestRunOptions(IReadOnlySet<string> Categories, bool List
                 continue;
             }
 
-            throw new ArgumentException($"Unknown test runner argument: {arg}");
+            throw new ArgumentException($"Unknown test runner argument: {arg}", nameof(args));
         }
 
         var canonical = categories.Select(TestTaxonomy.CanonicalCategory).OrderBy(static category => category, StringComparer.Ordinal).ToArray();
@@ -79,7 +79,7 @@ internal sealed record TestRunOptions(IReadOnlySet<string> Categories, bool List
         {
             if (!TestTaxonomy.IsKnownCategory(category))
             {
-                throw new ArgumentException($"Unknown test category: {category}");
+                throw new ArgumentException($"Unknown test category: {category}", nameof(value));
             }
 
             categories.Add(category);

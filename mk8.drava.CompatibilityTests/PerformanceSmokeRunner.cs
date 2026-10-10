@@ -133,7 +133,7 @@ internal static class PerformanceSmokeRunner
             Http1 => RunHttp1Async(),
             Cache => RunCacheAsync(),
             Headers => RunHeadersAsync(),
-            _ => throw new ArgumentException($"Unknown performance domain: {domain}")};
+            _ => throw new ArgumentException($"Unknown performance domain: {domain}", nameof(domain))};
     }
 
     private static Task<PerformanceSmokeResult> RunRoutingAsync()
@@ -601,7 +601,7 @@ internal static class PerformanceSmokeRunner
                 {
                     if (index + 1 >= args.Length)
                     {
-                        throw new ArgumentException($"{arg} requires a file path.");
+                        throw new ArgumentException($"{arg} requires a file path.", nameof(args));
                     }
 
                     summaryFile = args[++index];
@@ -612,7 +612,7 @@ internal static class PerformanceSmokeRunner
                 {
                     if (index + 1 >= args.Length)
                     {
-                        throw new ArgumentException($"{arg} requires a domain value.");
+                        throw new ArgumentException($"{arg} requires a domain value.", nameof(args));
                     }
 
                     AddDomains(args[++index], domains);
@@ -640,12 +640,12 @@ internal static class PerformanceSmokeRunner
                     continue;
                 }
 
-                throw new ArgumentException($"Unknown performance runner argument: {arg}");
+                throw new ArgumentException($"Unknown performance runner argument: {arg}", nameof(args));
             }
 
             if (!performance && !listDomains)
             {
-                throw new ArgumentException("Performance smoke mode requires --performance.");
+                throw new ArgumentException("Performance smoke mode requires --performance.", nameof(args));
             }
 
             var canonical = domains.Select(CanonicalDomain).OrderBy(static domain => domain, StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
@@ -658,7 +658,7 @@ internal static class PerformanceSmokeRunner
             {
                 if (!IsKnownDomain(domain))
                 {
-                    throw new ArgumentException($"Unknown performance domain: {domain}");
+                    throw new ArgumentException($"Unknown performance domain: {domain}", nameof(value));
                 }
 
                 domains.Add(domain);
@@ -672,7 +672,7 @@ internal static class PerformanceSmokeRunner
 
         private static string CanonicalDomain(string domain)
         {
-            return PerformanceSmokeRunner.Domains.FirstOrDefault(candidate => string.Equals(candidate, domain, StringComparison.OrdinalIgnoreCase)) ?? throw new ArgumentException($"Unknown performance domain: {domain}");
+            return PerformanceSmokeRunner.Domains.FirstOrDefault(candidate => string.Equals(candidate, domain, StringComparison.OrdinalIgnoreCase)) ?? throw new ArgumentException($"Unknown performance domain: {domain}", nameof(domain));
         }
     }
 
