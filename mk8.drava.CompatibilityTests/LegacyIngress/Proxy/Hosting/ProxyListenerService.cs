@@ -122,78 +122,25 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
             List<string> listenerErrors = [];
             try
             {
-                foreach (var key in diff.Added.Concat(diff.Changed))
-                {
-                    var listener = nextListeners[key];
-                    var handle = ManagedListener.Bind(listener, _timeProvider);
-                    pending.Add(key, handle);
-                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
-                    {
-                        LogProxyListenerPreparedOn10041(_logger, listener.Name, listener.Address, listener.Port, null);
-                    }
-                }
+                PrepareTcpListeners(nextListeners, diff, pending);
             }
             catch (Exception exception)when (exception is SocketException or IOException or InvalidOperationException)
             {
-                foreach (var handle in pending.Values)
-                {
-                    await handle.DisposeWithoutDrainAsync().ConfigureAwait(false);
-                }
-
-                _metrics.ListenerStartFailed();
-                _metrics.ListenerReloadFailed();
-                var result = BuildReloadResult(ProxyListenerReloadApplicationState.Failed, attemptedAt, diff, quicDiff, pending, pendingQuic, [SafeError(exception)], plan.CurrentTcpListeners, plan.CurrentQuicListeners);
-                UpdateRuntimeState(result);
-                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-                {
-                    LogProxyListenerReloadFailedWhile10042(_logger, exception);
-                }
-                return result;
+                return await FailTcpPreparationAsync(exception, attemptedAt, plan, diff, quicDiff, pending, pendingQuic).ConfigureAwait(false);
             }
 
-            foreach (var key in quicDiff.Added.Concat(quicDiff.Changed))
-            {
-                var listener = nextQuicListeners[key];
-                try
-                {
-                    var handle = await ManagedQuicListener.BindAsync(listener, snapshot, _quicListenerFactory, _timeProvider, cancellationToken).ConfigureAwait(false);
-                    pendingQuic.Add(key, handle);
-                    _metrics.QuicListenerStarted();
-                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
-                    {
-                        LogHTTPQUICListenerPreparedOn10043(_logger, listener.Name, listener.Address, listener.Port, null);
-                    }
-                }
-                catch (Exception exception)when (exception is QuicException or SocketException or IOException or InvalidOperationException or PlatformNotSupportedException)
-                {
-                    _metrics.QuicListenerStartFailed();
-                    _metrics.ListenerStartFailed();
-                    var error = $"quic:{listener.Name}:{SafeError(exception)}";
-                    listenerErrors.Add(error);
-                    pendingQuic.Add(key, ManagedQuicListener.Failed(listener, SafeError(exception), _timeProvider));
-                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-                    {
-                        LogHTTPQUICListenerFailedTo10044(_logger, listener.Name, exception);
-                    }
-                }
-            }
+            await PrepareQuicListenersAsync(snapshot, nextQuicListeners, quicDiff, pendingQuic, listenerErrors, cancellationToken).ConfigureAwait(false);
 
             ProxyConfigurationSnapshot activeSnapshot;
             try
             {
                 activeSnapshot = activateSnapshot(snapshot);
             }
-            catch (Exception exception)
+            #pragma warning disable CA1031 // Activation callback faults become a failed reload after pending listener cleanup.
+            catch (Exception exception) // Isolated fault boundary.
+            #pragma warning restore CA1031
             {
-                foreach (var handle in pending.Values)
-                {
-                    await handle.DisposeWithoutDrainAsync().ConfigureAwait(false);
-                }
-
-                foreach (var handle in pendingQuic.Values)
-                {
-                    await handle.DisposeWithoutDrainAsync().ConfigureAwait(false);
-                }
+                await DisposePreparedListenersAsync(pending, pendingQuic).ConfigureAwait(false);
 
                 _metrics.ListenerReloadFailed();
                 var result = BuildReloadResult(ProxyListenerReloadApplicationState.Failed, attemptedAt, diff, quicDiff, pending, pendingQuic, [SafeError(exception)], plan.CurrentTcpListeners, plan.CurrentQuicListeners);
@@ -203,103 +150,209 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
 
             List<ManagedListener> oldHandles = [];
             List<ManagedQuicListener> oldQuicHandles = [];
-            lock (_listeners)
-            {
-                foreach (var key in diff.Unchanged)
-                {
-                    _listeners[key].Update(nextListeners[key]);
-                }
+            CommitPreparedListeners(nextListeners, nextQuicListeners, diff, quicDiff, pending, pendingQuic, oldHandles, oldQuicHandles);
 
-                foreach (var key in diff.Changed)
-                {
-                    if (_listeners.TryGetValue(key, out var old))
-                    {
-                        oldHandles.Add(old);
-                    }
+            ActivatePreparedListeners(diff, quicDiff, pending, pendingQuic);
 
-                    _listeners[key] = pending[key];
-                }
+            await DrainReplacedListenersAsync(activeSnapshot, oldHandles, oldQuicHandles, cancellationToken).ConfigureAwait(false);
 
-                foreach (var key in diff.Added)
-                {
-                    _listeners[key] = pending[key];
-                }
-
-                foreach (var key in diff.Removed)
-                {
-                    if (_listeners.Remove(key, out var old))
-                    {
-                        oldHandles.Add(old);
-                    }
-                }
-            }
-
-            lock (_quicListeners)
-            {
-                foreach (var key in quicDiff.Unchanged)
-                {
-                    _quicListeners[key].Update(nextQuicListeners[key]);
-                }
-
-                foreach (var key in quicDiff.Changed)
-                {
-                    if (_quicListeners.TryGetValue(key, out var old))
-                    {
-                        oldQuicHandles.Add(old);
-                    }
-
-                    _quicListeners[key] = pendingQuic[key];
-                }
-
-                foreach (var key in quicDiff.Added)
-                {
-                    _quicListeners[key] = pendingQuic[key];
-                }
-
-                foreach (var key in quicDiff.Removed)
-                {
-                    if (_quicListeners.Remove(key, out var old))
-                    {
-                        oldQuicHandles.Add(old);
-                    }
-                }
-            }
-
-            foreach (var key in diff.Added.Concat(diff.Changed))
-            {
-                pending[key].Activate(this, _serviceStopping.Token);
-            }
-
-            foreach (var key in quicDiff.Added.Concat(quicDiff.Changed))
-            {
-                pendingQuic[key].Activate(this, _serviceStopping.Token);
-            }
-
-            foreach (var old in oldHandles)
-            {
-                await old.StopAcceptingAsync(activeSnapshot.Limits.ShutdownGracePeriod, cancellationToken).ConfigureAwait(false);
-                _metrics.ListenerDrained();
-            }
-
-            foreach (var old in oldQuicHandles)
-            {
-                await old.StopAcceptingAsync(activeSnapshot.Limits.ShutdownGracePeriod, cancellationToken).ConfigureAwait(false);
-                _metrics.ListenerDrained();
-            }
-
-            var success = BuildReloadResult(ProxyListenerReloadApplicationState.Applied, attemptedAt, diff, quicDiff, pending, pendingQuic, listenerErrors, plan.CurrentTcpListeners, plan.CurrentQuicListeners);
-            _metrics.ListenerReloadSucceeded(diff.Added.Count + quicDiff.Added.Count, diff.Removed.Count + quicDiff.Removed.Count, diff.Changed.Count + quicDiff.Changed.Count, diff.Unchanged.Count + quicDiff.Unchanged.Count);
-            UpdateRuntimeState(success);
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
-            {
-                LogProxyListenerReloadAppliedAdded10045(_logger, diff.Added.Count + quicDiff.Added.Count, diff.Removed.Count + quicDiff.Removed.Count, diff.Changed.Count + quicDiff.Changed.Count, diff.Unchanged.Count + quicDiff.Unchanged.Count, null);
-            }
-            return success;
+            return CompleteListenerReload(attemptedAt, plan, diff, quicDiff, pending, pendingQuic, listenerErrors);
         }
         finally
         {
             _reloadGate.Release();
         }
+    }
+
+    private async ValueTask<ProxyListenerReloadResult> FailTcpPreparationAsync(Exception exception, DateTimeOffset attemptedAt, ListenerReloadPlan plan, ProxyListenerDiff diff, ProxyListenerDiff quicDiff, Dictionary<string, ManagedListener> pending, Dictionary<string, ManagedQuicListener> pendingQuic)
+    {
+        foreach (var handle in pending.Values)
+        {
+            await handle.DisposeWithoutDrainAsync().ConfigureAwait(false);
+        }
+
+        _metrics.ListenerStartFailed();
+        _metrics.ListenerReloadFailed();
+        var result = BuildReloadResult(ProxyListenerReloadApplicationState.Failed, attemptedAt, diff, quicDiff, pending, pendingQuic, [SafeError(exception)], plan.CurrentTcpListeners, plan.CurrentQuicListeners);
+        UpdateRuntimeState(result);
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+        {
+            LogProxyListenerReloadFailedWhile10042(_logger, exception);
+        }
+        return result;
+    }
+
+    private void PrepareTcpListeners(IReadOnlyDictionary<string, RuntimeListener> nextListeners, ProxyListenerDiff diff, Dictionary<string, ManagedListener> pending)
+    {
+        foreach (var key in diff.Added.Concat(diff.Changed))
+        {
+            var listener = nextListeners[key];
+            var handle = ManagedListener.Bind(listener, _timeProvider);
+            pending.Add(key, handle);
+            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
+            {
+                LogProxyListenerPreparedOn10041(_logger, listener.Name, listener.Address, listener.Port, null);
+            }
+        }
+    }
+
+    private async ValueTask PrepareQuicListenersAsync(ProxyConfigurationSnapshot snapshot, IReadOnlyDictionary<string, RuntimeListener> nextQuicListeners, ProxyListenerDiff quicDiff, Dictionary<string, ManagedQuicListener> pendingQuic, List<string> listenerErrors, CancellationToken cancellationToken)
+    {
+        foreach (var key in quicDiff.Added.Concat(quicDiff.Changed))
+        {
+            var listener = nextQuicListeners[key];
+            try
+            {
+                var handle = await ManagedQuicListener.BindAsync(listener, snapshot, _quicListenerFactory, _timeProvider, cancellationToken).ConfigureAwait(false);
+                pendingQuic.Add(key, handle);
+                _metrics.QuicListenerStarted();
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
+                {
+                    LogHTTPQUICListenerPreparedOn10043(_logger, listener.Name, listener.Address, listener.Port, null);
+                }
+            }
+            catch (Exception exception)when (exception is QuicException or SocketException or IOException or InvalidOperationException or PlatformNotSupportedException)
+            {
+                _metrics.QuicListenerStartFailed();
+                _metrics.ListenerStartFailed();
+                var error = $"quic:{listener.Name}:{SafeError(exception)}";
+                listenerErrors.Add(error);
+                pendingQuic.Add(key, ManagedQuicListener.Failed(listener, SafeError(exception), _timeProvider));
+                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+                {
+                    LogHTTPQUICListenerFailedTo10044(_logger, listener.Name, exception);
+                }
+            }
+        }
+    }
+
+    private static async ValueTask DisposePreparedListenersAsync(Dictionary<string, ManagedListener> pending, Dictionary<string, ManagedQuicListener> pendingQuic)
+    {
+        foreach (var handle in pending.Values)
+        {
+            await handle.DisposeWithoutDrainAsync().ConfigureAwait(false);
+        }
+
+        foreach (var handle in pendingQuic.Values)
+        {
+            await handle.DisposeWithoutDrainAsync().ConfigureAwait(false);
+        }
+    }
+
+    private void CommitPreparedListeners(IReadOnlyDictionary<string, RuntimeListener> nextListeners, IReadOnlyDictionary<string, RuntimeListener> nextQuicListeners, ProxyListenerDiff diff, ProxyListenerDiff quicDiff, Dictionary<string, ManagedListener> pending, Dictionary<string, ManagedQuicListener> pendingQuic, List<ManagedListener> oldHandles, List<ManagedQuicListener> oldQuicHandles)
+    {
+        CommitPreparedTcpListeners(nextListeners, diff, pending, oldHandles);
+        CommitPreparedQuicListeners(nextQuicListeners, quicDiff, pendingQuic, oldQuicHandles);
+    }
+
+    private void CommitPreparedTcpListeners(IReadOnlyDictionary<string, RuntimeListener> nextListeners, ProxyListenerDiff diff, Dictionary<string, ManagedListener> pending, List<ManagedListener> oldHandles)
+    {
+        lock (_listeners)
+        {
+            foreach (var key in diff.Unchanged)
+            {
+                _listeners[key].Update(nextListeners[key]);
+            }
+
+            foreach (var key in diff.Changed)
+            {
+                if (_listeners.TryGetValue(key, out var old))
+                {
+                    oldHandles.Add(old);
+                }
+
+                _listeners[key] = pending[key];
+            }
+
+            foreach (var key in diff.Added)
+            {
+                _listeners[key] = pending[key];
+            }
+
+            foreach (var key in diff.Removed)
+            {
+                if (_listeners.Remove(key, out var old))
+                {
+                    oldHandles.Add(old);
+                }
+            }
+        }
+    }
+
+    private void CommitPreparedQuicListeners(IReadOnlyDictionary<string, RuntimeListener> nextQuicListeners, ProxyListenerDiff quicDiff, Dictionary<string, ManagedQuicListener> pendingQuic, List<ManagedQuicListener> oldQuicHandles)
+    {
+        lock (_quicListeners)
+        {
+            foreach (var key in quicDiff.Unchanged)
+            {
+                _quicListeners[key].Update(nextQuicListeners[key]);
+            }
+
+            foreach (var key in quicDiff.Changed)
+            {
+                if (_quicListeners.TryGetValue(key, out var old))
+                {
+                    oldQuicHandles.Add(old);
+                }
+
+                _quicListeners[key] = pendingQuic[key];
+            }
+
+            foreach (var key in quicDiff.Added)
+            {
+                _quicListeners[key] = pendingQuic[key];
+            }
+
+            foreach (var key in quicDiff.Removed)
+            {
+                if (_quicListeners.Remove(key, out var old))
+                {
+                    oldQuicHandles.Add(old);
+                }
+            }
+        }
+    }
+
+    private void ActivatePreparedListeners(ProxyListenerDiff diff, ProxyListenerDiff quicDiff, Dictionary<string, ManagedListener> pending, Dictionary<string, ManagedQuicListener> pendingQuic)
+    {
+        foreach (var key in diff.Added.Concat(diff.Changed))
+        {
+            pending[key].Activate(this, _serviceStopping.Token);
+        }
+
+        foreach (var key in quicDiff.Added.Concat(quicDiff.Changed))
+        {
+            pendingQuic[key].Activate(this, _serviceStopping.Token);
+        }
+    }
+
+    private async ValueTask DrainReplacedListenersAsync(ProxyConfigurationSnapshot activeSnapshot, List<ManagedListener> oldHandles, List<ManagedQuicListener> oldQuicHandles, CancellationToken cancellationToken)
+    {
+        for (var index = 0; index < oldHandles.Count; index++)
+        {
+            var old = oldHandles[index];
+            await old.StopAcceptingAsync(activeSnapshot.Limits.ShutdownGracePeriod, cancellationToken).ConfigureAwait(false);
+            _metrics.ListenerDrained();
+        }
+
+        for (var index = 0; index < oldQuicHandles.Count; index++)
+        {
+            var old = oldQuicHandles[index];
+            await old.StopAcceptingAsync(activeSnapshot.Limits.ShutdownGracePeriod, cancellationToken).ConfigureAwait(false);
+            _metrics.ListenerDrained();
+        }
+    }
+
+    private ProxyListenerReloadResult CompleteListenerReload(DateTimeOffset attemptedAt, ListenerReloadPlan plan, ProxyListenerDiff diff, ProxyListenerDiff quicDiff, Dictionary<string, ManagedListener> pending, Dictionary<string, ManagedQuicListener> pendingQuic, List<string> listenerErrors)
+    {
+        var success = BuildReloadResult(ProxyListenerReloadApplicationState.Applied, attemptedAt, diff, quicDiff, pending, pendingQuic, listenerErrors, plan.CurrentTcpListeners, plan.CurrentQuicListeners);
+        _metrics.ListenerReloadSucceeded(diff.Added.Count + quicDiff.Added.Count, diff.Removed.Count + quicDiff.Removed.Count, diff.Changed.Count + quicDiff.Changed.Count, diff.Unchanged.Count + quicDiff.Unchanged.Count);
+        UpdateRuntimeState(success);
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
+        {
+            LogProxyListenerReloadAppliedAdded10045(_logger, diff.Added.Count + quicDiff.Added.Count, diff.Removed.Count + quicDiff.Removed.Count, diff.Changed.Count + quicDiff.Changed.Count, diff.Unchanged.Count + quicDiff.Unchanged.Count, null);
+        }
+        return success;
     }
 
     public IReadOnlyList<ProxyListenerStatus> Snapshot()
@@ -548,12 +601,11 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
                 var admission = _admission.AcquireClientConnection(requestSnapshot.Limits.MaxActiveClientConnections);
                 if (admission is not ProxyAdmissionDecision.AcceptedResult acceptedAdmission)
                 {
-                    clientSocket.Dispose();
-                    _metrics.ConnectionClosed();
+                    CloseRejectedClient(clientSocket);
                     continue;
                 }
 
-                var connectionTask = RunConnectionAsync(clientSocket, requestSnapshot, requestListener, acceptedAdmission.Lease, _shutdown.Token);
+                var connectionTask = RunConnectionAsync(clientSocket, requestSnapshot, requestListener, acceptedAdmission, _shutdown.Token);
                 handle.AddConnectionTask(connectionTask);
             }
         }
@@ -565,7 +617,9 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
                 LogProxyListenerStoppedAfterSocket10046(_logger, handle.Listener.Name, exception);
             }
         }
-        catch (Exception exception)
+        #pragma warning disable CA1031 // Accept-loop faults mark the listener failed and are logged without terminating other listeners.
+        catch (Exception exception) // Isolated fault boundary.
+        #pragma warning restore CA1031
         {
             handle.MarkFailed(SafeError(exception));
             if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
@@ -611,7 +665,7 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
                     continue;
                 }
 
-                var connectionTask = RunQuicConnectionAsync(connection, requestSnapshot, requestListener, acceptedAdmission.Lease, _shutdown.Token);
+                var connectionTask = RunQuicConnectionAsync(connection, requestSnapshot, requestListener, acceptedAdmission, _shutdown.Token);
                 handle.AddConnectionTask(connectionTask);
             }
         }
@@ -623,7 +677,9 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
                 LogHTTPQUICListenerStoppedAfter10048(_logger, handle.Listener.Name, exception);
             }
         }
-        catch (Exception exception)
+        #pragma warning disable CA1031 // QUIC accept-loop faults mark the listener failed and are logged without terminating other listeners.
+        catch (Exception exception) // Isolated fault boundary.
+        #pragma warning restore CA1031
         {
             handle.MarkFailed(SafeError(exception));
             if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
@@ -637,9 +693,16 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
         }
     }
 
-    private async Task RunConnectionAsync(Socket clientSocket, ProxyConfigurationSnapshot snapshot, RuntimeListener listener, AdmissionLease admissionLease, CancellationToken cancellationToken)
+    private void CloseRejectedClient(Socket clientSocket)
     {
-        using var ownedAdmission = admissionLease;
+        clientSocket.Dispose();
+        _metrics.ConnectionClosed();
+    }
+
+    private async Task RunConnectionAsync(Socket clientSocket, ProxyConfigurationSnapshot snapshot, RuntimeListener listener, ProxyAdmissionDecision.AcceptedResult admission, CancellationToken cancellationToken)
+    {
+        using var ownedSocket = clientSocket;
+        using var ownedAdmission = admission.Lease;
         try
         {
             var connection = new ClientConnection(clientSocket, snapshot, listener, _routeMatcher, _upstreamSelector, _healthStore, _forwarder, _upgradeForwarder, _upgradeRequestPolicy, _forwardedHeadersPolicy, _routeActionPolicy, _pathRewritePolicy, _cacheStore, _altSvcPolicy, _circuitBreakerStore, _acmeChallengeResponder, _tlsAuthenticator, _metrics, _requestIdGenerator, _accessLogEmitter, _rateLimiter, _timeProvider, _connectionLogger);
@@ -655,7 +718,9 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
                 LogClientConnectionEndedWithAn10050(_logger, exception);
             }
         }
-        catch (Exception exception)
+        #pragma warning disable CA1031 // Connection faults are logged at the isolation boundary; finally closes metrics and the owned admission lease.
+        catch (Exception exception) // Isolated fault boundary.
+        #pragma warning restore CA1031
         {
             if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
             {
@@ -668,9 +733,9 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
         }
     }
 
-    private async Task RunQuicConnectionAsync(QuicConnection connection, ProxyConfigurationSnapshot snapshot, RuntimeListener listener, AdmissionLease admissionLease, CancellationToken cancellationToken)
+    private async Task RunQuicConnectionAsync(QuicConnection connection, ProxyConfigurationSnapshot snapshot, RuntimeListener listener, ProxyAdmissionDecision.AcceptedResult admission, CancellationToken cancellationToken)
     {
-        using var ownedAdmission = admissionLease;
+        using var ownedAdmission = admission.Lease;
         try
         {
             var http3Connection = new Http3Connection(connection, snapshot, listener, _routeMatcher, _upstreamSelector, _healthStore, _forwarder, _forwardedHeadersPolicy, _routeActionPolicy, _pathRewritePolicy, _cacheStore, _circuitBreakerStore, _acmeChallengeResponder, _metrics, _requestIdGenerator, _accessLogEmitter, _rateLimiter, _timeProvider, _connectionLogger);
@@ -686,7 +751,9 @@ internal sealed partial class ProxyListenerService : BackgroundService, IProxyLi
                 LogHTTPClientConnectionEndedWith10052(_logger, exception);
             }
         }
-        catch (Exception exception)
+        #pragma warning disable CA1031 // QUIC connection faults are logged at the isolation boundary; finally closes metrics and the owned admission lease.
+        catch (Exception exception) // Isolated fault boundary.
+        #pragma warning restore CA1031
         {
             if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Error))
             {
