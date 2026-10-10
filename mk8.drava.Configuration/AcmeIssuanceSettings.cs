@@ -3,7 +3,8 @@ namespace Mk8.Drava.Configuration;
 public sealed record AcmeIssuanceSettings
 {
     public bool Enabled { get; init; }
-    public Uri DirectoryUrl { get; init; } = new("https://acme-v02.api.letsencrypt.org/directory");
+    public Uri? DirectoryUrl { get; init; }
+    public bool UseStaging { get; init; }
     public string AccountKeyPath { get; init; } = "";
     public string CleanupJournalPath { get; init; } = "";
     public NativeDnsManagementSettings? NativeManagement { get; init; }
@@ -34,10 +35,8 @@ public sealed record AcmeIssuanceSettings
         }
         if (!native && string.Equals(AccountKeyPath, CleanupJournalPath, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             throw new InvalidDataException("Account key and cleanup journal require separate private files.");
-        var directory = DirectoryUrl;
+        _ = RequireDirectoryUrl();
         if (string.Equals(servingTrust.Mode, "site-ca", StringComparison.Ordinal) || !native && !string.Equals(dns.Provider, "cloudflare", StringComparison.Ordinal) ||
-            directory is null || !directory.IsAbsoluteUri || !string.Equals(directory.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) ||
-            directory.UserInfo.Length != 0 || directory.Query.Length != 0 || directory.Fragment.Length != 0 ||
             !Path.IsPathFullyQualified(AccountKeyPath) || !native && !Path.IsPathFullyQualified(CleanupJournalPath) || !TermsAccepted || ContactEmails.Count is < 1 or > 8)
             throw new InvalidDataException("Automatic public issuance requires an approved HTTPS directory, DNS01 scope, private account key, contacts and accepted terms.");
         if (string.Equals(servingTrust.Mode, "pinned", StringComparison.Ordinal) ? !Path.IsPathFullyQualified(PinnedServingRootPath) : PinnedServingRootPath.Length != 0)
@@ -50,6 +49,17 @@ public sealed record AcmeIssuanceSettings
         if (RequestTimeoutSeconds is < 1 or > 30 || OperationTimeoutSeconds is < 30 or > 600 || PollIntervalSeconds is < 1 or > 30 ||
             CleanupTimeoutSeconds is < 1 or > 30 || CheckIntervalSeconds is < 10 or > 3600 || RetryAfterSeconds is < 30 or > 86400)
             throw new InvalidDataException("Automatic public issuance timing exceeds supported bounds.");
+    }
+
+    public Uri RequireDirectoryUrl()
+    {
+        var directory = DirectoryUrl;
+        if (directory is null || !directory.IsAbsoluteUri || !string.Equals(directory.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) ||
+            directory.Host.Length == 0 || directory.UserInfo.Length != 0 || directory.Query.Length != 0 || directory.Fragment.Length != 0)
+        {
+            throw new InvalidDataException("Automatic issuance requires an explicitly configured HTTPS directory without credentials, query or fragment.");
+        }
+        return directory;
     }
 
     private void ValidateNative(DnsPublicationSettings dns)

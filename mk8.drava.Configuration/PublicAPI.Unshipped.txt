@@ -400,7 +400,7 @@ Mk8.Drava.Configuration.AcmeIssuanceSettings.Equals(Mk8.Drava.Configuration.Acme
 Mk8.Drava.Configuration.AcmeIssuanceSettings.Validate(Mk8.Drava.Configuration.ServingTrustSettings! servingTrust, Mk8.Drava.Configuration.DnsPublicationSettings! dns) -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.Enabled.get -> bool
 Mk8.Drava.Configuration.AcmeIssuanceSettings.Enabled.init -> void
-Mk8.Drava.Configuration.AcmeIssuanceSettings.DirectoryUrl.get -> System.Uri!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.DirectoryUrl.get -> System.Uri?
 Mk8.Drava.Configuration.AcmeIssuanceSettings.DirectoryUrl.init -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.AccountKeyPath.get -> string!
 Mk8.Drava.Configuration.AcmeIssuanceSettings.AccountKeyPath.init -> void
@@ -473,3 +473,11 @@ Mk8.Drava.Configuration.NativeDnsOwnerScope.Owner.get -> string!
 Mk8.Drava.Configuration.NativeDnsOwnerScope.Owner.init -> void
 Mk8.Drava.Configuration.NativeDnsOwnerScope.Type.get -> ushort
 Mk8.Drava.Configuration.NativeDnsOwnerScope.Type.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.RequireDirectoryUrl() -> System.Uri!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.UseStaging.get -> bool
+Mk8.Drava.Configuration.AcmeIssuanceSettings.UseStaging.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.ApiBaseUrl.get -> System.Uri?
+Mk8.Drava.Configuration.DnsPublicationSettings.ApiBaseUrl.init -> void
+Mk8.Drava.Configuration.DnsPublicationSettings.RequireApiBaseUrl() -> System.Uri!
+Mk8.Drava.Configuration.DnsObservationEndpoint
+static Mk8.Drava.Configuration.DnsObservationEndpoint.Parse(string! address, int port) -> System.Net.IPEndPoint!

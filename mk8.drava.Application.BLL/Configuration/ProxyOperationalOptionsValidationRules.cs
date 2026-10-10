@@ -144,9 +144,9 @@ public static partial class ProxyOperationalOptionsValidationRules
         }
 
         var directoryUrl = ProxyAcmeDirectoryPolicy.ResolveDirectoryUrl(options);
-        if (!urlSyntaxPolicy.IsAbsoluteHttpsUrl(directoryUrl))
+        if ((options.Enabled || directoryUrl.Length != 0) && !urlSyntaxPolicy.IsAbsoluteHttpsUrl(directoryUrl))
         {
-            failures.Add("Proxy ACME DirectoryUrl must be an absolute https URL.");
+            failures.Add("Enabled Proxy ACME requires an explicitly configured absolute https DirectoryUrl.");
         }
 
         if (options.Enabled && options.Certificates.Any(static certificate => certificate.Enabled) && !options.TermsAccepted)

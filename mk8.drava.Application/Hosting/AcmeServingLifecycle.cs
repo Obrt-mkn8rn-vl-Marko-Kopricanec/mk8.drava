@@ -21,7 +21,7 @@ internal sealed class AcmeServingLifecycle(ApplicationBootstrap bootstrap, Servi
                 new Pkcs12LoaderLimits { MaxCertificates = 16, MaxKeys = 1 });
             active = new AcmeRenewalActiveCertificate(new DateTimeOffset(certificate.NotBefore.ToUniversalTime()), new DateTimeOffset(certificate.NotAfter.ToUniversalTime()));
         }
-        return AcmeRenewalConfigurationInputReadResult.Available(new AcmeRenewalConfigurationInput(true, "owner-serving", controller.Acme.DirectoryUrl.AbsoluteUri,
+        return AcmeRenewalConfigurationInputReadResult.Available(new AcmeRenewalConfigurationInput(true, "owner-serving", controller.Acme.RequireDirectoryUrl().AbsoluteUri,
             controller.Acme.ContactEmails, controller.Acme.TermsAccepted, 5,
             [new AcmeRenewalCertificateInput("site", true, [controller.Domain, "*." + controller.Domain], 30, active, LifetimeAwareRenewal: true)],
             TimeSpan.FromSeconds(controller.Acme.RetryAfterSeconds)));

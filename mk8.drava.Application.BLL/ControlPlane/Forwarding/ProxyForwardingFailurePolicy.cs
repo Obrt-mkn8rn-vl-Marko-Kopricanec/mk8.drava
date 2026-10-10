@@ -1,6 +1,21 @@
 namespace Mk8.Drava.Application.BLL.ControlPlane.Forwarding;
 public static class ProxyForwardingFailurePolicy
 {
+    public static ProxyFailureKind ClassifyConnectionFailure(bool responseStarted)
+    {
+        return responseStarted ? ProxyFailureKind.UpstreamPrematureDisconnect : ProxyFailureKind.UpstreamConnectFailed;
+    }
+
+    public static ProxyFailureKind ClassifyDisconnectingProtocolFailure(bool connectionFailed, bool responseStarted)
+    {
+        if (responseStarted)
+        {
+            return ProxyFailureKind.UpstreamPrematureDisconnect;
+        }
+
+        return connectionFailed ? ProxyFailureKind.UpstreamConnectFailed : ProxyFailureKind.UpstreamMalformedResponse;
+    }
+
     public static bool IsCircuitFailure(ProxyFailureKind failureKind)
     {
         return failureKind is ProxyFailureKind.UpstreamConnectFailed or ProxyFailureKind.UpstreamConnectTimeout or ProxyFailureKind.UpstreamResponseHeadTimeout;
@@ -13,7 +28,7 @@ public static class ProxyForwardingFailurePolicy
             ProxyFailureKind.UpstreamConnectFailed => "connect_failure",
             ProxyFailureKind.UpstreamConnectTimeout => "connect_timeout",
             ProxyFailureKind.UpstreamResponseHeadTimeout => "response_head_timeout",
-            _ => "other"
+            _ => "other",
         };
     }
 
@@ -28,7 +43,7 @@ public static class ProxyForwardingFailurePolicy
             ProxyFailureKind.UpgradeRejected => 503,
             ProxyFailureKind.RequestPayloadTooLarge => 413,
             ProxyFailureKind.ClientMalformedRequest => 400,
-            _ => 502
+            _ => 502,
         };
     }
 

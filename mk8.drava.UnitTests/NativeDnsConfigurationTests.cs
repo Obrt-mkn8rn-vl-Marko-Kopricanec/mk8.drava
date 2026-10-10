@@ -35,6 +35,7 @@ public sealed class NativeDnsConfigurationTests
         Assert.Throws<InvalidDataException>(() => (settings with { Provider = "existing" }).Validate("site.test"));
         Assert.Throws<InvalidDataException>(() => (settings with { Provider = "cloudflare" }).Validate("site.test"));
         Assert.Throws<InvalidDataException>(() => (settings with { ZoneName = "site.test" }).Validate("site.test"));
+        Assert.Throws<InvalidDataException>(() => (settings with { ApiBaseUrl = new Uri("https://api.dns.invalid/") }).Validate("site.test"));
     }
 
     [Fact]
@@ -43,7 +44,7 @@ public sealed class NativeDnsConfigurationTests
         var records = Profile();
         var settings = new DnsPublicationSettings { Provider = "mk8.dns", NativeManagement = records, RequestTimeoutSeconds = 20 };
         var acme = records with { CredentialPath = Path.Combine(Path.GetTempPath(), "acme-capability"), Scopes = [new NativeDnsOwnerScope("_acme-challenge.site.test", 16)] };
-        var issuance = new AcmeIssuanceSettings { Enabled = true, AccountKeyPath = Path.Combine(Path.GetTempPath(), "account.key"), TermsAccepted = true,
+        var issuance = new AcmeIssuanceSettings { Enabled = true, DirectoryUrl = new Uri("https://ca.invalid/directory"), AccountKeyPath = Path.Combine(Path.GetTempPath(), "account.key"), TermsAccepted = true,
             NativeManagement = acme, ContactEmails = ["owner@site.test"], CleanupTimeoutSeconds = 20 };
         var trust = new ServingTrustSettings { Mode = "system" };
         issuance.Validate(trust, settings);

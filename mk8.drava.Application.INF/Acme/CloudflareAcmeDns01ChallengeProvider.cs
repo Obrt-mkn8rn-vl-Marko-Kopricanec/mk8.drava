@@ -25,7 +25,7 @@ internal sealed class CloudflareAcmeDns01ChallengeProvider : IAcmeDns01Challenge
         if (!string.Equals(settings.Provider, "cloudflare", StringComparison.Ordinal)) throw new InvalidDataException("DNS01 requires explicit owner-approved Cloudflare settings.");
         _settings = settings; _siteDomain = siteDomain; _siteId = siteId; _verifier = verifier;
         _journal = journal;
-        _api = new CloudflareDnsApi(settings.ZoneId, PrivateBearerCredentialFile.Read(settings.CredentialPath), handler);
+        _api = new CloudflareDnsApi(settings.RequireApiBaseUrl(), settings.ZoneId, PrivateBearerCredentialFile.Read(settings.CredentialPath), handler);
     }
 
     public async ValueTask<AcmeDns01Record> PublishAsync(string host, string value, string operationId, CancellationToken cancellationToken)

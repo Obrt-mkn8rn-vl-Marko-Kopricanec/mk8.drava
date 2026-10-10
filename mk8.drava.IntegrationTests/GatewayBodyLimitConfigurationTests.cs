@@ -5,13 +5,14 @@ namespace Mk8.Drava.IntegrationTests;
 
 public sealed class GatewayBodyLimitConfigurationTests
 {
+    // Reserved test names exercise exact host scopes without assigning deployment routes.
     [Theory]
-    [InlineData("*.mk8n.com")]
-    [InlineData("blob.mk8n.com.")]
-    [InlineData("BLOB.mk8n.com")]
-    [InlineData("blob.mk8n.com:443")]
+    [InlineData("*.site.test")]
+    [InlineData("blob.site.test.")]
+    [InlineData("BLOB.site.test")]
+    [InlineData("blob.site.test:443")]
     [InlineData("blob")]
-    [InlineData("blob..mk8n.com")]
+    [InlineData("blob..site.test")]
     public void BodyOverridesRefuseAmbiguousOrNoncanonicalScopes(string host)
     {
         var scope = new GatewayRequestBodyLimit { Host = host, MaxRequestBodyBytes = 269_615_107 };
@@ -23,7 +24,7 @@ public sealed class GatewayBodyLimitConfigurationTests
     [InlineData(long.MaxValue)]
     public void BodyOverridesRemainBounded(long limit)
     {
-        var scope = new GatewayRequestBodyLimit { Host = "blob.mk8n.com", MaxRequestBodyBytes = limit };
+        var scope = new GatewayRequestBodyLimit { Host = "blob.site.test", MaxRequestBodyBytes = limit };
         Assert.Throws<InvalidDataException>(scope.Validate);
     }
 
@@ -36,12 +37,12 @@ public sealed class GatewayBodyLimitConfigurationTests
             Application = OperatingSystem.IsWindows()
                 ? new IpcEndpoint { NamedPipeName = "fixture", IdentityTokenPath = Path.Combine(Path.GetTempPath(), "fixture.token") }
                 : new IpcEndpoint { UnixSocketPath = Path.Combine(Path.GetTempPath(), "fixture.sock"), IdentityTokenPath = Path.Combine(Path.GetTempPath(), "fixture.token") },
-            RequestBodyLimits = [new GatewayRequestBodyLimit { Host = "blob.mk8n.com", MaxRequestBodyBytes = 269_615_107 }],
+            RequestBodyLimits = [new GatewayRequestBodyLimit { Host = "blob.site.test", MaxRequestBodyBytes = 269_615_107 }],
         };
         bootstrap.Validate();
-        Assert.Equal(269_615_107, bootstrap.ResolveRequestBodyLimit("BLOB.mk8n.com"));
-        Assert.Equal(100L * 1024 * 1024, bootstrap.ResolveRequestBodyLimit("email.mk8n.com"));
-        Assert.Equal(100L * 1024 * 1024, bootstrap.ResolveRequestBodyLimit("other.blob.mk8n.com"));
+        Assert.Equal(269_615_107, bootstrap.ResolveRequestBodyLimit("BLOB.site.test"));
+        Assert.Equal(100L * 1024 * 1024, bootstrap.ResolveRequestBodyLimit("email.site.test"));
+        Assert.Equal(100L * 1024 * 1024, bootstrap.ResolveRequestBodyLimit("other.blob.site.test"));
         Assert.Throws<InvalidDataException>(() => (bootstrap with { RequestBodyLimits = [bootstrap.RequestBodyLimits[0], bootstrap.RequestBodyLimits[0]] }).Validate());
         Assert.Throws<InvalidDataException>(() => (bootstrap with { RequestBodyLimits = null! }).Validate());
         Assert.Throws<InvalidDataException>(() => (bootstrap with { RequestBodyLimits = [null!] }).Validate());

@@ -77,7 +77,7 @@ public sealed class CloudflareAcmeDns01ProviderTests
         {
             var path = Path.Combine(_directory.Path, "provider.token"); File.WriteAllText(path, new string('A', 40));
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            var settings = new Mk8.Drava.Configuration.DnsPublicationSettings { Provider = "cloudflare", ZoneId = new string('a', 32), ZoneName = "site.example", CredentialPath = path };
+            var settings = new Mk8.Drava.Configuration.DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.example", CredentialPath = path };
             Provider = new CloudflareAcmeDns01ChallengeProvider(settings, "site.example", "development", Verifier, Handler);
         }
         public void Dispose() { Provider.Dispose(); Handler.Dispose(); _directory.Dispose(); }

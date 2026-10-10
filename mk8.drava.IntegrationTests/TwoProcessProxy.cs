@@ -150,7 +150,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             using var rootCertificate = authority.PublicCertificate;
             await File.WriteAllBytesAsync(Path.Combine(directory, "site-root.der"), rootCertificate.RawData).ConfigureAwait(false);
             await EnrollDevelopmentNodeAsync(directory, state, authority, relayAddress).ConfigureAwait(false);
-            controller = new ControllerBootstrap { Domain = "site.test", CertificateAuthorityPath = authorityPath, EnrollmentRootFingerprint = fingerprint, RegistrationPort = registrationPort, DnsServerAddress = dnsPort.HasValue ? "127.0.0.1" : "", DnsServerPort = dnsPort ?? 53, Registration = lifecycleSettings.Registration, ServingPlan = lifecycleSettings.Serving };
+            controller = new ControllerBootstrap { Domain = "site.test", CertificateAuthorityPath = authorityPath, EnrollmentRootFingerprint = fingerprint, RegistrationPort = registrationPort, DnsServerAddress = "127.0.0.1", DnsServerPort = dnsPort ?? 53, Registration = lifecycleSettings.Registration, ServingPlan = lifecycleSettings.Serving };
         }
         var administratorPath = managementPort > 0 ? Path.Combine(state, "administrator.token") : "";
         if (administratorPath.Length > 0)

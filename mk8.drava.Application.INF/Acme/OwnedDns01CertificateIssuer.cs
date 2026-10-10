@@ -40,7 +40,7 @@ public sealed class OwnedDns01CertificateIssuer : IAcmeCertificateIssuer, IDispo
             }
             _issuer = new CertesDns01CertificateIssuer(new AcmeDns01IssuerPolicy
             {
-                SiteDomain = controller.Domain, Directory = controller.Acme.DirectoryUrl, AccountKeyPath = controller.Acme.AccountKeyPath,
+                SiteDomain = controller.Domain, Directory = controller.Acme.RequireDirectoryUrl(), AccountKeyPath = controller.Acme.AccountKeyPath,
                 ContactEmails = controller.Acme.ContactEmails, TermsAccepted = controller.Acme.TermsAccepted,
                 RequestTimeout = TimeSpan.FromSeconds(controller.Acme.RequestTimeoutSeconds), OperationTimeout = TimeSpan.FromSeconds(controller.Acme.OperationTimeoutSeconds),
                 PollInterval = TimeSpan.FromSeconds(controller.Acme.PollIntervalSeconds), CleanupTimeout = TimeSpan.FromSeconds(controller.Acme.CleanupTimeoutSeconds),

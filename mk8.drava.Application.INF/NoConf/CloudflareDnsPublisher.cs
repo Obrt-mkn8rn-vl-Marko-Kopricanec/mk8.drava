@@ -40,7 +40,7 @@ public sealed class CloudflareDnsPublisher : IServiceDnsPublisher, IDisposable
             _addresses.TryAdd(address.ToString(), address.AddressFamily == AddressFamily.InterNetwork ? "A" : "AAAA");
         }
         _settings = settings; _siteDomain = siteDomain; _ownership = "mk8.drava site=" + siteId; _clock = clock;
-        _api = new CloudflareDnsApi(settings.ZoneId, PrivateBearerCredentialFile.Read(settings.CredentialPath), handler);
+        _api = new CloudflareDnsApi(settings.RequireApiBaseUrl(), settings.ZoneId, PrivateBearerCredentialFile.Read(settings.CredentialPath), handler);
     }
 
     public async ValueTask<bool> EnsureAsync(string host, CancellationToken cancellationToken)

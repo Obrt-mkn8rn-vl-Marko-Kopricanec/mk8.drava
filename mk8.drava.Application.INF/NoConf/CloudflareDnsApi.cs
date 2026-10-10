@@ -12,7 +12,7 @@ internal sealed partial class CloudflareDnsApi : IDisposable
     private readonly string _zonePath;
     private readonly string _credential;
 
-    public CloudflareDnsApi(string zoneId, string credential, HttpMessageHandler? handler)
+    public CloudflareDnsApi(Uri apiBaseUrl, string zoneId, string credential, HttpMessageHandler? handler)
     {
         _zonePath = "zones/" + zoneId;
         _credential = credential;
@@ -20,7 +20,7 @@ internal sealed partial class CloudflareDnsApi : IDisposable
         try
         {
             _client = new HttpClient(_handler, disposeHandler: false);
-            _client.BaseAddress = new Uri("https://api.cloudflare.com/client/v4/");
+            _client.BaseAddress = apiBaseUrl;
             _client.Timeout = Timeout.InfiniteTimeSpan;
         }
         catch { _client?.Dispose(); _handler.Dispose(); throw; }

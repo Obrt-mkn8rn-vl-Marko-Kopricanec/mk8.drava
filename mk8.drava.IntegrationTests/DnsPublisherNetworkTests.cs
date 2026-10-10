@@ -18,14 +18,14 @@ public sealed class DnsPublisherNetworkTests
     public async Task ActualTlsProviderWritesRequireAnIndependentUdpDnsProofAsync(bool propagate)
     {
         using var material = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
-        using var certificate = material.Authority.IssueGateway("cloudflare.com", ["127.0.0.1"]);
+        using var certificate = material.Authority.IssueGateway("dns.invalid", ["127.0.0.1"]);
         using var root = material.Authority.PublicCertificate;
         var created = 0;
         var dns = new DevelopmentDnsServer(() => propagate && Volatile.Read(ref created) > 0 ? IPAddress.Loopback : null);
         await using var dnsLifetime = dns.ConfigureAwait(true);
         var api = await DevelopmentHttpUpstream.StartAsync(async context =>
         {
-            Assert.Equal("api.cloudflare.com", context.Request.Host.Host);
+            Assert.Equal("api.dns.invalid", context.Request.Host.Host);
             Assert.Equal("Bearer " + new string('A', 40), context.Request.Headers.Authorization.ToString());
             if (HttpMethods.IsPost(context.Request.Method))
             {
@@ -72,7 +72,7 @@ public sealed class DnsPublisherNetworkTests
         var credential = Path.Combine(directory, "provider.token");
         await File.WriteAllTextAsync(credential, new string('A', 40)).ConfigureAwait(false);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(credential, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        return new DnsPublicationSettings { Provider = "cloudflare", ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = credential };
+        return new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = credential };
     }
 
     private static SocketsHttpHandler ConnectProvider(X509Certificate2 root, int port) => new()
@@ -96,7 +96,7 @@ public sealed class DnsPublisherNetworkTests
         },
         ConnectCallback = async (context, cancellationToken) =>
         {
-            Assert.Equal("api.cloudflare.com", context.DnsEndPoint.Host);
+            Assert.Equal("api.dns.invalid", context.DnsEndPoint.Host);
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             try
             {

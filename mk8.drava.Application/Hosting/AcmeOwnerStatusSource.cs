@@ -2,7 +2,7 @@ using Mk8.Drava.Application.BLL.ControlPlane.Acme;
 
 namespace Mk8.Drava.Application.Hosting;
 
-internal sealed class AcmeOwnerStatusSource(AcmeServingLifecycle lifecycle, AcmeCertificateStatusStore statuses)
+internal sealed class AcmeOwnerStatusSource(AcmeServingLifecycle lifecycle, AcmeCertificateStatusStore statuses, bool useStaging)
     : IProxyAcmeStatusConfigurationSource, IProxyAcmeCertificateLifecycleStatusSource
 {
     public ProxyAcmeStatusConfigurationSourceReadResult Read()
@@ -12,7 +12,7 @@ internal sealed class AcmeOwnerStatusSource(AcmeServingLifecycle lifecycle, Acme
         IReadOnlyList<ProxyAcmeRuntimeCertificateSource> runtime = active is null ? [] :
             [new ProxyAcmeRuntimeCertificateSource(certificate.Id, certificate.Id, "acme", active.NotBeforeUtc, active.NotAfterUtc)];
         return ProxyAcmeStatusConfigurationSourceReadResult.Available(new ProxyAcmeStatusConfigurationSourceSnapshot(input.Enabled, input.DirectoryUrl,
-            string.Equals(input.DirectoryUrl, "https://acme-staging-v02.api.letsencrypt.org/directory", StringComparison.Ordinal),
+            useStaging,
             [new ProxyAcmeConfiguredCertificateStatus(certificate.Id, certificate.Enabled, certificate.Domains, certificate.RenewBeforeDays)], runtime));
     }
 

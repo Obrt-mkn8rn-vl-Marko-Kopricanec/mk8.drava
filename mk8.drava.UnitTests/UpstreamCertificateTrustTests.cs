@@ -36,7 +36,9 @@ public sealed class UpstreamCertificateTrustTests
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var endpoint = new UpstreamTransportEndpoint("peer", "https", "http1", "127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port, true,
             string.Equals(profile, "wrong-name", StringComparison.Ordinal) ? "other.drava.invalid" : "backend.drava.invalid") { TrustedRoot = configuredRoot };
-        var serving = ServeTlsAsync(listener, certificates.Leaf, deadline.Token);
+        // Borrowed leaf; finally joins serving before certificates is disposed.
+        var leaf = certificates.Leaf;
+        var serving = ServeTlsAsync(listener, leaf, deadline.Token);
         try
         {
             if (string.Equals(profile, "matching", StringComparison.Ordinal))

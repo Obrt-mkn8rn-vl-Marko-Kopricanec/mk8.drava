@@ -249,7 +249,7 @@ public sealed class DnsPublicationTests
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             Publisher = new CloudflareDnsPublisher(Settings(path) with { RequestTimeoutSeconds = timeoutSeconds }, "site.example", "development", addresses ?? ["192.0.2.10"], Clock, Handler);
         }
-        public static DnsPublicationSettings Settings(string path) => new() { Provider = "cloudflare", ZoneId = new string('a', 32), ZoneName = "site.example", CredentialPath = path };
+        public static DnsPublicationSettings Settings(string path) => new() { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.example", CredentialPath = path };
         public void Dispose() { Publisher.Dispose(); _directory.Dispose(); }
     }
 

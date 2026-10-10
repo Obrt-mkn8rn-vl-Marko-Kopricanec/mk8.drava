@@ -16,7 +16,7 @@ internal sealed class DevelopmentJournaledAcmeProvider : IDisposable
     public DevelopmentJournaledAcmeProvider(string directory, List<ProviderRecord> records)
     {
         var credential = Path.Combine(directory, "provider.token");
-        var settings = new DnsPublicationSettings { Provider = "cloudflare", ZoneId = new string('a', 32), ZoneName = "site.example", CredentialPath = credential };
+        var settings = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.example", CredentialPath = credential };
         _journal = new AcmeDns01CleanupJournal(Path.Combine(directory, "cleanup.json"));
         Handler = new DevelopmentDnsProvider(records);
         try { Provider = new CloudflareAcmeDns01ChallengeProvider(settings, "site.example", "development", new Verifier(), Handler, _journal); }

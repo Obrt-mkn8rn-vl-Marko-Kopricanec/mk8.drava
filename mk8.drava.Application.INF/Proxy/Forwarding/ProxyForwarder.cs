@@ -56,17 +56,7 @@ public sealed partial class ProxyForwarder
         UpstreamConnectionLease? upstreamLease = null;
         try
         {
-            Http1BodyReader? preReadRequestBodyReader = null;
-            byte[]? preReadChunkLine = null;
-            if (requestHead.Framing.Kind == Http1BodyKind.Chunked && clientStream is not ExchangeClientStream)
-            {
-                preReadRequestBodyReader = new Http1BodyReader(clientStream, requestHeadRead.InitialBodyBytes, _metrics, timeouts.ClientRequestBodyIdleTimeout, ProxyTimeoutKind.ClientRequestBodyIdle);
-                preReadChunkLine = await preReadRequestBodyReader.ReadLineWithCrlfAsync(listener.MaxChunkLineBytes, cancellationToken).ConfigureAwait(false);
-                if (!Http1ChunkSizeParser.TryParseLine(preReadChunkLine.AsSpan(), out _))
-                {
-                    throw new Http1ClientProtocolException("Invalid chunk-size line.");
-                }
-            }
+            var (preReadRequestBodyReader, preReadChunkLine) = await ReadInitialChunkAsync(clientStream, requestHeadRead, requestHead, listener, timeouts, cancellationToken).ConfigureAwait(false);
 
             ResponseForwardingResult responseResult;
             if (RuntimeUpstreamProtocol.IsHttp3(upstream.Protocol))
@@ -81,164 +71,17 @@ public sealed partial class ProxyForwarder
             }
 
             responseStarted = responseResult.ResponseStarted;
-            if (responseResult.SuppressedForRetry)
-            {
-                _metrics.UpstreamFailed();
-                return ForwardingResult.Failure(responseStarted: false, responseStatusCode: responseResult.StatusCode, failureKind: ProxyFailureKind.UpstreamUnavailable);
-            }
-
-            if (responseResult.CanReuseUpstreamConnection && upstreamLease is not null)
-            {
-                upstreamLease.MarkReusable();
-            }
-
-            _metrics.UpstreamSucceeded();
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-            {
-                LogProxiedToUpstream10013(_logger, requestHead.Method, requestHead.Target, upstream.Name, null);
-            }
-            return ForwardingResult.Success(responseStarted, responseResult.KeepClientConnectionOpen, responseResult.StatusCode);
+            return CompleteForwardingAttempt(responseResult, responseStarted, upstreamLease, requestHead, upstream);
         }
         catch (OperationCanceledException)when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (ProxyTimeoutException exception)
+        catch (Exception exception) when (IsExpectedForwardingFailure(exception))
         {
-            var timeoutFailure = ProxyTimeoutFailurePolicy.ClassifyForwardingTimeout(exception.Kind, responseStarted);
-            await HandleTimeoutAsync(clientStream, requestHead, upstream, responseStarted, exception, timeouts, requestId, cancellationToken, suppressGeneratedFailureResponse).ConfigureAwait(false);
-            return ForwardingResult.Failure(responseStarted, timeoutFailure.ResponseStatusCode, timeoutFailure.FailureKind);
-        }
-        catch (Http1PayloadTooLargeException exception)
-        {
-            _metrics.RequestBodySizeRejected();
-            _metrics.ClientBodyRelayFailed();
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-            {
-                LogRejectedOversizedRequestBodyFor10014(_logger, requestHead.Method, requestHead.Target, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.RequestPayloadTooLarge, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.RequestPayloadTooLarge), ProxyFailureKind.RequestPayloadTooLarge);
-        }
-        catch (Http1ClientProtocolException exception)
-        {
-            _metrics.MalformedRequestRejected();
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-            {
-                LogRejectedMalformedRequestBodyFor10015(_logger, requestHead.Method, requestHead.Target, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.ClientMalformedRequest, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.ClientMalformedRequest), ProxyFailureKind.ClientMalformedRequest);
-        }
-        catch (Exception exception) when (exception is Http1UpstreamProtocolException or FramedUpstreamProtocolException)
-        {
-            _metrics.UpstreamMalformedResponse();
-            _metrics.UpstreamFailed();
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                _metrics.UpstreamConnectFailed();
-            }
-
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            {
-                LogUpstreamResponseFramingFailedFor10016(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamMalformedResponse, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.UpstreamMalformedResponse), ProxyFailureKind.UpstreamMalformedResponse);
-        }
-        catch (Http2UpstreamProtocolException exception)
-        {
-            _metrics.UpstreamHttp2ProtocolError();
-            _metrics.UpstreamMalformedResponse();
-            _metrics.UpstreamFailed();
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                _metrics.UpstreamConnectFailed();
-            }
-
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            {
-                LogUpstreamHTTPResponseFramingFailed10017(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamMalformedResponse, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, ProxyFailureKind.UpstreamMalformedResponse), ProxyFailureKind.UpstreamMalformedResponse);
-        }
-        catch (Http3UpstreamProtocolException exception)
-        {
-            _metrics.UpstreamHttp3ProtocolError(exception.FailureKind == Http3UpstreamFailureKind.ConnectFailure ? "connect_failure" : "protocol_failure");
-            _metrics.UpstreamFailed();
-            var failureKind = exception.FailureKind == Http3UpstreamFailureKind.ConnectFailure && !responseStarted ? ProxyFailureKind.UpstreamConnectFailed : responseStarted ? ProxyFailureKind.UpstreamPrematureDisconnect : ProxyFailureKind.UpstreamMalformedResponse;
-            if (failureKind == ProxyFailureKind.UpstreamMalformedResponse)
-            {
-                _metrics.UpstreamMalformedResponse();
-            }
-
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                _metrics.UpstreamConnectFailed();
-            }
-
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            {
-                LogUpstreamHTTPForwardingFailedFor10018(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, failureKind, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, failureKind), failureKind);
-        }
-        catch (UpstreamTlsException exception)
-        {
-            _metrics.UpstreamFailed();
-            if (RuntimeUpstreamProtocol.IsHttp2(upstream.Protocol) && exception.Message.Contains("ALPN", StringComparison.OrdinalIgnoreCase))
-            {
-                _metrics.UpstreamHttp2AlpnFailed();
-            }
-
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            {
-                LogUpstreamTLSFailedForTo10019(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectFailed, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            var failureKind = responseStarted ? ProxyFailureKind.UpstreamPrematureDisconnect : ProxyFailureKind.UpstreamConnectFailed;
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, failureKind), failureKind);
-        }
-        catch (Exception exception)when (exception is SocketException or IOException)
-        {
-            _metrics.UpstreamFailed();
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            {
-                LogUpstreamForwardingFailedForTo10020(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
-            }
-            if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-            {
-                await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectFailed, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-            }
-
-            var failureKind = responseStarted ? ProxyFailureKind.UpstreamPrematureDisconnect : ProxyFailureKind.UpstreamConnectFailed;
-            return ForwardingResult.Failure(responseStarted, ProxyForwardingFailurePolicy.ResponseStatusCodeForFailure(responseStarted, failureKind), failureKind);
+            var context = new ForwardingFailureContext(clientStream, requestHead.Method, requestHead.Target, upstream.Name, upstream.Protocol,
+                timeouts, requestId, responseStarted, suppressGeneratedFailureResponse);
+            return await HandleForwardingFailureAsync(context, exception, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -247,6 +90,46 @@ public sealed partial class ProxyForwarder
                 await upstreamLease.DisposeAsync().ConfigureAwait(false);
             }
         }
+    }
+
+    private async ValueTask<(Http1BodyReader? Reader, byte[]? ChunkLine)> ReadInitialChunkAsync(Stream clientStream, Http1HeadReadResult requestHeadRead,
+        Http1RequestHead requestHead, RuntimeListener listener, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
+    {
+        if (requestHead.Framing.Kind != Http1BodyKind.Chunked || clientStream is ExchangeClientStream)
+        {
+            return (null, null);
+        }
+
+        var reader = new Http1BodyReader(clientStream, requestHeadRead.InitialBodyBytes, _metrics, timeouts.ClientRequestBodyIdleTimeout, ProxyTimeoutKind.ClientRequestBodyIdle);
+        var line = await reader.ReadLineWithCrlfAsync(listener.MaxChunkLineBytes, cancellationToken).ConfigureAwait(false);
+        if (!Http1ChunkSizeParser.TryParseLine(line.AsSpan(), out _))
+        {
+            throw new Http1ClientProtocolException("Invalid chunk-size line.");
+        }
+
+        return (reader, line);
+    }
+
+    private ForwardingResult CompleteForwardingAttempt(ResponseForwardingResult responseResult, bool responseStarted, UpstreamConnectionLease? upstreamLease,
+        Http1RequestHead requestHead, RuntimeUpstream upstream)
+    {
+        if (responseResult.SuppressedForRetry)
+        {
+            _metrics.UpstreamFailed();
+            return ForwardingResult.Failure(responseStarted: false, responseStatusCode: responseResult.StatusCode, failureKind: ProxyFailureKind.UpstreamUnavailable);
+        }
+
+        if (responseResult.CanReuseUpstreamConnection && upstreamLease is not null)
+        {
+            upstreamLease.MarkReusable();
+        }
+
+        _metrics.UpstreamSucceeded();
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+        {
+            LogProxiedToUpstream10013(_logger, requestHead.Method, requestHead.Target, upstream.Name, null);
+        }
+        return ForwardingResult.Success(responseStarted, responseResult.KeepClientConnectionOpen, responseResult.StatusCode);
     }
 
     private async ValueTask<ResponseForwardingResult> ForwardHttp1Async(Stream upstreamStream, Stream clientStream, Http1HeadReadResult requestHeadRead, Http1RequestHead requestHead, RuntimeRoute route, RuntimeListener listener, RuntimeTimeouts timeouts, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, bool preferClientKeepAlive, string requestId, bool suppressGeneratedFailureResponse, Http1BodyReader? preReadRequestBodyReader, byte[]? preReadChunkLine, Action markResponseStarted, CancellationToken cancellationToken)
@@ -359,65 +242,6 @@ public sealed partial class ProxyForwarder
         return await ResponseAsync(cancellationToken, null).ConfigureAwait(false);
     }
 
-    private async ValueTask HandleTimeoutAsync(Stream clientStream, Http1RequestHead requestHead, RuntimeUpstream upstream, bool responseStarted, ProxyTimeoutException exception, RuntimeTimeouts timeouts, string requestId, CancellationToken cancellationToken, bool suppressGeneratedFailureResponse)
-    {
-        switch (exception.Kind)
-        {
-            case ProxyTimeoutKind.ClientRequestBodyIdle:
-                _metrics.ClientRequestBodyTimedOut();
-                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-                {
-                    LogClientRequestBodyTimedOut10021(_logger, requestHead.Method, requestHead.Target, exception);
-                }
-                if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-                {
-                    await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.ClientRequestBodyTimeout, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-                }
-
-                break;
-            case ProxyTimeoutKind.UpstreamConnect:
-                _metrics.UpstreamConnectTimedOut();
-                _metrics.UpstreamFailed();
-                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-                {
-                    LogTimedOutConnectingToUpstream10022(_logger, upstream.Name, exception);
-                }
-                if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-                {
-                    await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectTimeout, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-                }
-
-                break;
-            case ProxyTimeoutKind.UpstreamResponseHead:
-                _metrics.UpstreamResponseHeadTimedOut();
-                _metrics.UpstreamFailed();
-                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-                {
-                    LogTimedOutWaitingForUpstream10023(_logger, upstream.Name, exception);
-                }
-                if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse))
-                {
-                    await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamResponseHeadTimeout, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
-                }
-
-                break;
-            case ProxyTimeoutKind.UpstreamResponseBodyIdle:
-                _metrics.UpstreamResponseBodyTimedOut();
-                _metrics.UpstreamFailed();
-                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-                {
-                    LogTimedOutRelayingUpstreamResponse10024(_logger, upstream.Name, exception);
-                }
-                break;
-            case ProxyTimeoutKind.DownstreamWrite:
-                _metrics.DownstreamWriteTimedOut();
-                if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-                {
-                    LogDownstreamWriteTimedOutFor10025(_logger, requestHead.Method, requestHead.Target, exception);
-                }
-                break;
-        }
-    }
 
     private List<ProxyHeaderField> BuildHttp2RequestHeaders(Http1RequestHead requestHead, RuntimeRoute route, RuntimeUpstream upstream, string upstreamTarget, ForwardedHeadersContext forwardedHeaders)
     {

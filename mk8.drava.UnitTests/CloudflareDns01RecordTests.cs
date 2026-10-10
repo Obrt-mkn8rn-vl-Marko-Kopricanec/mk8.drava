@@ -9,7 +9,7 @@ public sealed class CloudflareDns01RecordTests
     public async Task ExistingProviderAdapterVerifiesCreatedDns01TxtContentAsync()
     {
         using var provider = new DevelopmentDnsProvider();
-        using var api = new CloudflareDnsApi(new string('a', 32), new string('A', 40), provider);
+        using var api = new CloudflareDnsApi(new Uri("https://api.dns.invalid/client/v4/"), new string('a', 32), new string('A', 40), provider);
         var host = "_acme-challenge.site.example";
         var value = new string('A', 43);
         var confirmed = await api.CreateAsync(host, "TXT", value, 60, "mk8.drava acme site=site order=owned", CancellationToken.None).ConfigureAwait(true);
@@ -28,7 +28,7 @@ public sealed class CloudflareDns01RecordTests
         using var provider = new DevelopmentDnsProvider();
         var foreign = new ProviderRecord("_acme-challenge.site.example", "TXT", "\"foreign value\"");
         provider.Records.Add(foreign);
-        using var api = new CloudflareDnsApi(new string('a', 32), new string('A', 40), provider);
+        using var api = new CloudflareDnsApi(new Uri("https://api.dns.invalid/client/v4/"), new string('a', 32), new string('A', 40), provider);
         var identity = await api.CreateTxtAsync(foreign.Name, new string('A', 43), 60, "mk8.drava acme site=site order=owned", CancellationToken.None).ConfigureAwait(true);
         Assert.Equal(2, provider.Records.Count);
         Assert.True(await api.DeleteTxtAsync(identity, CancellationToken.None).ConfigureAwait(true));
@@ -48,7 +48,7 @@ public sealed class CloudflareDns01RecordTests
     public async Task ChangedRecordIdentityPreventsCleanupAsync(string corruption)
     {
         using var provider = new DevelopmentDnsProvider();
-        using var api = new CloudflareDnsApi(new string('a', 32), new string('A', 40), provider);
+        using var api = new CloudflareDnsApi(new Uri("https://api.dns.invalid/client/v4/"), new string('a', 32), new string('A', 40), provider);
         var identity = await api.CreateTxtAsync("_acme-challenge.site.example", new string('A', 43), 60, "mk8.drava acme site=site order=owned", CancellationToken.None).ConfigureAwait(true);
         provider.Failure = corruption;
         Assert.False(await api.DeleteTxtAsync(identity, CancellationToken.None).ConfigureAwait(true));
@@ -60,10 +60,10 @@ public sealed class CloudflareDns01RecordTests
     public async Task AnotherZoneCannotConsumeTheCreatedRecordIdentityAsync()
     {
         using var creator = new DevelopmentDnsProvider();
-        using var owner = new CloudflareDnsApi(new string('a', 32), new string('A', 40), creator);
+        using var owner = new CloudflareDnsApi(new Uri("https://api.dns.invalid/client/v4/"), new string('a', 32), new string('A', 40), creator);
         var identity = await owner.CreateTxtAsync("_acme-challenge.site.example", new string('A', 43), 60, "mk8.drava acme site=site order=owned", CancellationToken.None).ConfigureAwait(true);
         using var other = new DevelopmentDnsProvider();
-        using var foreign = new CloudflareDnsApi(new string('c', 32), new string('A', 40), other);
+        using var foreign = new CloudflareDnsApi(new Uri("https://api.dns.invalid/client/v4/"), new string('c', 32), new string('A', 40), other);
         await Assert.ThrowsAsync<InvalidDataException>(() => foreign.DeleteTxtAsync(identity, CancellationToken.None).AsTask()).ConfigureAwait(true);
         Assert.Empty(other.Requests);
         Assert.Collection(creator.Records, record => Assert.Equal(identity.Id, record.Id));

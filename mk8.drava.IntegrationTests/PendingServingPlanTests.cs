@@ -105,7 +105,7 @@ public sealed class PendingServingPlanTests
         {
             ServingTrust = new ServingTrustSettings { Mode = "pinned", RootFingerprint = material.Root.GetCertHashString(HashAlgorithmName.SHA256) },
             ServingCertificatePath = Path.Combine(fixture.Application.StateDirectory, "public.pfx"),
-            DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = Path.Combine(fixture.Application.StateDirectory, "dns.token") },
+            DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = Path.Combine(fixture.Application.StateDirectory, "dns.token") },
             Acme = new AcmeIssuanceSettings { Enabled = true, TermsAccepted = true, DirectoryUrl = new Uri("https://development-ca.example/directory"), ContactEmails = ["ops@example.org"],
                 AccountKeyPath = Path.Combine(fixture.Application.StateDirectory, "account.pem"), CleanupJournalPath = Path.Combine(fixture.Application.StateDirectory, "cleanup.json"), PinnedServingRootPath = Path.Combine(fixture.Application.StateDirectory, "public-root.der") },
         },

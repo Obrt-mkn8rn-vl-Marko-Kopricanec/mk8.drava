@@ -264,7 +264,8 @@ public sealed class AcmeHostedPipelineTests
         using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
-        var services = Services(bootstrap); services.AddOwnerAcmeLifecycle(bootstrap, plans, History(repository, bootstrap));
+        Assert.Null(bootstrap.Controller!.Acme.DirectoryUrl);
+        var services = Services(bootstrap); services.AddOwnerAcmeLifecycle(bootstrap, plans, null);
         var provider = services.BuildServiceProvider(); await using var providerLifetime = provider.ConfigureAwait(true);
         Assert.IsType<DisabledAcmeCertificateIssuer>(provider.GetRequiredService<IAcmeCertificateIssuer>());
         Assert.Empty(provider.GetServices<IHostedService>().OfType<AcmeRenewalService>());
@@ -279,17 +280,17 @@ public sealed class AcmeHostedPipelineTests
         {
             ServingTrust = new ServingTrustSettings { Mode = "pinned", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256) },
             ServingCertificatePath = Path.Combine(directory, "public.pfx"),
-            DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = Path.Combine(directory, "dns.token") },
+            DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = Path.Combine(directory, "dns.token") },
             Acme = new AcmeIssuanceSettings { Enabled = true, TermsAccepted = true, DirectoryUrl = new Uri("https://ca.example/directory"), ContactEmails = ["ops@example.org"],
                 AccountKeyPath = Path.Combine(directory, "account.pem"), CleanupJournalPath = Path.Combine(directory, "cleanup.json"), PinnedServingRootPath = Path.Combine(directory, "public-root.der") },
         } };
     }
 
     private static CertesDns01CertificateIssuer Issuer(ApplicationBootstrap bootstrap, DevelopmentAcmeDnsProvider dns, DevelopmentAcmeServer server) => new(
-        new AcmeDns01IssuerPolicy { SiteDomain = bootstrap.Controller!.Domain, Directory = bootstrap.Controller.Acme.DirectoryUrl,
+        new AcmeDns01IssuerPolicy { SiteDomain = bootstrap.Controller!.Domain, Directory = bootstrap.Controller.Acme.RequireDirectoryUrl(),
             AccountKeyPath = bootstrap.Controller.Acme.AccountKeyPath, ContactEmails = bootstrap.Controller.Acme.ContactEmails, TermsAccepted = true, PollInterval = TimeSpan.FromMilliseconds(100) }, dns, () => server);
     private static SqliteAcmeCertificateStatusPersistence History(SqliteRegistryRepository repository, ApplicationBootstrap bootstrap) =>
-        new(repository, bootstrap.Controller!.Domain, bootstrap.Controller.Acme.DirectoryUrl);
+        new(repository, bootstrap.Controller!.Domain, bootstrap.Controller.Acme.RequireDirectoryUrl());
     private static AcmeCertificateManager Manager(ApplicationBootstrap bootstrap, AcmeServingLifecycle lifecycle, IAcmeCertificateIssuer issuer, AcmeCertificateStatusStore status, LifecycleCounters counters) =>
         new(lifecycle, lifecycle, new ApplicationDataDirectoryProvider(bootstrap.StateDirectory), issuer, lifecycle, new AcmeChallengeStore(), status, TimeProvider.System, counters, counters);
     internal static ServiceCollection Services(ApplicationBootstrap bootstrap)

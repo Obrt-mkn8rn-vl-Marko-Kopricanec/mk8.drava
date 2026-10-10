@@ -7,7 +7,8 @@ public sealed record AcmeRenewalConfigurationInput
     {
         ArgumentNullException.ThrowIfNull(Certificates);
         ArgumentException.ThrowIfNullOrWhiteSpace(StoragePath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(DirectoryUrl);
+        ArgumentNullException.ThrowIfNull(DirectoryUrl);
+        if (Enabled) ArgumentException.ThrowIfNullOrWhiteSpace(DirectoryUrl);
         this.Enabled = Enabled;
         this.StoragePath = StoragePath;
         this.DirectoryUrl = DirectoryUrl;

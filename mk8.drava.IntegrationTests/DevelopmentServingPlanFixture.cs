@@ -15,7 +15,7 @@ internal sealed class DevelopmentServingPlanFixture : IDisposable
     {
         _directory = directory; Clock = clock; Authority = authority;
         Application = new ApplicationBootstrap { SiteId = "site", StateDirectory = directory, Controller = new ControllerBootstrap
-            { Domain = "site.test", CertificateAuthorityPath = Path.Combine(directory, "ca.pfx"), EnrollmentRootFingerprint = fingerprint } };
+            { Domain = "site.test", CertificateAuthorityPath = Path.Combine(directory, "ca.pfx"), EnrollmentRootFingerprint = fingerprint, DnsServerAddress = "127.0.0.1" } };
         Gateway = new GatewayBootstrap { SiteId = "site", StateDirectory = directory, EnrollmentRootFingerprint = fingerprint };
     }
 

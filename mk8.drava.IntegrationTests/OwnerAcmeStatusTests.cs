@@ -10,20 +10,25 @@ namespace Mk8.Drava.IntegrationTests;
 public sealed class OwnerAcmeStatusTests
 {
     private static readonly string[] Domains = ["site.test", "*.site.test"];
-    [Fact]
-    public async Task OwnerPendingStatusIsAvailableWithoutLegacyProxyConfigurationOrIssuerConstructionAsync()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OwnerPendingStatusIsAvailableWithoutLegacyProxyConfigurationOrIssuerConstructionAsync(bool useStaging)
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var material = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow());
-        var bootstrap = PendingServingPlanTests.PublicApplication(fixture, material);
+        var configured = PendingServingPlanTests.PublicApplication(fixture, material);
+        var controller = configured.Controller ?? throw new InvalidOperationException("The fixture requires a controller.");
+        var bootstrap = configured with { Controller = controller with { Acme = controller.Acme with { UseStaging = useStaging } } };
         using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
         var services = AcmeHostedPipelineTests.Services(bootstrap);
-        services.AddOwnerAcmeLifecycle(bootstrap, plans, new SqliteAcmeCertificateStatusPersistence(repository, bootstrap.Controller!.Domain, bootstrap.Controller.Acme.DirectoryUrl));
+        services.AddOwnerAcmeLifecycle(bootstrap, plans, new SqliteAcmeCertificateStatusPersistence(repository, bootstrap.Controller!.Domain, bootstrap.Controller.Acme.RequireDirectoryUrl()));
         var provider = services.BuildServiceProvider(); await using var providerLifetime = provider.ConfigureAwait(true);
         var status = provider.GetRequiredService<ProxyAcmeAdministrationService>().GetStatus();
-        Assert.NotNull(status); Assert.True(status.Enabled); Assert.Equal(bootstrap.Controller.Acme.DirectoryUrl.AbsoluteUri, status.DirectoryUrl);
+        Assert.NotNull(status); Assert.True(status.Enabled); Assert.Equal(bootstrap.Controller.Acme.RequireDirectoryUrl().AbsoluteUri, status.DirectoryUrl);
+        Assert.Equal(useStaging, status.UseStaging);
         Assert.Collection(status.Certificates, certificate => { Assert.Equal("site", certificate.CertificateId); Assert.False(certificate.Active); Assert.Equal(Domains, certificate.Domains); });
         Assert.False(File.Exists(bootstrap.Controller.Acme.AccountKeyPath)); Assert.False(File.Exists(bootstrap.Controller.Acme.CleanupJournalPath + ".lock"));
         Assert.Null(plans.ReadPublicationProof());
@@ -42,7 +47,7 @@ public sealed class OwnerAcmeStatusTests
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
         var services = AcmeHostedPipelineTests.Services(bootstrap);
-        services.AddOwnerAcmeLifecycle(bootstrap, plans, new SqliteAcmeCertificateStatusPersistence(repository, bootstrap.Controller.Domain, bootstrap.Controller.Acme.DirectoryUrl));
+        services.AddOwnerAcmeLifecycle(bootstrap, plans, new SqliteAcmeCertificateStatusPersistence(repository, bootstrap.Controller.Domain, bootstrap.Controller.Acme.RequireDirectoryUrl()));
         var provider = services.BuildServiceProvider(); await using var providerLifetime = provider.ConfigureAwait(true);
         var status = provider.GetRequiredService<ProxyAcmeAdministrationService>().GetStatus(); Assert.NotNull(status);
         Assert.Collection(status.Certificates, certificate =>

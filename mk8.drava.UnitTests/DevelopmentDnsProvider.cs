@@ -23,7 +23,7 @@ internal sealed class DevelopmentDnsProvider : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var uri = request.RequestUri ?? throw new InvalidOperationException("Provider request URI is absent.");
-        Assert.Equal("https://api.cloudflare.com", uri.GetLeftPart(UriPartial.Authority));
+        Assert.Equal("https://api.dns.invalid", uri.GetLeftPart(UriPartial.Authority));
         Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
         Assert.Equal(new string('A', 40), request.Headers.Authorization?.Parameter);
         var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);

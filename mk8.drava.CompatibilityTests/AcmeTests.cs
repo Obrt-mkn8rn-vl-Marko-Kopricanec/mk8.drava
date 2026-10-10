@@ -30,7 +30,7 @@ internal static class AcmeTests
 
     public static void AcmeConfigValidationRejectsMissingTermsAcceptance()
     {
-        var failures = ProxyOperationalOptionsValidationRules.Validate(new ProxyOperationalOptions { Acme = new ProxyAcmeOptions { Enabled = true, TermsAccepted = false, Certificates = [new AcmeManagedCertificateOptions { Id = "home-acme", Domains = ["home.example.test"] }] } }, static _ => null, new Mk8.Drava.Application.INF.Configuration.ProxyAdminUrlPolicy(), new ProxyRelativeStoragePathPolicy(), new Mk8.Drava.Application.INF.Configuration.ProxyUrlSyntaxPolicy(), new ProxyForwardedHeadersAddressPolicy());
+        var failures = ProxyOperationalOptionsValidationRules.Validate(new ProxyOperationalOptions { Acme = new ProxyAcmeOptions { Enabled = true, DirectoryUrl = "https://acme.example.test/directory", TermsAccepted = false, Certificates = [new AcmeManagedCertificateOptions { Id = "home-acme", Domains = ["home.example.test"] }] } }, static _ => null, new Mk8.Drava.Application.INF.Configuration.ProxyAdminUrlPolicy(), new ProxyRelativeStoragePathPolicy(), new Mk8.Drava.Application.INF.Configuration.ProxyUrlSyntaxPolicy(), new ProxyForwardedHeadersAddressPolicy());
         AssertEx.True(failures.Any(static failure => failure.Contains("TermsAccepted", StringComparison.Ordinal)));
     }
 
@@ -273,6 +273,7 @@ internal static class AcmeTests
         var acmeOptions = new ProxyAcmeOptions
         {
             Enabled = true,
+            DirectoryUrl = "https://acme.example.test/directory",
             TermsAccepted = true,
             Certificates = [new AcmeManagedCertificateOptions
             {
@@ -290,6 +291,7 @@ internal static class AcmeTests
             {
               "acme": {
                 "enabled": true,
+                "directoryUrl": "https://acme.example.test/directory",
                 "termsAccepted": true,
                 "certificates": [
                   {
@@ -631,6 +633,7 @@ internal static class AcmeTests
             Acme = new ProxyAcmeOptions
             {
                 Enabled = true,
+                DirectoryUrl = "https://acme.example.test/directory",
                 TermsAccepted = true,
                 RetryAfterMinutes = 60,
                 CheckIntervalMinutes = checkIntervalMinutes,
