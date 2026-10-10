@@ -890,6 +890,87 @@ internal static class ProxyIntegrationTests
         AssertEx.True(result.UpstreamRequests[0].StartsWith("GET /first HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequests[0]);
     }
 
+    public static Task PersistentStartupFailureSettlesOwnedUpstreamAsync() => VerifyPersistentFailureSettlementAsync(startupFailure: true);
+
+    public static Task PersistentClientFailureSettlesOwnedUpstreamAsync() => VerifyPersistentFailureSettlementAsync(startupFailure: false);
+
+    private static async Task VerifyPersistentFailureSettlementAsync(bool startupFailure)
+    {
+        var proxyPort = GetFreeTcpPort();
+        using var blocker = new TcpListener(IPAddress.Loopback, proxyPort);
+        blocker.Server.ExclusiveAddressUse = true;
+        if (startupFailure) blocker.Start();
+        Task? upstreamTask = null;
+        var upstreamPort = 0;
+        var expectedClientFailure = new InvalidOperationException("controlled_persistent_client_failure");
+        InvalidOperationException? observedFailure = null;
+        try
+        {
+            await RunPersistentClientScenarioAsync([], ["HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"],
+                proxyPortOverride: proxyPort,
+                observeUpstream: (port, task) => { upstreamPort = port; upstreamTask = task; },
+                beforeClientOperation: startupFailure ? null : () => throw expectedClientFailure).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException exception)
+        {
+            observedFailure = exception;
+        }
+        var failure = AssertEx.NotNull(observedFailure);
+        if (startupFailure) AssertEx.True(failure.Message.Contains("AddressAlreadyInUse", StringComparison.Ordinal), failure.ToString());
+        else AssertEx.True(ReferenceEquals(expectedClientFailure, failure), failure.ToString());
+        AssertEx.True(upstreamTask is { IsCompleted: true, IsCanceled: true }, "Fixture must cancel and join its waiting upstream before returning the scenario failure.");
+        AssertEx.False(proxyPort == upstreamPort, "Declared proxy and upstream ports must be distinct.");
+        blocker.Stop();
+        AssertPersistentFixturePortReleased(proxyPort);
+        AssertPersistentFixturePortReleased(upstreamPort);
+    }
+
+    private static void AssertPersistentFixturePortReleased(int port)
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, port);
+        listener.Server.ExclusiveAddressUse = true;
+        listener.Start();
+    }
+
+    public static async Task PersistentCleanupFaultStillJoinsUpstreamAsync()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var callbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var upstream = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var primary = new InvalidOperationException("controlled_scenario_failure");
+        var callbackFailure = new InvalidOperationException("controlled_cancel_callback_failure");
+        var upstreamFailure = new IOException("controlled_upstream_failure");
+        await using var registration = cancellation.Token.Register(() => { callbackEntered.SetResult(); throw callbackFailure; }).ConfigureAwait(false);
+        #pragma warning disable CA2025 // Finally completes the controlled producer and directly joins settlement before the CTS/registration using scopes exit.
+        var settlement = SettlePersistentUpstreamAsync(cancellation, upstream.Task, primary);
+        #pragma warning restore CA2025
+        using var watchdog = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        AggregateException? observed = null;
+        try
+        {
+            await callbackEntered.Task.WaitAsync(watchdog.Token).ConfigureAwait(false);
+            AssertEx.False(settlement.IsCompleted, "Cancellation callback failure must not bypass joining the upstream task.");
+        }
+        finally
+        {
+            upstream.TrySetException(upstreamFailure);
+            try
+            {
+                await settlement.ConfigureAwait(false);
+            }
+            catch (AggregateException exception)
+            {
+                observed = exception;
+            }
+        }
+        var failures = AssertEx.NotNull(observed).Flatten().InnerExceptions;
+        AssertEx.Equal(3, failures.Count);
+        AssertEx.True(failures.Contains(primary));
+        AssertEx.True(failures.Contains(callbackFailure));
+        AssertEx.True(failures.Contains(upstreamFailure));
+        AssertEx.True(upstream.Task.IsCompleted && settlement.IsCompleted);
+    }
+
     public static async Task PersistentClientProxiesContentLengthPostAsync()
     {
         var result = await RunPersistentClientScenarioAsync(["POST /post HTTP/1.1\r\nHost: post.test\r\nContent-Length: 5\r\n\r\nhello", "GET /done HTTP/1.1\r\nHost: post.test\r\nConnection: close\r\n\r\n"], ["HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\npost", "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\ndone"]).ConfigureAwait(false);
@@ -1700,66 +1781,153 @@ internal static class ProxyIntegrationTests
         }
     }
 
-    private static async Task<PersistentClientScenarioResult> RunPersistentClientScenarioAsync(IReadOnlyList<string> clientRequests, IReadOnlyList<string> upstreamResponses, int maxRequestsPerClientConnection = 100, int clientKeepAliveIdleTimeoutMs = 1000, bool expectClientCloseAfterLastResponse = false, bool readSecondAsRawClose = false, bool closeUpstreamAfterEachResponse = false, bool useSeparateClients = false)
+    private static async Task<PersistentClientScenarioResult> RunPersistentClientScenarioAsync(IReadOnlyList<string> clientRequests, IReadOnlyList<string> upstreamResponses, int maxRequestsPerClientConnection = 100, int clientKeepAliveIdleTimeoutMs = 1000, bool expectClientCloseAfterLastResponse = false, bool readSecondAsRawClose = false, bool closeUpstreamAfterEachResponse = false, bool useSeparateClients = false, int? proxyPortOverride = null, Action<int, Task>? observeUpstream = null, Action? beforeClientOperation = null)
     {
-        var proxyPort = GetFreeTcpPort();
+        var proxyPort = proxyPortOverride ?? GetFreeTcpPort();
         var upstreamPort = GetFreeTcpPort();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var dataDirectory = Path.Combine(Path.GetTempPath(), $"mdrava-persistent-{Guid.NewGuid():N}");
+        Task<PersistentUpstreamResult>? upstreamTask = null;
+        Exception? scenarioFailure = null;
         try
         {
             ConfigurationTests.WriteSite(dataDirectory, "persistent.json", proxyPort, upstreamPort);
             ConfigurationTests.WriteOperationalConfig(dataDirectory, clientKeepAliveIdleTimeoutMs: clientKeepAliveIdleTimeoutMs, maxRequestsPerClientConnection: maxRequestsPerClientConnection);
-            var upstreamTask = RunPersistentScenarioUpstreamAsync(upstreamPort, upstreamResponses, closeUpstreamAfterEachResponse, timeout.Token);
+            upstreamTask = RunPersistentScenarioUpstreamAsync(upstreamPort, upstreamResponses, closeUpstreamAfterEachResponse, timeout.Token);
+            observeUpstream?.Invoke(upstreamPort, upstreamTask);
             using var host = BuildProxyHost(dataDirectory);
-            await host.StartAsync(timeout.Token).ConfigureAwait(false);
-            List<string> clientResponses = [];
-            try
-            {
-                if (useSeparateClients)
-                {
-                    foreach (var request in clientRequests)
-                    {
-                        clientResponses.Add(await SendSingleRequestAsync(proxyPort, request, timeout.Token).ConfigureAwait(false));
-                    }
-                }
-                else
-                {
-                    using var client = new TcpClient();
-                    await client.ConnectAsync(IPAddress.Loopback, proxyPort, timeout.Token).ConfigureAwait(false);
-                    var stream = client.GetStream();
-                    await using var streamDisposal = stream.ConfigureAwait(false);
-                    for (var index = 0; index < clientRequests.Count; index++)
-                    {
-                        var requestBytes = Encoding.ASCII.GetBytes(clientRequests[index]);
-                        await stream.WriteAsync(requestBytes, timeout.Token).ConfigureAwait(false);
-                        if (readSecondAsRawClose && index == 1)
-                        {
-                            clientResponses.Add(await ReadToEndAsync(stream, timeout.Token).ConfigureAwait(false));
-                            break;
-                        }
-
-                        clientResponses.Add(await ReadHttpResponseAsync(stream, timeout.Token).ConfigureAwait(false));
-                    }
-
-                    if (expectClientCloseAfterLastResponse)
-                    {
-                        await WaitForClientCloseAsync(stream, timeout.Token).ConfigureAwait(false);
-                    }
-                }
-            }
-            finally
-            {
-                await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
-            }
-
+            var clientResponses = await RunPersistentHostAsync(host, clientRequests, proxyPort, useSeparateClients, readSecondAsRawClose, expectClientCloseAfterLastResponse, beforeClientOperation, timeout.Token).ConfigureAwait(false);
             var upstreamResult = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
             var metrics = host.Services.GetRequiredService<ProxyMetrics>().Snapshot();
             return new PersistentClientScenarioResult(clientResponses, upstreamResult.Requests, upstreamResult.AcceptedConnections, expectClientCloseAfterLastResponse, metrics);
         }
+        #pragma warning disable CA1031 // Preserve the scenario failure while joining the owned upstream in finally.
+        catch (Exception exception)
+        {
+            scenarioFailure = exception;
+            throw;
+        }
+        #pragma warning restore CA1031
         finally
         {
-            DeleteDirectory(dataDirectory);
+            try
+            {
+                if (upstreamTask is not null)
+                    await SettlePersistentUpstreamAsync(timeout, upstreamTask, scenarioFailure).ConfigureAwait(false);
+            }
+            finally
+            {
+                DeleteDirectory(dataDirectory);
+            }
+        }
+    }
+
+    private static async Task<List<string>> RunPersistentHostAsync(IHost host, IReadOnlyList<string> clientRequests, int proxyPort, bool useSeparateClients, bool readSecondAsRawClose, bool expectClientCloseAfterLastResponse, Action? beforeClientOperation, CancellationToken cancellationToken)
+    {
+        List<string> clientResponses = [];
+        Exception? hostFailure = null;
+        try
+        {
+            await host.StartAsync(cancellationToken).ConfigureAwait(false);
+            beforeClientOperation?.Invoke();
+            await RunPersistentClientsAsync(clientRequests, clientResponses, proxyPort, useSeparateClients, readSecondAsRawClose, expectClientCloseAfterLastResponse, cancellationToken).ConfigureAwait(false);
+        }
+        #pragma warning disable CA1031 // Preserve startup/client failure while the host settles its owned listeners.
+        catch (Exception exception)
+        {
+            hostFailure = exception;
+            throw;
+        }
+        #pragma warning restore CA1031
+        finally
+        {
+            await StopPersistentHostAsync(host, hostFailure).ConfigureAwait(false);
+        }
+
+        return clientResponses;
+    }
+
+    private static async Task RunPersistentClientsAsync(IReadOnlyList<string> clientRequests, List<string> clientResponses, int proxyPort, bool useSeparateClients, bool readSecondAsRawClose, bool expectClientCloseAfterLastResponse, CancellationToken cancellationToken)
+    {
+        if (useSeparateClients)
+        {
+            foreach (var request in clientRequests)
+            {
+                clientResponses.Add(await SendSingleRequestAsync(proxyPort, request, cancellationToken).ConfigureAwait(false));
+            }
+        }
+        else
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, proxyPort, cancellationToken).ConfigureAwait(false);
+            var stream = client.GetStream();
+            await using var streamDisposal = stream.ConfigureAwait(false);
+            for (var index = 0; index < clientRequests.Count; index++)
+            {
+                var requestBytes = Encoding.ASCII.GetBytes(clientRequests[index]);
+                await stream.WriteAsync(requestBytes, cancellationToken).ConfigureAwait(false);
+                if (readSecondAsRawClose && index == 1)
+                {
+                    clientResponses.Add(await ReadToEndAsync(stream, cancellationToken).ConfigureAwait(false));
+                    break;
+                }
+
+                clientResponses.Add(await ReadHttpResponseAsync(stream, cancellationToken).ConfigureAwait(false));
+            }
+
+            if (expectClientCloseAfterLastResponse)
+            {
+                await WaitForClientCloseAsync(stream, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static async Task StopPersistentHostAsync(IHost host, Exception? hostFailure)
+    {
+        try
+        {
+            await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        #pragma warning disable CA1031 // Both the original scenario fault and host-stop fault remain observable.
+        catch (Exception exception) when (hostFailure is not null)
+        {
+            throw new AggregateException("Persistent fixture host stop failed.", hostFailure, exception);
+        }
+        #pragma warning restore CA1031
+    }
+
+    private static async Task SettlePersistentUpstreamAsync(CancellationTokenSource timeout, Task upstreamTask, Exception? scenarioFailure)
+    {
+        List<Exception> cleanupFailures = [];
+        try
+        {
+            await timeout.CancelAsync().ConfigureAwait(false);
+        }
+        #pragma warning disable CA1031 // Cancellation callback failure cannot bypass joining the started fixture task.
+        catch (Exception exception)
+        {
+            cleanupFailures.Add(exception);
+        }
+        #pragma warning restore CA1031
+        try
+        {
+            #pragma warning disable VSTHRD003 // Caller started this fixture task in the same context; mandatory join has no UI dependency.
+            await upstreamTask.ConfigureAwait(false);
+            #pragma warning restore VSTHRD003
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && upstreamTask.IsCanceled)
+        {
+        }
+        #pragma warning disable CA1031 // Observe exact upstream failure; retain both scenario and distinct cleanup faults.
+        catch (Exception exception)
+        {
+            if (!ReferenceEquals(exception, scenarioFailure)) cleanupFailures.Add(exception);
+        }
+        #pragma warning restore CA1031
+        if (cleanupFailures.Count > 0)
+        {
+            if (scenarioFailure is not null) cleanupFailures.Insert(0, scenarioFailure);
+            throw new AggregateException("Persistent fixture cleanup failed.", cleanupFailures);
         }
     }
 
@@ -2202,19 +2370,7 @@ internal static class ProxyIntegrationTests
         return false;
     }
 
-    private static int GetFreeTcpPort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        try
-        {
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
-        finally
-        {
-            listener.Stop();
-        }
-    }
+    private static int GetFreeTcpPort() => TestPortAllocator.GetFreeTcpPort();
 
     private sealed record ProxyScenarioResult(string ClientResponse, string UpstreamRequest, ProxyMetricsSnapshot Metrics, IReadOnlyList<ProxyRecentRequestDiagnosticEvent> Diagnostics);
     private sealed record TlsProxyScenarioResult(string ClientResponse, string UpstreamRequest, string RemoteCertificateSubject, ProxyMetricsSnapshot Metrics);
