@@ -45,24 +45,8 @@ internal sealed record TestRunOptions(IReadOnlySet<string> Categories, bool List
                 continue;
             }
 
-            const string categoryPrefix = "--category=";
-            const string categoriesPrefix = "--categories=";
-            const string summaryFilePrefix = "--summary-file=";
-            if (arg.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
+            if (TryReadInlineOption(arg, categories, ref summaryFile))
             {
-                AddCategories(arg[categoryPrefix.Length..], categories);
-                continue;
-            }
-
-            if (arg.StartsWith(categoriesPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                AddCategories(arg[categoriesPrefix.Length..], categories);
-                continue;
-            }
-
-            if (arg.StartsWith(summaryFilePrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                summaryFile = arg[summaryFilePrefix.Length..];
                 continue;
             }
 
@@ -71,6 +55,32 @@ internal sealed record TestRunOptions(IReadOnlySet<string> Categories, bool List
 
         var canonical = categories.Select(TestTaxonomy.CanonicalCategory).OrderBy(static category => category, StringComparer.Ordinal).ToArray();
         return new TestRunOptions(canonical.ToHashSet(StringComparer.Ordinal), listCategories, checkMetadata, summaryFile);
+    }
+
+    private static bool TryReadInlineOption(string arg, HashSet<string> categories, ref string? summaryFile)
+    {
+        const string categoryPrefix = "--category=";
+        const string categoriesPrefix = "--categories=";
+        const string summaryFilePrefix = "--summary-file=";
+        if (arg.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            AddCategories(arg[categoryPrefix.Length..], categories);
+            return true;
+        }
+
+        if (arg.StartsWith(categoriesPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            AddCategories(arg[categoriesPrefix.Length..], categories);
+            return true;
+        }
+
+        if (arg.StartsWith(summaryFilePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            summaryFile = arg[summaryFilePrefix.Length..];
+            return true;
+        }
+
+        return false;
     }
 
     private static void AddCategories(string value, HashSet<string> categories)

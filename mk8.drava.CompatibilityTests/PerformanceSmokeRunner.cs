@@ -26,6 +26,7 @@ internal static class PerformanceSmokeRunner
     private const string Cache = "Cache";
     private const string Headers = "Headers";
     private static readonly string[] Domains = [Routing, Config, Http1, Cache, Headers];
+    private static readonly JsonSerializerOptions SummaryJsonOptions = new() { WriteIndented = true };
     public static bool IsPerformanceCommand(string[] args)
     {
         return args.Any(static arg => string.Equals(arg, "--performance", StringComparison.OrdinalIgnoreCase) || string.Equals(arg, "--list-performance-domains", StringComparison.OrdinalIgnoreCase));
@@ -62,9 +63,23 @@ internal static class PerformanceSmokeRunner
             return 2;
         }
 
-        var failures = 0;
         List<PerformanceSmokeResult> results = [];
         List<string> failureDomains = [];
+        var failures = await RunSelectedDomainsAsync(selectedDomains, results, failureDomains).ConfigureAwait(false);
+
+        WritePerformanceSummary(options, selectedDomains, results, failures, failureDomains);
+        if (failures > 0)
+        {
+            return 1;
+        }
+
+        Console.WriteLine($"Passed {selectedDomains.Length} performance smoke domains.");
+        return 0;
+    }
+
+    private static async Task<int> RunSelectedDomainsAsync(IReadOnlyList<string> selectedDomains, List<PerformanceSmokeResult> results, List<string> failureDomains)
+    {
+        var failures = 0;
         foreach (var domain in selectedDomains)
         {
             try
@@ -88,14 +103,7 @@ internal static class PerformanceSmokeRunner
             }
         }
 
-        WritePerformanceSummary(options, selectedDomains, results, failures, failureDomains);
-        if (failures > 0)
-        {
-            return 1;
-        }
-
-        Console.WriteLine($"Passed {selectedDomains.Length} performance smoke domains.");
-        return 0;
+        return failures;
     }
 
     private static void WritePerformanceSummary(PerformanceSmokeOptions options, string[] selectedDomains, IReadOnlyList<PerformanceSmokeResult> results, int failures, IReadOnlyList<string> failureDomains)
@@ -121,7 +129,7 @@ internal static class PerformanceSmokeRunner
             failures = failureDomains,
             results = results.Select(static result => new { domain = result.Domain, operations = result.Operations, elapsedMilliseconds = result.Elapsed.TotalMilliseconds, thresholdMilliseconds = result.Threshold.TotalMilliseconds, passed = result.Passed, detail = result.Detail }).ToArray()
         };
-        File.WriteAllText(options.SummaryFile, JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(options.SummaryFile, JsonSerializer.Serialize(summary, SummaryJsonOptions));
     }
 
     private static Task<PerformanceSmokeResult> RunDomainAsync(string domain)
@@ -619,24 +627,8 @@ internal static class PerformanceSmokeRunner
                     continue;
                 }
 
-                const string domainPrefix = "--domain=";
-                const string domainsPrefix = "--domains=";
-                const string summaryFilePrefix = "--summary-file=";
-                if (arg.StartsWith(domainPrefix, StringComparison.OrdinalIgnoreCase))
+                if (TryReadInlineOption(arg, domains, ref summaryFile))
                 {
-                    AddDomains(arg[domainPrefix.Length..], domains);
-                    continue;
-                }
-
-                if (arg.StartsWith(domainsPrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    AddDomains(arg[domainsPrefix.Length..], domains);
-                    continue;
-                }
-
-                if (arg.StartsWith(summaryFilePrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    summaryFile = arg[summaryFilePrefix.Length..];
                     continue;
                 }
 
@@ -650,6 +642,32 @@ internal static class PerformanceSmokeRunner
 
             var canonical = domains.Select(CanonicalDomain).OrderBy(static domain => domain, StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
             return new PerformanceSmokeOptions(canonical, listDomains, summaryFile);
+        }
+
+        private static bool TryReadInlineOption(string arg, HashSet<string> domains, ref string? summaryFile)
+        {
+            const string domainPrefix = "--domain=";
+            const string domainsPrefix = "--domains=";
+            const string summaryFilePrefix = "--summary-file=";
+            if (arg.StartsWith(domainPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                AddDomains(arg[domainPrefix.Length..], domains);
+                return true;
+            }
+
+            if (arg.StartsWith(domainsPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                AddDomains(arg[domainsPrefix.Length..], domains);
+                return true;
+            }
+
+            if (arg.StartsWith(summaryFilePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                summaryFile = arg[summaryFilePrefix.Length..];
+                return true;
+            }
+
+            return false;
         }
 
         private static void AddDomains(string value, HashSet<string> domains)

@@ -7,20 +7,7 @@ public sealed record RuntimeHttp3SupportProjection
 
     public RuntimeHttp3SupportProjection(string RuntimeSupport, bool QuicListenerSupported, bool QuicConnectionSupported, string Configured, string EnablementLevel, bool EnabledForTraffic, bool QuicListenerReady, bool AltSvcConfigured, bool AltSvcActive, int? AltSvcMaxAgeSeconds, string DisabledReason, bool UdpQuicListenerIdentityModeled, string ReadinessConclusion, string DefaultEnablementState, IReadOnlyList<string> DefaultReadinessBlockers, string AltSvcStateReason, string QpackMode, int QpackDynamicTableCapacity, int QpackBlockedStreams, string RequestBodyMode, string ClientHttp3SupportLevel, string UpstreamHttp3SupportLevel, IReadOnlyList<string> ClientProtocols, IReadOnlyList<string> UpstreamProtocols, IReadOnlyList<string> SupportedRouteActions, IReadOnlyList<string> SupportedPolicyFeatures, IReadOnlyList<string> UnsupportedFeatures, bool UpstreamHttp3Configured, string UpstreamPoolingMode, bool UpstreamMultiplexingEnabled, int UpstreamMaxStreamsPerConnection, string UpstreamQpackMode, string UpstreamPoolingLimitationReason)
     {
-        ArgumentNullException.ThrowIfNull(RuntimeSupport);
-        ArgumentNullException.ThrowIfNull(Configured);
-        ArgumentNullException.ThrowIfNull(EnablementLevel);
-        ArgumentNullException.ThrowIfNull(DisabledReason);
-        ArgumentNullException.ThrowIfNull(ReadinessConclusion);
-        ArgumentNullException.ThrowIfNull(DefaultEnablementState);
-        ArgumentNullException.ThrowIfNull(AltSvcStateReason);
-        ArgumentNullException.ThrowIfNull(QpackMode);
-        ArgumentNullException.ThrowIfNull(RequestBodyMode);
-        ArgumentNullException.ThrowIfNull(ClientHttp3SupportLevel);
-        ArgumentNullException.ThrowIfNull(UpstreamHttp3SupportLevel);
-        ArgumentNullException.ThrowIfNull(UpstreamPoolingMode);
-        ArgumentNullException.ThrowIfNull(UpstreamQpackMode);
-        ArgumentNullException.ThrowIfNull(UpstreamPoolingLimitationReason);
+        ValidateRequiredText(RuntimeSupport, Configured, EnablementLevel, DisabledReason, ReadinessConclusion, DefaultEnablementState, AltSvcStateReason, QpackMode, RequestBodyMode, ClientHttp3SupportLevel, UpstreamHttp3SupportLevel, UpstreamPoolingMode, UpstreamQpackMode, UpstreamPoolingLimitationReason);
         this.RuntimeSupport = RuntimeSupport;
         this.QuicListenerSupported = QuicListenerSupported;
         this.QuicConnectionSupported = QuicConnectionSupported;
@@ -54,6 +41,24 @@ public sealed record RuntimeHttp3SupportProjection
         this.UpstreamMaxStreamsPerConnection = UpstreamMaxStreamsPerConnection;
         this.UpstreamQpackMode = UpstreamQpackMode;
         this.UpstreamPoolingLimitationReason = UpstreamPoolingLimitationReason;
+    }
+
+    private static void ValidateRequiredText(string RuntimeSupport, string Configured, string EnablementLevel, string DisabledReason, string ReadinessConclusion, string DefaultEnablementState, string AltSvcStateReason, string QpackMode, string RequestBodyMode, string ClientHttp3SupportLevel, string UpstreamHttp3SupportLevel, string UpstreamPoolingMode, string UpstreamQpackMode, string UpstreamPoolingLimitationReason)
+    {
+        ArgumentNullException.ThrowIfNull(RuntimeSupport);
+        ArgumentNullException.ThrowIfNull(Configured);
+        ArgumentNullException.ThrowIfNull(EnablementLevel);
+        ArgumentNullException.ThrowIfNull(DisabledReason);
+        ArgumentNullException.ThrowIfNull(ReadinessConclusion);
+        ArgumentNullException.ThrowIfNull(DefaultEnablementState);
+        ArgumentNullException.ThrowIfNull(AltSvcStateReason);
+        ArgumentNullException.ThrowIfNull(QpackMode);
+        ArgumentNullException.ThrowIfNull(RequestBodyMode);
+        ArgumentNullException.ThrowIfNull(ClientHttp3SupportLevel);
+        ArgumentNullException.ThrowIfNull(UpstreamHttp3SupportLevel);
+        ArgumentNullException.ThrowIfNull(UpstreamPoolingMode);
+        ArgumentNullException.ThrowIfNull(UpstreamQpackMode);
+        ArgumentNullException.ThrowIfNull(UpstreamPoolingLimitationReason);
     }
 
     public string RuntimeSupport { get; }
