@@ -7,6 +7,16 @@ public static class ProxyReadinessEvaluator
         var subsystems = input.Subsystems;
         List<string> notReadyReasons = [];
         List<string> degradedReasons = [];
+        AddAvailabilityReasons(input, notReadyReasons, degradedReasons);
+        AddBackendDegradation(subsystems, degradedReasons);
+
+        var state = notReadyReasons.Count > 0 ? ProxyStatusText.NotReady : degradedReasons.Count > 0 ? ProxyStatusText.Degraded : ProxyStatusText.Healthy;
+        var reasons = notReadyReasons.Count > 0 ? notReadyReasons : degradedReasons;
+        return ProxyReadinessStatus.Evaluated(state, reasons, input.EvaluatedAtUtc, input.ConfigGeneration);
+    }
+    private static void AddAvailabilityReasons(ProxyReadinessEvaluationInput input, List<string> notReadyReasons, List<string> degradedReasons)
+    {
+        var subsystems = input.Subsystems;
         if (!input.HasActiveConfiguration)
         {
             notReadyReasons.Add("config_missing");
@@ -49,7 +59,10 @@ public static class ProxyReadinessEvaluator
         {
             degradedReasons.Add("runtime_preflight_degraded");
         }
+    }
 
+    private static void AddBackendDegradation(ProxySubsystemSummaries subsystems, List<string> degradedReasons)
+    {
         if (subsystems.Upstreams.Unhealthy > 0)
         {
             degradedReasons.Add("upstream_unhealthy");
@@ -94,9 +107,5 @@ public static class ProxyReadinessEvaluator
         {
             degradedReasons.Add("http3_not_ready");
         }
-
-        var state = notReadyReasons.Count > 0 ? ProxyStatusText.NotReady : degradedReasons.Count > 0 ? ProxyStatusText.Degraded : ProxyStatusText.Healthy;
-        var reasons = notReadyReasons.Count > 0 ? notReadyReasons : degradedReasons;
-        return ProxyReadinessStatus.Evaluated(state, reasons, input.EvaluatedAtUtc, input.ConfigGeneration);
     }
 }

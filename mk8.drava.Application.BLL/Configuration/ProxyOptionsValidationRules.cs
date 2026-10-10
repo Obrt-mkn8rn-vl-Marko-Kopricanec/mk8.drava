@@ -16,65 +16,7 @@ public static partial class ProxyOptionsValidationRules
         {
             var route = options.Routes[routeIndex];
             var routePrefix = $"Proxy:Routes:{routeIndex}";
-            if (string.IsNullOrWhiteSpace(route.Name))
-            {
-                failures.Add($"{routePrefix}:Name is required.");
-            }
-            else if (!routeNames.Add(route.Name))
-            {
-                failures.Add($"{routePrefix}:Name '{route.Name}' is duplicated.");
-            }
-
-            if (string.IsNullOrWhiteSpace(route.Host))
-            {
-                failures.Add($"{routePrefix}:Host is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(route.PathPrefix) || !route.PathPrefix.StartsWith('/'))
-            {
-                failures.Add($"{routePrefix}:PathPrefix must start with '/'.");
-            }
-
-            var routeAction = string.IsNullOrWhiteSpace(route.Action) ? "proxy" : route.Action;
-            if (!IsRouteAction(routeAction))
-            {
-                failures.Add($"{routePrefix}:Action must be 'proxy', 'redirect', or 'staticResponse'.");
-            }
-
-            if (IsProxyAction(routeAction) && !string.Equals(route.LoadBalancingPolicy, "round-robin", StringComparison.OrdinalIgnoreCase))
-            {
-                failures.Add($"{routePrefix}:LoadBalancingPolicy must be 'round-robin' for Phase 8.");
-            }
-
-            if (IsProxyAction(routeAction))
-            {
-                ValidateHealthCheck(failures, routePrefix, route.HealthCheck);
-            }
-
-            ValidateRedirectPolicy(failures, routePrefix, route.HttpsRedirect);
-            ValidateCanonicalHost(failures, routePrefix, route.CanonicalHost);
-            ProxyHeaderPolicyOptionsValidationRules.Validate(failures, routePrefix, route.HeaderPolicy);
-            ValidatePathRewrite(failures, routePrefix, route.PathRewrite);
-            ValidateMaintenance(failures, routePrefix, route.Maintenance);
-            ValidateCachePolicy(failures, routePrefix, route.Cache, routeAction);
-            ValidateRetryPolicy(failures, routePrefix, route.Retry, routeAction);
-            ValidateOverrides(failures, routePrefix, route.Overrides);
-            if (IsProxyAction(routeAction) && route.Upstreams.Count == 0)
-            {
-                failures.Add($"{routePrefix}:Upstreams must contain at least one upstream.");
-            }
-
-            if (IsRedirectAction(routeAction))
-            {
-                ValidateRedirectRoute(failures, routePrefix, route.Redirect, urlSyntaxPolicy);
-            }
-
-            if (IsStaticResponseAction(routeAction))
-            {
-                ValidateStaticResponse(failures, routePrefix, route.StaticResponse);
-            }
-
-            ValidateUpstreams(failures, routePrefix, route, endpointAddressPolicy);
+            ValidateRoute(failures, routePrefix, route, routeNames, endpointAddressPolicy, urlSyntaxPolicy);
         }
     }
 
@@ -492,67 +434,8 @@ public static partial class ProxyOptionsValidationRules
             return;
         }
 
-        if (!IsProxyAction(routeAction))
-        {
-            failures.Add($"{routePrefix}:Cache can only be enabled for proxy routes.");
-        }
-
-        if (cache.MaxEntryBytes is <= 0 or > MaximumCacheEntryBytes)
-        {
-            failures.Add($"{routePrefix}:Cache:MaxEntryBytes must be between 1 and {MaximumCacheEntryBytes}.");
-        }
-
-        if (cache.MaxTotalBytes is <= 0 or > MaximumCacheTotalBytes)
-        {
-            failures.Add($"{routePrefix}:Cache:MaxTotalBytes must be between 1 and {MaximumCacheTotalBytes}.");
-        }
-
-        if (cache.MaxEntryBytes > 0 && cache.MaxTotalBytes > 0 && cache.MaxEntryBytes > cache.MaxTotalBytes)
-        {
-            failures.Add($"{routePrefix}:Cache:MaxEntryBytes must not exceed Cache:MaxTotalBytes.");
-        }
-
-        if (cache.DefaultTtlSeconds <= 0)
-        {
-            failures.Add($"{routePrefix}:Cache:DefaultTtlSeconds must be greater than 0.");
-        }
-
-        for (var index = 0; index < cache.VaryByHeaders.Count; index++)
-        {
-            var headerName = cache.VaryByHeaders[index];
-            if (string.IsNullOrWhiteSpace(headerName) || !ProxyHeaderPolicyOptionsValidationRules.IsValidHttpFieldName(headerName))
-            {
-                failures.Add($"{routePrefix}:Cache:VaryByHeaders:{index} '{headerName}' is not a valid HTTP field name.");
-            }
-        }
-
-        if (cache.CacheableStatusCodes.Count == 0)
-        {
-            failures.Add($"{routePrefix}:Cache:CacheableStatusCodes must contain at least one status code.");
-        }
-
-        for (var index = 0; index < cache.CacheableStatusCodes.Count; index++)
-        {
-            var statusCode = cache.CacheableStatusCodes[index];
-            if (statusCode is < 200 or > 599)
-            {
-                failures.Add($"{routePrefix}:Cache:CacheableStatusCodes:{index} must be an HTTP response status code.");
-            }
-        }
-
-        if (cache.Methods.Count == 0)
-        {
-            failures.Add($"{routePrefix}:Cache:Methods must contain GET, HEAD, or both.");
-        }
-
-        for (var index = 0; index < cache.Methods.Count; index++)
-        {
-            var method = cache.Methods[index];
-            if (!ProxyRequestMethodPolicy.IsSafeReadMethod(method))
-            {
-                failures.Add($"{routePrefix}:Cache:Methods:{index} must be GET or HEAD.");
-            }
-        }
+        ValidateEnabledCacheLimits(failures, routePrefix, cache, routeAction);
+        ValidateCacheSelectors(failures, routePrefix, cache);
     }
 
     private const int MaxGeneratedBodyBytes = 64 * 1024;
@@ -605,117 +488,9 @@ public static partial class ProxyOptionsValidationRules
         {
             var listener = options.Listeners[index];
             var prefix = $"Proxy:Listeners:{index}";
-            if (string.IsNullOrWhiteSpace(listener.Name))
-            {
-                failures.Add($"{prefix}:Name is required.");
-            }
-            else if (!listenerNames.Add(listener.Name))
-            {
-                failures.Add($"{prefix}:Name '{listener.Name}' is duplicated.");
-            }
-
-            if (!endpointAddressPolicy.IsListenerAddress(listener.Address))
-            {
-                failures.Add($"{prefix}:Address must be an IP address for Phase 1.");
-            }
-
-            var isHttp = string.Equals(listener.Transport, "http", StringComparison.OrdinalIgnoreCase);
-            var isHttps = string.Equals(listener.Transport, "https", StringComparison.OrdinalIgnoreCase);
-            if (!isHttp && !isHttps)
-            {
-                failures.Add($"{prefix}:Transport must be 'http' or 'https'.");
-            }
-
-            var http3Compatibility = RuntimeHttp3Compatibility.From(listener);
-            var listenerProtocols = http3Compatibility.Protocols;
-            if (!http3Compatibility.ProtocolsValid)
-            {
-                failures.Add($"{prefix}:Protocols must be {SupportedListenerProtocolsText()}.");
-            }
-            else if (listenerProtocols.HasFlag(RuntimeListenerProtocols.Http2) && !isHttps)
-            {
-                failures.Add($"{prefix}:HTTP/2 requires an HTTPS listener with ALPN; h2c is not supported.");
-            }
-
-            var http3Enablement = http3Compatibility.EffectiveEnablement;
-            var explicitHttp3Requested = http3Compatibility.ExplicitHttp3Requested;
-            if (explicitHttp3Requested)
-            {
-                if (http3Enablement == RuntimeHttp3Enablement.Disabled)
-                {
-                    failures.Add($"{prefix}:HTTP/3 protocols cannot be combined with Http3Enablement 'disabled'.");
-                }
-
-                if (!isHttps)
-                {
-                    failures.Add($"{prefix}:HTTP/3 requires an HTTPS listener; QUIC TLS over plaintext is not supported.");
-                }
-
-                if (string.IsNullOrWhiteSpace(listener.DefaultCertificateId) && listener.SniCertificates.Count == 0)
-                {
-                    failures.Add($"{prefix}:HTTP/3 requires DefaultCertificateId or SniCertificates so QUIC TLS can use the certificate registry.");
-                }
-            }
-
-            if (!http3Compatibility.EnablementValid)
-            {
-                failures.Add($"{prefix}:Http3Enablement must be {SupportedHttp3EnablementsText()} when configured.");
-            }
-
-            if (listener.Http3AltSvcMaxAgeSeconds is < 0 or > 31536000)
-            {
-                failures.Add($"{prefix}:Http3AltSvcMaxAgeSeconds must be between 0 and 31536000.");
-            }
-
-            if (listener.Http3AltSvcEnabled && string.Equals(listener.Http3Enablement, "disabled", StringComparison.OrdinalIgnoreCase))
-            {
-                failures.Add($"{prefix}:Http3AltSvcEnabled cannot be true when Http3Enablement is 'disabled'.");
-            }
-
-            if (listener.Port is < 1 or > 65535)
-            {
-                failures.Add($"{prefix}:Port must be between 1 and 65535.");
-            }
-
-            if (listener.Backlog < 1)
-            {
-                failures.Add($"{prefix}:Backlog must be greater than zero.");
-            }
-
-            if (listener.MaxRequestHeadBytes is < 1024 or > 1024 * 1024)
-            {
-                failures.Add($"{prefix}:MaxRequestHeadBytes must be between 1024 and 1048576.");
-            }
-
-            if (listener.ForwardingBufferBytes is < 4096 or > 1024 * 1024)
-            {
-                failures.Add($"{prefix}:ForwardingBufferBytes must be between 4096 and 1048576.");
-            }
-
-            if (listener.MaxResponseHeadBytes is < 1024 or > 1024 * 1024)
-            {
-                failures.Add($"{prefix}:MaxResponseHeadBytes must be between 1024 and 1048576.");
-            }
-
-            if (listener.MaxChunkLineBytes is < 64 or > 16 * 1024)
-            {
-                failures.Add($"{prefix}:MaxChunkLineBytes must be between 64 and 16384.");
-            }
-
-            if (listener.Http2MaxConcurrentStreams is < 1 or > 1000)
-            {
-                failures.Add($"{prefix}:Http2MaxConcurrentStreams must be between 1 and 1000.");
-            }
-
-            if (listener.Http2MaxHeaderListBytes is < 1024 or > 1024 * 1024)
-            {
-                failures.Add($"{prefix}:Http2MaxHeaderListBytes must be between 1024 and 1048576.");
-            }
-
-            if (listener.Http2MaxFrameSize is < 16 * 1024 or > 16 * 1024 * 1024 - 1)
-            {
-                failures.Add($"{prefix}:Http2MaxFrameSize must be between 16384 and 16777215.");
-            }
+            var isHttps = ValidateListenerIdentity(failures, prefix, listener, listenerNames, endpointAddressPolicy);
+            ValidateListenerProtocols(failures, prefix, listener, isHttps);
+            ValidateListenerLimits(failures, prefix, listener);
 
             var bindKey = $"{listener.Address.Trim().ToLowerInvariant()}|{listener.Port}|{listener.Transport.Trim().ToLowerInvariant()}";
             if (listener.Enabled && !listenerBinds.Add(bindKey))
@@ -727,6 +502,269 @@ public static partial class ProxyOptionsValidationRules
         if (options.Listeners.Count > 0 && !options.Listeners.Any(static listener => listener.Enabled))
         {
             failures.Add("Proxy:Listeners must contain at least one enabled listener.");
+        }
+    }
+
+    private static void ValidateRoute(List<string> failures, string routePrefix, ProxyRouteOptions route, HashSet<string> routeNames, IProxyEndpointAddressPolicy endpointAddressPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy)
+    {
+        ValidateRouteIdentity(failures, routePrefix, route, routeNames);
+        var routeAction = string.IsNullOrWhiteSpace(route.Action) ? "proxy" : route.Action;
+        if (!IsRouteAction(routeAction))
+        {
+            failures.Add($"{routePrefix}:Action must be 'proxy', 'redirect', or 'staticResponse'.");
+        }
+
+        if (IsProxyAction(routeAction) && !string.Equals(route.LoadBalancingPolicy, "round-robin", StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add($"{routePrefix}:LoadBalancingPolicy must be 'round-robin' for Phase 8.");
+        }
+
+        if (IsProxyAction(routeAction))
+        {
+            ValidateHealthCheck(failures, routePrefix, route.HealthCheck);
+        }
+
+        ValidateRedirectPolicy(failures, routePrefix, route.HttpsRedirect);
+        ValidateCanonicalHost(failures, routePrefix, route.CanonicalHost);
+        ProxyHeaderPolicyOptionsValidationRules.Validate(failures, routePrefix, route.HeaderPolicy);
+        ValidatePathRewrite(failures, routePrefix, route.PathRewrite);
+        ValidateMaintenance(failures, routePrefix, route.Maintenance);
+        ValidateCachePolicy(failures, routePrefix, route.Cache, routeAction);
+        ValidateRetryPolicy(failures, routePrefix, route.Retry, routeAction);
+        ValidateOverrides(failures, routePrefix, route.Overrides);
+        if (IsProxyAction(routeAction) && route.Upstreams.Count == 0)
+        {
+            failures.Add($"{routePrefix}:Upstreams must contain at least one upstream.");
+        }
+
+        if (IsRedirectAction(routeAction))
+        {
+            ValidateRedirectRoute(failures, routePrefix, route.Redirect, urlSyntaxPolicy);
+        }
+
+        if (IsStaticResponseAction(routeAction))
+        {
+            ValidateStaticResponse(failures, routePrefix, route.StaticResponse);
+        }
+
+        ValidateUpstreams(failures, routePrefix, route, endpointAddressPolicy);
+    }
+
+    private static void ValidateRouteIdentity(List<string> failures, string routePrefix, ProxyRouteOptions route, HashSet<string> routeNames)
+    {
+        if (string.IsNullOrWhiteSpace(route.Name))
+        {
+            failures.Add($"{routePrefix}:Name is required.");
+        }
+        else if (!routeNames.Add(route.Name))
+        {
+            failures.Add($"{routePrefix}:Name '{route.Name}' is duplicated.");
+        }
+
+        if (string.IsNullOrWhiteSpace(route.Host))
+        {
+            failures.Add($"{routePrefix}:Host is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(route.PathPrefix) || !route.PathPrefix.StartsWith('/'))
+        {
+            failures.Add($"{routePrefix}:PathPrefix must start with '/'.");
+        }
+    }
+
+    private static void ValidateEnabledCacheLimits(List<string> failures, string routePrefix, ProxyCachePolicyOptions cache, string routeAction)
+    {
+        if (!IsProxyAction(routeAction))
+        {
+            failures.Add($"{routePrefix}:Cache can only be enabled for proxy routes.");
+        }
+
+        if (cache.MaxEntryBytes is <= 0 or > MaximumCacheEntryBytes)
+        {
+            failures.Add($"{routePrefix}:Cache:MaxEntryBytes must be between 1 and {MaximumCacheEntryBytes}.");
+        }
+
+        if (cache.MaxTotalBytes is <= 0 or > MaximumCacheTotalBytes)
+        {
+            failures.Add($"{routePrefix}:Cache:MaxTotalBytes must be between 1 and {MaximumCacheTotalBytes}.");
+        }
+
+        if (cache.MaxEntryBytes > 0 && cache.MaxTotalBytes > 0 && cache.MaxEntryBytes > cache.MaxTotalBytes)
+        {
+            failures.Add($"{routePrefix}:Cache:MaxEntryBytes must not exceed Cache:MaxTotalBytes.");
+        }
+
+        if (cache.DefaultTtlSeconds <= 0)
+        {
+            failures.Add($"{routePrefix}:Cache:DefaultTtlSeconds must be greater than 0.");
+        }
+    }
+
+    private static void ValidateCacheSelectors(List<string> failures, string routePrefix, ProxyCachePolicyOptions cache)
+    {
+        for (var index = 0; index < cache.VaryByHeaders.Count; index++)
+        {
+            var headerName = cache.VaryByHeaders[index];
+            if (string.IsNullOrWhiteSpace(headerName) || !ProxyHeaderPolicyOptionsValidationRules.IsValidHttpFieldName(headerName))
+            {
+                failures.Add($"{routePrefix}:Cache:VaryByHeaders:{index} '{headerName}' is not a valid HTTP field name.");
+            }
+        }
+
+        if (cache.CacheableStatusCodes.Count == 0)
+        {
+            failures.Add($"{routePrefix}:Cache:CacheableStatusCodes must contain at least one status code.");
+        }
+
+        for (var index = 0; index < cache.CacheableStatusCodes.Count; index++)
+        {
+            var statusCode = cache.CacheableStatusCodes[index];
+            if (statusCode is < 200 or > 599)
+            {
+                failures.Add($"{routePrefix}:Cache:CacheableStatusCodes:{index} must be an HTTP response status code.");
+            }
+        }
+
+        if (cache.Methods.Count == 0)
+        {
+            failures.Add($"{routePrefix}:Cache:Methods must contain GET, HEAD, or both.");
+        }
+
+        for (var index = 0; index < cache.Methods.Count; index++)
+        {
+            var method = cache.Methods[index];
+            if (!ProxyRequestMethodPolicy.IsSafeReadMethod(method))
+            {
+                failures.Add($"{routePrefix}:Cache:Methods:{index} must be GET or HEAD.");
+            }
+        }
+    }
+
+    private static bool ValidateListenerIdentity(List<string> failures, string prefix, ListenerOptions listener, HashSet<string> listenerNames, IProxyEndpointAddressPolicy endpointAddressPolicy)
+    {
+        if (string.IsNullOrWhiteSpace(listener.Name))
+        {
+            failures.Add($"{prefix}:Name is required.");
+        }
+        else if (!listenerNames.Add(listener.Name))
+        {
+            failures.Add($"{prefix}:Name '{listener.Name}' is duplicated.");
+        }
+
+        if (!endpointAddressPolicy.IsListenerAddress(listener.Address))
+        {
+            failures.Add($"{prefix}:Address must be an IP address for Phase 1.");
+        }
+
+        var isHttp = string.Equals(listener.Transport, "http", StringComparison.OrdinalIgnoreCase);
+        var isHttps = string.Equals(listener.Transport, "https", StringComparison.OrdinalIgnoreCase);
+        if (!isHttp && !isHttps)
+        {
+            failures.Add($"{prefix}:Transport must be 'http' or 'https'.");
+        }
+
+        return isHttps;
+    }
+
+    private static void ValidateListenerProtocols(List<string> failures, string prefix, ListenerOptions listener, bool isHttps)
+    {
+        var http3Compatibility = RuntimeHttp3Compatibility.From(listener);
+        var listenerProtocols = http3Compatibility.Protocols;
+        if (!http3Compatibility.ProtocolsValid)
+        {
+            failures.Add($"{prefix}:Protocols must be {SupportedListenerProtocolsText()}.");
+        }
+        else if (listenerProtocols.HasFlag(RuntimeListenerProtocols.Http2) && !isHttps)
+        {
+            failures.Add($"{prefix}:HTTP/2 requires an HTTPS listener with ALPN; h2c is not supported.");
+        }
+
+        ValidateListenerHttp3(failures, prefix, listener, isHttps, http3Compatibility);
+    }
+
+    private static void ValidateListenerHttp3(List<string> failures, string prefix, ListenerOptions listener, bool isHttps, RuntimeHttp3Compatibility http3Compatibility)
+    {
+        var http3Enablement = http3Compatibility.EffectiveEnablement;
+        var explicitHttp3Requested = http3Compatibility.ExplicitHttp3Requested;
+        if (explicitHttp3Requested)
+        {
+            if (http3Enablement == RuntimeHttp3Enablement.Disabled)
+            {
+                failures.Add($"{prefix}:HTTP/3 protocols cannot be combined with Http3Enablement 'disabled'.");
+            }
+
+            if (!isHttps)
+            {
+                failures.Add($"{prefix}:HTTP/3 requires an HTTPS listener; QUIC TLS over plaintext is not supported.");
+            }
+
+            if (string.IsNullOrWhiteSpace(listener.DefaultCertificateId) && listener.SniCertificates.Count == 0)
+            {
+                failures.Add($"{prefix}:HTTP/3 requires DefaultCertificateId or SniCertificates so QUIC TLS can use the certificate registry.");
+            }
+        }
+
+        if (!http3Compatibility.EnablementValid)
+        {
+            failures.Add($"{prefix}:Http3Enablement must be {SupportedHttp3EnablementsText()} when configured.");
+        }
+
+        if (listener.Http3AltSvcMaxAgeSeconds is < 0 or > 31536000)
+        {
+            failures.Add($"{prefix}:Http3AltSvcMaxAgeSeconds must be between 0 and 31536000.");
+        }
+
+        if (listener.Http3AltSvcEnabled && string.Equals(listener.Http3Enablement, "disabled", StringComparison.OrdinalIgnoreCase))
+        {
+            failures.Add($"{prefix}:Http3AltSvcEnabled cannot be true when Http3Enablement is 'disabled'.");
+        }
+    }
+
+    private static void ValidateListenerLimits(List<string> failures, string prefix, ListenerOptions listener)
+    {
+        if (listener.Port is < 1 or > 65535)
+        {
+            failures.Add($"{prefix}:Port must be between 1 and 65535.");
+        }
+
+        if (listener.Backlog < 1)
+        {
+            failures.Add($"{prefix}:Backlog must be greater than zero.");
+        }
+
+        if (listener.MaxRequestHeadBytes is < 1024 or > 1024 * 1024)
+        {
+            failures.Add($"{prefix}:MaxRequestHeadBytes must be between 1024 and 1048576.");
+        }
+
+        if (listener.ForwardingBufferBytes is < 4096 or > 1024 * 1024)
+        {
+            failures.Add($"{prefix}:ForwardingBufferBytes must be between 4096 and 1048576.");
+        }
+
+        if (listener.MaxResponseHeadBytes is < 1024 or > 1024 * 1024)
+        {
+            failures.Add($"{prefix}:MaxResponseHeadBytes must be between 1024 and 1048576.");
+        }
+
+        if (listener.MaxChunkLineBytes is < 64 or > 16 * 1024)
+        {
+            failures.Add($"{prefix}:MaxChunkLineBytes must be between 64 and 16384.");
+        }
+
+        if (listener.Http2MaxConcurrentStreams is < 1 or > 1000)
+        {
+            failures.Add($"{prefix}:Http2MaxConcurrentStreams must be between 1 and 1000.");
+        }
+
+        if (listener.Http2MaxHeaderListBytes is < 1024 or > 1024 * 1024)
+        {
+            failures.Add($"{prefix}:Http2MaxHeaderListBytes must be between 1024 and 1048576.");
+        }
+
+        if (listener.Http2MaxFrameSize is < 16 * 1024 or > 16 * 1024 * 1024 - 1)
+        {
+            failures.Add($"{prefix}:Http2MaxFrameSize must be between 16384 and 16777215.");
         }
     }
 }

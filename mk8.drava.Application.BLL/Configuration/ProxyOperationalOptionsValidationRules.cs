@@ -167,43 +167,7 @@ public static partial class ProxyOperationalOptionsValidationRules
         {
             var certificate = options.Certificates[index];
             var prefix = $"Proxy:Acme:Certificates:{index}";
-            if (string.IsNullOrWhiteSpace(certificate.Id))
-            {
-                failures.Add($"{prefix}:Id is required.");
-            }
-            else if (!IsSafeStorageSegment(certificate.Id))
-            {
-                failures.Add($"{prefix}:Id must contain only letters, digits, dot, dash, or underscore.");
-            }
-            else if (!ids.Add(certificate.Id))
-            {
-                failures.Add($"{prefix}:Id '{certificate.Id}' duplicates another manual or ACME certificate id.");
-            }
-
-            if (certificate.RenewBeforeDays is < 1 or > 365)
-            {
-                failures.Add($"{prefix}:RenewBeforeDays must be between 1 and 365.");
-            }
-
-            if (certificate.Enabled && certificate.Domains.Count == 0)
-            {
-                failures.Add($"{prefix}:Domains must contain at least one DNS name when the ACME certificate is enabled.");
-            }
-
-            HashSet<string> domains = new(StringComparer.OrdinalIgnoreCase);
-            for (var domainIndex = 0; domainIndex < certificate.Domains.Count; domainIndex++)
-            {
-                var domain = certificate.Domains[domainIndex];
-                var domainPrefix = $"{prefix}:Domains:{domainIndex}";
-                if (!IsValidAcmeDomain(domain))
-                {
-                    failures.Add($"{domainPrefix} '{domain}' must be a non-wildcard DNS name without control characters.");
-                }
-                else if (!domains.Add(domain.Trim()))
-                {
-                    failures.Add($"{domainPrefix} '{domain}' is duplicated.");
-                }
-            }
+            ValidateAcmeCertificate(failures, prefix, certificate, ids);
         }
     }
 
@@ -373,6 +337,51 @@ public static partial class ProxyOperationalOptionsValidationRules
         if (urls.Any(adminUrlPolicy.IsNonLocal) && !ProxyAdminSecurityTokenPolicy.IsAuthenticationEnabled(options, readEnvironmentVariable))
         {
             failures.Add("Proxy admin Urls includes a non-local bind address, so Admin:RequireAuthentication must be true with a configured token.");
+        }
+    }
+    private static void ValidateAcmeCertificate(List<string> failures, string prefix, AcmeManagedCertificateOptions certificate, HashSet<string> ids)
+    {
+        if (string.IsNullOrWhiteSpace(certificate.Id))
+        {
+            failures.Add($"{prefix}:Id is required.");
+        }
+        else if (!IsSafeStorageSegment(certificate.Id))
+        {
+            failures.Add($"{prefix}:Id must contain only letters, digits, dot, dash, or underscore.");
+        }
+        else if (!ids.Add(certificate.Id))
+        {
+            failures.Add($"{prefix}:Id '{certificate.Id}' duplicates another manual or ACME certificate id.");
+        }
+
+        if (certificate.RenewBeforeDays is < 1 or > 365)
+        {
+            failures.Add($"{prefix}:RenewBeforeDays must be between 1 and 365.");
+        }
+
+        if (certificate.Enabled && certificate.Domains.Count == 0)
+        {
+            failures.Add($"{prefix}:Domains must contain at least one DNS name when the ACME certificate is enabled.");
+        }
+
+        ValidateAcmeDomains(failures, prefix, certificate);
+    }
+
+    private static void ValidateAcmeDomains(List<string> failures, string prefix, AcmeManagedCertificateOptions certificate)
+    {
+        HashSet<string> domains = new(StringComparer.OrdinalIgnoreCase);
+        for (var domainIndex = 0; domainIndex < certificate.Domains.Count; domainIndex++)
+        {
+            var domain = certificate.Domains[domainIndex];
+            var domainPrefix = $"{prefix}:Domains:{domainIndex}";
+            if (!IsValidAcmeDomain(domain))
+            {
+                failures.Add($"{domainPrefix} '{domain}' must be a non-wildcard DNS name without control characters.");
+            }
+            else if (!domains.Add(domain.Trim()))
+            {
+                failures.Add($"{domainPrefix} '{domain}' is duplicated.");
+            }
         }
     }
 }

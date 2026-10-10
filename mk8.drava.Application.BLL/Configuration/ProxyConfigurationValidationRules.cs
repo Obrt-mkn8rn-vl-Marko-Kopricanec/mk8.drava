@@ -19,57 +19,7 @@ public static class ProxyConfigurationValidationRules
         {
             var listener = options.Listeners[listenerIndex];
             var prefix = $"Proxy:Listeners:{listenerIndex}";
-            var isHttp = string.Equals(listener.Transport, "http", StringComparison.OrdinalIgnoreCase);
-            var isHttps = string.Equals(listener.Transport, "https", StringComparison.OrdinalIgnoreCase);
-            if (!isHttp && !isHttps)
-            {
-                failures.Add($"{prefix}:Transport must be 'http' or 'https'.");
-                continue;
-            }
-
-            if (isHttp)
-            {
-                if (!string.IsNullOrWhiteSpace(listener.DefaultCertificateId) || listener.SniCertificates.Count > 0)
-                {
-                    failures.Add($"{prefix} must not configure certificates when Transport is 'http'.");
-                }
-
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(listener.DefaultCertificateId) && listener.SniCertificates.Count == 0)
-            {
-                failures.Add($"{prefix} must configure DefaultCertificateId or SniCertificates when Transport is 'https'.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(listener.DefaultCertificateId) && !certificateIds.Contains(listener.DefaultCertificateId))
-            {
-                failures.Add($"{prefix}:DefaultCertificateId references unknown certificate '{listener.DefaultCertificateId}'.");
-            }
-
-            HashSet<string> sniHosts = new(StringComparer.OrdinalIgnoreCase);
-            for (var bindingIndex = 0; bindingIndex < listener.SniCertificates.Count; bindingIndex++)
-            {
-                var binding = listener.SniCertificates[bindingIndex];
-                var bindingPrefix = $"{prefix}:SniCertificates:{bindingIndex}";
-                if (string.IsNullOrWhiteSpace(binding.HostName))
-                {
-                    failures.Add($"{bindingPrefix}:HostName is required.");
-                }
-                else if (!sniHosts.Add(binding.HostName))
-                {
-                    failures.Add($"{bindingPrefix}:HostName '{binding.HostName}' is duplicated for this listener.");
-                }
-
-                if (string.IsNullOrWhiteSpace(binding.CertificateId))
-                {
-                    failures.Add($"{bindingPrefix}:CertificateId is required.");
-                }
-                else if (!certificateIds.Contains(binding.CertificateId))
-                {
-                    failures.Add($"{bindingPrefix}:CertificateId references unknown certificate '{binding.CertificateId}'.");
-                }
-            }
+            ValidateListenerTlsReferences(failures, prefix, listener, certificateIds);
         }
 
         return failures;
@@ -102,5 +52,64 @@ public static class ProxyConfigurationValidationRules
         }
 
         return failures;
+    }
+    private static void ValidateListenerTlsReferences(List<string> failures, string prefix, ListenerOptions listener, HashSet<string> certificateIds)
+    {
+        var isHttp = string.Equals(listener.Transport, "http", StringComparison.OrdinalIgnoreCase);
+        var isHttps = string.Equals(listener.Transport, "https", StringComparison.OrdinalIgnoreCase);
+        if (!isHttp && !isHttps)
+        {
+            failures.Add($"{prefix}:Transport must be 'http' or 'https'.");
+            return;
+        }
+
+        if (isHttp)
+        {
+            if (!string.IsNullOrWhiteSpace(listener.DefaultCertificateId) || listener.SniCertificates.Count > 0)
+            {
+                failures.Add($"{prefix} must not configure certificates when Transport is 'http'.");
+            }
+
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(listener.DefaultCertificateId) && listener.SniCertificates.Count == 0)
+        {
+            failures.Add($"{prefix} must configure DefaultCertificateId or SniCertificates when Transport is 'https'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.DefaultCertificateId) && !certificateIds.Contains(listener.DefaultCertificateId))
+        {
+            failures.Add($"{prefix}:DefaultCertificateId references unknown certificate '{listener.DefaultCertificateId}'.");
+        }
+
+        ValidateSniReferences(failures, prefix, listener, certificateIds);
+    }
+
+    private static void ValidateSniReferences(List<string> failures, string prefix, ListenerOptions listener, HashSet<string> certificateIds)
+    {
+        HashSet<string> sniHosts = new(StringComparer.OrdinalIgnoreCase);
+        for (var bindingIndex = 0; bindingIndex < listener.SniCertificates.Count; bindingIndex++)
+        {
+            var binding = listener.SniCertificates[bindingIndex];
+            var bindingPrefix = $"{prefix}:SniCertificates:{bindingIndex}";
+            if (string.IsNullOrWhiteSpace(binding.HostName))
+            {
+                failures.Add($"{bindingPrefix}:HostName is required.");
+            }
+            else if (!sniHosts.Add(binding.HostName))
+            {
+                failures.Add($"{bindingPrefix}:HostName '{binding.HostName}' is duplicated for this listener.");
+            }
+
+            if (string.IsNullOrWhiteSpace(binding.CertificateId))
+            {
+                failures.Add($"{bindingPrefix}:CertificateId is required.");
+            }
+            else if (!certificateIds.Contains(binding.CertificateId))
+            {
+                failures.Add($"{bindingPrefix}:CertificateId references unknown certificate '{binding.CertificateId}'.");
+            }
+        }
     }
 }
