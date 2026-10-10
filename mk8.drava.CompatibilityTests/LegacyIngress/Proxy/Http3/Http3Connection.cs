@@ -218,7 +218,7 @@ internal sealed partial class Http3Connection
                 return true;
             }
 
-            using var requestBody = new Http3RequestBodyReadStream(this, stream, requestHead.Framing, cancellationToken);
+            using var requestBody = new Http3RequestBodyReadStream(this, stream, requestHead.Framing);
             var upstreamTarget = _pathRewritePolicy.Apply(ProxyPathRewriteRuntimeMapper.ToPolicyInput(route), requestHead.Target, requestHead.Path);
             var effectiveTimeouts = ProxyTimeoutPolicy.ApplyRouteTimeouts(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), _configurationSnapshot.Timeouts);
             if (await TryHandleCacheHitAsync(stream, route, requestHead, upstreamTarget, context, cancellationToken).ConfigureAwait(false))
@@ -721,17 +721,15 @@ internal sealed partial class Http3Connection
         private readonly Http3Connection _connection;
         private readonly QuicStream _stream;
         private readonly Http1RequestFraming _framing;
-        private readonly CancellationToken _connectionCancellationToken;
         private byte[] _pending = [];
         private int _pendingOffset;
         private long _remainingContentLength;
         private bool _completed;
-        public Http3RequestBodyReadStream(Http3Connection connection, QuicStream stream, Http1RequestFraming framing, CancellationToken connectionCancellationToken)
+        public Http3RequestBodyReadStream(Http3Connection connection, QuicStream stream, Http1RequestFraming framing)
         {
             _connection = connection;
             _stream = stream;
             _framing = framing;
-            _connectionCancellationToken = connectionCancellationToken;
             _remainingContentLength = framing.ContentLength.GetValueOrDefault();
         }
 
@@ -741,10 +739,8 @@ internal sealed partial class Http3Connection
         public override long Length => throw new NotSupportedException();
         public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            return ReadAsync(buffer.AsMemory(offset, count), _connectionCancellationToken).AsTask().GetAwaiter().GetResult();
-        }
+        // Forwarding reads this private network adapter through ReadAsync with its operation token.
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException("Use asynchronous network reads.");
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
@@ -872,9 +868,11 @@ internal sealed partial class Http3Connection
     private sealed class Http3ResponseTranslationStream : Stream
     {
         private readonly Http3Connection _connection;
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213", Justification = "Borrowed from ProcessRequestStreamAsync, whose await-using scope owns the QUIC stream through forwarding and completion; this per-attempt adapter must not close it.")]
         private readonly QuicStream _stream;
         private readonly string _method;
         private readonly TimeSpan _writeTimeout;
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213", Justification = "Borrowed request-body adapter remains owned by ProcessRequestStreamAsync across retry attempts; only this translator's two buffers belong to its Dispose method.")]
         private readonly Stream _requestBody;
         private readonly MemoryStream _headBuffer = new();
         private readonly MemoryStream _chunkBuffer = new();
@@ -934,10 +932,8 @@ internal sealed partial class Http3Connection
             }
         }
 
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            WriteAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
-        }
+        // ProxyTimedStreamWriter owns cancellation/deadlines and calls WriteAsync.
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException("Use asynchronous network writes.");
 
         public async ValueTask CompleteAsync(CancellationToken cancellationToken)
         {

@@ -950,10 +950,8 @@ internal sealed partial class Http2ClientConnection : IDisposable
             await ProxyTimeoutPolicy.RunAsync(async timeoutToken => await WriteCoreAsync(buffer, timeoutToken).ConfigureAwait(false), _writeTimeout, ProxyTimeoutKind.DownstreamWrite, cancellationToken).ConfigureAwait(false);
         }
 
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            WriteAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
-        }
+        // ProxyTimedStreamWriter owns cancellation/deadlines and calls WriteAsync.
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException("Use asynchronous network writes.");
 
         public async ValueTask CompleteAsync(CancellationToken cancellationToken)
         {
