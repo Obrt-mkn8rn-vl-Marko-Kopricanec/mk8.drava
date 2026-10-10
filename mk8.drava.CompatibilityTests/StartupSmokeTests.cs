@@ -145,7 +145,10 @@ internal static class StartupSmokeTests
                     Directory.Delete(Path, recursive: true);
                 }
             }
-            catch
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
             {
             }
         }

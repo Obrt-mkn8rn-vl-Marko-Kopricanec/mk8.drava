@@ -2376,7 +2376,10 @@ internal static partial class ClientHttp3Tests
                     Directory.Delete(Path, recursive: true);
                 }
             }
-            catch
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
             {
             }
         }

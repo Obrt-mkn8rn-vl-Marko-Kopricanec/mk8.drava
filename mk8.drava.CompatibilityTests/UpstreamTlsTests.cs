@@ -429,7 +429,10 @@ internal static class UpstreamTlsTests
                     Directory.Delete(Path, recursive: true);
                 }
             }
-            catch
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
             {
             }
         }

@@ -995,7 +995,10 @@ internal static class ClientHttp2Tests
                 Directory.Delete(path, recursive: true);
             }
         }
-        catch
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
         {
         }
     }

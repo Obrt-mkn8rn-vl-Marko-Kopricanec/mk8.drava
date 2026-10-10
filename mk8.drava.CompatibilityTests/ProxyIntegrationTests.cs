@@ -70,7 +70,10 @@ internal static class ProxyIntegrationTests
                     Directory.Delete(dataDirectory, recursive: true);
                 }
             }
-            catch
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
             {
             }
         }
@@ -1356,7 +1359,10 @@ internal static class ProxyIntegrationTests
                     Directory.Delete(dataDirectory, recursive: true);
                 }
             }
-            catch
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
             {
             }
         }
@@ -2092,7 +2098,10 @@ internal static class ProxyIntegrationTests
                 Directory.Delete(directory, recursive: true);
             }
         }
-        catch
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
         {
         }
     }

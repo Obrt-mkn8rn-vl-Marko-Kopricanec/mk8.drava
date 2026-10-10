@@ -1019,7 +1019,10 @@ internal static class UpstreamHttp3Tests
                     Directory.Delete(Path, recursive: true);
                 }
             }
-            catch
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
             {
             }
         }

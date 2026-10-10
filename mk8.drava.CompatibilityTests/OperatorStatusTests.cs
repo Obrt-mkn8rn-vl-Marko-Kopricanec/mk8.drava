@@ -1294,7 +1294,10 @@ internal static class OperatorStatusTests
                     Directory.Delete(DataDirectory, recursive: true);
                 }
             }
-            catch
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
             {
             }
         }
