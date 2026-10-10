@@ -147,91 +147,7 @@ internal sealed partial class Http3Connection
                 return !closeConnection;
             }
 
-            var translationResult = Http3RequestTranslator.BuildRequest(headerRead.Headers, ProxyHttp3RequestTranslationRuntimeMapper.ToListenerInput(_listener), bodyMayFollow: true);
-            if (translationResult is not Http3RequestTranslationResult.AcceptedResult translation)
-            {
-                rejectionReason = ((Http3RequestTranslationResult.RejectedResult)translationResult).Reason;
-                var closeConnection = RecordProtocolError(rejectionReason);
-                await WriteGeneratedResponseAsync(stream, 400, "Bad Request", context, ProxyFailureKind.ClientMalformedRequest, "GET", cancellationToken).ConfigureAwait(false);
-                CompleteContext(ref context);
-                return !closeConnection;
-            }
-
-            var requestHead = translation.RequestHead;
-            _metrics.RequestReceived();
-            _metrics.Http3RequestReceived();
-            context.SetRequest(requestHead.Method, requestHead.Host, requestHead.Target, ProxyExternalRequestIdPolicy.Extract(requestHead));
-            var methodDecision = ProxyRequestMethodPolicy.ClassifyApplicationMethod(requestHead.Method);
-            if (methodDecision is ProxyRequestApplicationMethodDecision.RejectedDecision rejectedMethod)
-            {
-                _metrics.Http3RequestRejected(rejectedMethod.Reason);
-                await WriteGeneratedResponseAsync(stream, 501, "Not Implemented", context, ProxyFailureKind.ClientMalformedRequest, requestHead.Method, cancellationToken).ConfigureAwait(false);
-                CompleteContext(ref context);
-                return true;
-            }
-
-            var noBodyFrames = requestHead.Framing.Kind == Http1BodyKind.None ? await EnsureNoRequestBodyFramesAsync(stream, cancellationToken).ConfigureAwait(false) : Http3FrameValidationResult.Successful();
-            if (!noBodyFrames.Success)
-            {
-                var closeConnection = RecordProtocolError(noBodyFrames.Reason);
-                await WriteGeneratedResponseAsync(stream, 400, "Bad Request", context, ProxyFailureKind.ClientMalformedRequest, requestHead.Method, cancellationToken).ConfigureAwait(false);
-                CompleteContext(ref context);
-                return !closeConnection;
-            }
-
-            var forwardedHeaders = _forwardedHeadersPolicy.Build(requestHead, ProxyForwardedHeadersRuntimeMapper.ToListener(_listener), _configurationSnapshot.ForwardedHeaders, ProxyClientAddressPolicy.ToForwardedHeadersPeer(_connection.RemoteEndPoint));
-            context.SetClientEndpoint(forwardedHeaders.ResolvedClientEndpoint);
-            if (_rateLimiter.AcquireRequest(forwardedHeaders.ResolvedClientAddress, _configurationSnapshot.Limits.RequestsPerMinutePerIp) is ClientRateLimitDecision.RejectedResult)
-            {
-                await WriteGeneratedResponseAsync(stream, 429, "Too Many Requests", context, ProxyFailureKind.RateLimited, requestHead.Method, cancellationToken).ConfigureAwait(false);
-                CompleteContext(ref context);
-                return true;
-            }
-
-            if (_acmeChallengeResponder.CreateResponse(requestHead)is AcmeHttp01ChallengeResponseResult.HandledResult acmeChallengeResponse)
-            {
-                _metrics.Http3GeneratedResponse();
-                await WriteGeneratedRouteResponseAsync(stream, acmeChallengeResponse.Response, context, requestHead.Method, cancellationToken).ConfigureAwait(false);
-                CompleteContext(ref context);
-                return true;
-            }
-
-            var routeMatch = _routeMatcher.Match(_routeCandidates, ProxyRouteMatchRuntimeMapper.ToRequest(requestHead));
-            if (routeMatch is null)
-            {
-                await WriteGeneratedResponseAsync(stream, 404, "Not Found", context, ProxyFailureKind.NoMatchingRoute, requestHead.Method, cancellationToken).ConfigureAwait(false);
-                CompleteContext(ref context);
-                return true;
-            }
-
-            var route = ProxyRouteMatchRuntimeMapper.SelectRoute(_configurationSnapshot.Routes, routeMatch);
-            context.SetRoute(ProxyRequestContextRuntimeMapper.ToRequestRoute(route));
-            if (await TryHandleGeneratedRouteActionAsync(stream, route, requestHead, context, cancellationToken).ConfigureAwait(false))
-            {
-                CompleteContext(ref context);
-                return true;
-            }
-
-            if (await TryRejectKnownLengthRequestBodyAsync(stream, route, requestHead, context, cancellationToken).ConfigureAwait(false))
-            {
-                CompleteContext(ref context);
-                return true;
-            }
-
-            using var requestBody = new Http3RequestBodyReadStream(this, stream, requestHead.Framing);
-            var upstreamTarget = _pathRewritePolicy.Apply(ProxyPathRewriteRuntimeMapper.ToPolicyInput(route), requestHead.Target, requestHead.Path);
-            var effectiveTimeouts = ProxyTimeoutPolicy.ApplyRouteTimeouts(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), _configurationSnapshot.Timeouts);
-            if (await TryHandleCacheHitAsync(stream, route, requestHead, upstreamTarget, context, cancellationToken).ConfigureAwait(false))
-            {
-                CompleteContext(ref context);
-                return true;
-            }
-
-            _metrics.Http3ProxiedRequest();
-            var result = await ForwardWithRetriesAsync(stream, requestBody, requestHead, route, effectiveTimeouts, _configurationSnapshot.ConnectionLimits, _configurationSnapshot.Limits, upstreamTarget, forwardedHeaders, context, context.RequestId, cancellationToken).ConfigureAwait(false);
-            ApplyForwardingResult(context, result);
-            CompleteContext(ref context);
-            return true;
+            return await ProcessDecodedRequestAsync(stream, headerRead.Headers, context, () => CompleteContext(ref context), cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)when (exception is QuicException or IOException)
         {
@@ -252,6 +168,100 @@ internal sealed partial class Http3Connection
         {
             _metrics.Http3StreamEnded();
         }
+    }
+
+    private async ValueTask<bool> ProcessDecodedRequestAsync(QuicStream stream, IReadOnlyList<ProxyHeaderField> headers, ProxyRequestContext context, Action completeContext, CancellationToken cancellationToken)
+    {
+        var translationResult = Http3RequestTranslator.BuildRequest(headers, ProxyHttp3RequestTranslationRuntimeMapper.ToListenerInput(_listener), bodyMayFollow: true);
+        if (translationResult is not Http3RequestTranslationResult.AcceptedResult translation)
+        {
+            var rejectionReason = ((Http3RequestTranslationResult.RejectedResult)translationResult).Reason;
+            var closeConnection = RecordProtocolError(rejectionReason);
+            await WriteGeneratedResponseAsync(stream, 400, "Bad Request", context, ProxyFailureKind.ClientMalformedRequest, "GET", cancellationToken).ConfigureAwait(false);
+            completeContext();
+            return !closeConnection;
+        }
+
+        var requestHead = translation.RequestHead;
+        _metrics.RequestReceived();
+        _metrics.Http3RequestReceived();
+        context.SetRequest(requestHead.Method, requestHead.Host, requestHead.Target, ProxyExternalRequestIdPolicy.Extract(requestHead));
+        var methodDecision = ProxyRequestMethodPolicy.ClassifyApplicationMethod(requestHead.Method);
+        if (methodDecision is ProxyRequestApplicationMethodDecision.RejectedDecision rejectedMethod)
+        {
+            _metrics.Http3RequestRejected(rejectedMethod.Reason);
+            await WriteGeneratedResponseAsync(stream, 501, "Not Implemented", context, ProxyFailureKind.ClientMalformedRequest, requestHead.Method, cancellationToken).ConfigureAwait(false);
+            completeContext();
+            return true;
+        }
+
+        var noBodyFrames = requestHead.Framing.Kind == Http1BodyKind.None ? await EnsureNoRequestBodyFramesAsync(stream, cancellationToken).ConfigureAwait(false) : Http3FrameValidationResult.Successful();
+        if (!noBodyFrames.Success)
+        {
+            var closeConnection = RecordProtocolError(noBodyFrames.Reason);
+            await WriteGeneratedResponseAsync(stream, 400, "Bad Request", context, ProxyFailureKind.ClientMalformedRequest, requestHead.Method, cancellationToken).ConfigureAwait(false);
+            completeContext();
+            return !closeConnection;
+        }
+
+        var forwardedHeaders = _forwardedHeadersPolicy.Build(requestHead, ProxyForwardedHeadersRuntimeMapper.ToListener(_listener), _configurationSnapshot.ForwardedHeaders, ProxyClientAddressPolicy.ToForwardedHeadersPeer(_connection.RemoteEndPoint));
+        context.SetClientEndpoint(forwardedHeaders.ResolvedClientEndpoint);
+        if (_rateLimiter.AcquireRequest(forwardedHeaders.ResolvedClientAddress, _configurationSnapshot.Limits.RequestsPerMinutePerIp) is ClientRateLimitDecision.RejectedResult)
+        {
+            await WriteGeneratedResponseAsync(stream, 429, "Too Many Requests", context, ProxyFailureKind.RateLimited, requestHead.Method, cancellationToken).ConfigureAwait(false);
+            completeContext();
+            return true;
+        }
+
+        if (_acmeChallengeResponder.CreateResponse(requestHead)is AcmeHttp01ChallengeResponseResult.HandledResult acmeChallengeResponse)
+        {
+            _metrics.Http3GeneratedResponse();
+            await WriteGeneratedRouteResponseAsync(stream, acmeChallengeResponse.Response, context, requestHead.Method, cancellationToken).ConfigureAwait(false);
+            completeContext();
+            return true;
+        }
+
+        return await RouteAcceptedRequestAsync(stream, requestHead, forwardedHeaders, context, completeContext, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<bool> RouteAcceptedRequestAsync(QuicStream stream, Http1RequestHead requestHead, ForwardedHeadersContext forwardedHeaders, ProxyRequestContext context, Action completeContext, CancellationToken cancellationToken)
+    {
+        var routeMatch = _routeMatcher.Match(_routeCandidates, ProxyRouteMatchRuntimeMapper.ToRequest(requestHead));
+        if (routeMatch is null)
+        {
+            await WriteGeneratedResponseAsync(stream, 404, "Not Found", context, ProxyFailureKind.NoMatchingRoute, requestHead.Method, cancellationToken).ConfigureAwait(false);
+            completeContext();
+            return true;
+        }
+
+        var route = ProxyRouteMatchRuntimeMapper.SelectRoute(_configurationSnapshot.Routes, routeMatch);
+        context.SetRoute(ProxyRequestContextRuntimeMapper.ToRequestRoute(route));
+        if (await TryHandleGeneratedRouteActionAsync(stream, route, requestHead, context, cancellationToken).ConfigureAwait(false))
+        {
+            completeContext();
+            return true;
+        }
+
+        if (await TryRejectKnownLengthRequestBodyAsync(stream, route, requestHead, context, cancellationToken).ConfigureAwait(false))
+        {
+            completeContext();
+            return true;
+        }
+
+        using var requestBody = new Http3RequestBodyReadStream(this, stream, requestHead.Framing);
+        var upstreamTarget = _pathRewritePolicy.Apply(ProxyPathRewriteRuntimeMapper.ToPolicyInput(route), requestHead.Target, requestHead.Path);
+        var effectiveTimeouts = ProxyTimeoutPolicy.ApplyRouteTimeouts(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), _configurationSnapshot.Timeouts);
+        if (await TryHandleCacheHitAsync(stream, route, requestHead, upstreamTarget, context, cancellationToken).ConfigureAwait(false))
+        {
+            completeContext();
+            return true;
+        }
+
+        _metrics.Http3ProxiedRequest();
+        var result = await ForwardWithRetriesAsync(stream, requestBody, requestHead, route, effectiveTimeouts, _configurationSnapshot.ConnectionLimits, _configurationSnapshot.Limits, upstreamTarget, forwardedHeaders, context, context.RequestId, cancellationToken).ConfigureAwait(false);
+        ApplyForwardingResult(context, result);
+        completeContext();
+        return true;
     }
 
     private async ValueTask<bool> TryHandleGeneratedRouteActionAsync(QuicStream stream, RuntimeRoute route, Http1RequestHead requestHead, ProxyRequestContext context, CancellationToken cancellationToken)
@@ -487,15 +497,7 @@ internal sealed partial class Http3Connection
             var selection = _upstreamSelector.Select(ProxyUpstreamSelectionRuntimeMapper.ToSelectionRoute(route));
             if (selection is null)
             {
-                if (ProxyRetryPolicy.DidExhaustAttemptsBeforeUpstreamSelection(attempt))
-                {
-                    _metrics.RetryExhausted();
-                }
-
-                var failureResponse = ProxyGeneratedFailurePolicy.BuildFailureResponse(ProxyFailureKind.NoHealthyUpstream);
-                ProxyGeneratedFailureMetrics.Record(_metrics, failureResponse);
-                await WriteGeneratedResponseAsync(stream, failureResponse, context, requestHead.Method, cancellationToken).ConfigureAwait(false);
-                return failureResponse.ToForwardingResult();
+                return await WriteNoUpstreamFailureAsync(attempt, stream, context, requestHead, cancellationToken).ConfigureAwait(false);
             }
 
             context.SetUpstream(ProxyRequestContextRuntimeMapper.ToRequestUpstream(selection.Upstream));
@@ -516,15 +518,7 @@ internal sealed partial class Http3Connection
                 continue;
             }
 
-            if (retryAttempt is ProxyRetryAttemptDecision.SkippedDecision skippedAttempt)
-            {
-                _metrics.RetrySkipped(skippedAttempt.Reason);
-            }
-
-            if (retryAllowed && ProxyRetryPolicy.DidExhaustAttempts(retryOutcome, result, attempt, maxAttempts))
-            {
-                _metrics.RetryExhausted();
-            }
+            RecordStoppedRetryAttempt(retryAttempt, retryAllowed, retryOutcome, result, attempt, maxAttempts);
 
             if (suppressGeneratedFailureResponse && result is ForwardingResult.FailureResult { ResponseStarted: false } suppressedFailure)
             {
@@ -541,6 +535,32 @@ internal sealed partial class Http3Connection
         }
 
         return ProxyRetryPolicy.RequireCompletedAttemptResult(lastResult);
+    }
+
+    private void RecordStoppedRetryAttempt(ProxyRetryAttemptDecision retryAttempt, bool retryAllowed, ProxyRetryOutcomeInput retryOutcome, ForwardingResult result, int attempt, int maxAttempts)
+    {
+        if (retryAttempt is ProxyRetryAttemptDecision.SkippedDecision skippedAttempt)
+        {
+            _metrics.RetrySkipped(skippedAttempt.Reason);
+        }
+
+        if (retryAllowed && ProxyRetryPolicy.DidExhaustAttempts(retryOutcome, result, attempt, maxAttempts))
+        {
+            _metrics.RetryExhausted();
+        }
+    }
+
+    private async ValueTask<ForwardingResult> WriteNoUpstreamFailureAsync(int attempt, QuicStream stream, ProxyRequestContext context, Http1RequestHead requestHead, CancellationToken cancellationToken)
+    {
+        if (ProxyRetryPolicy.DidExhaustAttemptsBeforeUpstreamSelection(attempt))
+        {
+            _metrics.RetryExhausted();
+        }
+
+        var failureResponse = ProxyGeneratedFailurePolicy.BuildFailureResponse(ProxyFailureKind.NoHealthyUpstream);
+        ProxyGeneratedFailureMetrics.Record(_metrics, failureResponse);
+        await WriteGeneratedResponseAsync(stream, failureResponse, context, requestHead.Method, cancellationToken).ConfigureAwait(false);
+        return failureResponse.ToForwardingResult();
     }
 
     private async ValueTask<ForwardingResult> WriteSuppressedFailureAsync(QuicStream stream, ForwardingResult.FailureResult result, ProxyRequestContext context, string method, CancellationToken cancellationToken)
@@ -792,20 +812,7 @@ internal sealed partial class Http3Connection
                 var frame = await ReadFrameAsync(_stream, cancellationToken).ConfigureAwait(false);
                 if (!frame.Success)
                 {
-                    if (_framing.Kind == Http1BodyKind.ContentLength && _remainingContentLength > 0)
-                    {
-                        throw new IOException("HTTP/3 stream ended before the declared request body was complete.");
-                    }
-
-                    _completed = true;
-                    if (_framing.Kind == Http1BodyKind.Chunked)
-                    {
-                        _pending = "0\r\n\r\n"u8.ToArray();
-                        _pendingOffset = 0;
-                        return true;
-                    }
-
-                    return false;
+                    return CompleteRequestBodyAtEndOfStream();
                 }
 
                 if (frame.Type != Http3Codec.DataFrame)
@@ -838,6 +845,24 @@ internal sealed partial class Http3Connection
                 _pendingOffset = 0;
                 return true;
             }
+        }
+
+        private bool CompleteRequestBodyAtEndOfStream()
+        {
+            if (_framing.Kind == Http1BodyKind.ContentLength && _remainingContentLength > 0)
+            {
+                throw new IOException("HTTP/3 stream ended before the declared request body was complete.");
+            }
+
+            _completed = true;
+            if (_framing.Kind == Http1BodyKind.Chunked)
+            {
+                _pending = "0\r\n\r\n"u8.ToArray();
+                _pendingOffset = 0;
+                return true;
+            }
+
+            return false;
         }
 
         private bool HasPending()
@@ -1013,85 +1038,45 @@ internal sealed partial class Http3Connection
             {
                 if (_chunkState == ChunkParserState.ReadingSize)
                 {
-                    var lineEnd = IndexOfCrlf(bytes, offset);
-                    if (lineEnd < 0)
+                    if (!TryReadChunkSize(bytes, ref offset))
                     {
                         break;
                     }
 
-                    var line = Encoding.ASCII.GetString(bytes, offset, lineEnd - offset);
-                    var separator = line.IndexOf(';', StringComparison.Ordinal);
-                    if (separator >= 0)
-                    {
-                        line = line[..separator];
-                    }
-
-                    if (!long.TryParse(line.Trim(), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out _chunkBytesRemaining) || _chunkBytesRemaining < 0)
-                    {
-                        throw new IOException("Invalid chunked response body.");
-                    }
-
-                    offset = lineEnd + 2;
-                    _chunkState = _chunkBytesRemaining == 0 ? ChunkParserState.ReadingTrailers : ChunkParserState.ReadingData;
                     continue;
                 }
 
                 if (_chunkState == ChunkParserState.ReadingData)
                 {
-                    var available = bytes.Length - offset;
-                    if (available <= 0)
+                    var nextOffset = await TryWriteChunkDataAsync(bytes, offset, cancellationToken).ConfigureAwait(false);
+                    if (!nextOffset.HasValue)
                     {
                         break;
                     }
 
-                    var take = (int)Math.Min(available, _chunkBytesRemaining);
-                    await _connection.WriteDataAsync(_stream, bytes.AsMemory(offset, take), completeWrites: false, cancellationToken).ConfigureAwait(false);
-                    offset += take;
-                    _chunkBytesRemaining -= take;
-                    if (_chunkBytesRemaining == 0)
-                    {
-                        _chunkState = ChunkParserState.ReadingDataCrlf;
-                    }
-
+                    offset = nextOffset.Value;
                     continue;
                 }
 
                 if (_chunkState == ChunkParserState.ReadingDataCrlf)
                 {
-                    if (bytes.Length - offset < 2)
+                    if (!TryConsumeChunkTerminator(bytes, ref offset))
                     {
                         break;
                     }
 
-                    if (bytes[offset] != (byte)'\r' || bytes[offset + 1] != (byte)'\n')
-                    {
-                        throw new IOException("Invalid chunked response body.");
-                    }
-
-                    offset += 2;
-                    _chunkState = ChunkParserState.ReadingSize;
                     continue;
                 }
 
                 if (_chunkState == ChunkParserState.ReadingTrailers)
                 {
-                    var lineEnd = IndexOfCrlf(bytes, offset);
-                    if (lineEnd < 0)
+                    var nextOffset = await TryConsumeChunkTrailersAsync(bytes, offset, cancellationToken).ConfigureAwait(false);
+                    if (!nextOffset.HasValue)
                     {
                         break;
                     }
 
-                    if (lineEnd == offset)
-                    {
-                        await _connection.WriteDataAsync(_stream, ReadOnlyMemory<byte>.Empty, completeWrites: true, cancellationToken).ConfigureAwait(false);
-                        _endStreamSent = true;
-                        EndResponseStream();
-                        _chunkState = ChunkParserState.Complete;
-                        offset = lineEnd + 2;
-                        continue;
-                    }
-
-                    offset = lineEnd + 2;
+                    offset = nextOffset.Value;
                     continue;
                 }
 
@@ -1101,6 +1086,90 @@ internal sealed partial class Http3Connection
             var remaining = bytes.AsMemory(offset).ToArray();
             _chunkBuffer.SetLength(0);
             _chunkBuffer.Write(remaining);
+        }
+
+        private async ValueTask<int?> TryWriteChunkDataAsync(byte[] bytes, int offset, CancellationToken cancellationToken)
+        {
+            var available = bytes.Length - offset;
+            if (available <= 0)
+            {
+                return null;
+            }
+
+            var take = (int)Math.Min(available, _chunkBytesRemaining);
+            await _connection.WriteDataAsync(_stream, bytes.AsMemory(offset, take), completeWrites: false, cancellationToken).ConfigureAwait(false);
+            offset += take;
+            _chunkBytesRemaining -= take;
+            if (_chunkBytesRemaining == 0)
+            {
+                _chunkState = ChunkParserState.ReadingDataCrlf;
+            }
+
+            return offset;
+        }
+
+        private async ValueTask<int?> TryConsumeChunkTrailersAsync(byte[] bytes, int offset, CancellationToken cancellationToken)
+        {
+            var lineEnd = IndexOfCrlf(bytes, offset);
+            if (lineEnd < 0)
+            {
+                return null;
+            }
+
+            if (lineEnd == offset)
+            {
+                await _connection.WriteDataAsync(_stream, ReadOnlyMemory<byte>.Empty, completeWrites: true, cancellationToken).ConfigureAwait(false);
+                _endStreamSent = true;
+                EndResponseStream();
+                _chunkState = ChunkParserState.Complete;
+                offset = lineEnd + 2;
+                return offset;
+            }
+
+            offset = lineEnd + 2;
+            return offset;
+        }
+
+        private bool TryConsumeChunkTerminator(byte[] bytes, ref int offset)
+        {
+            if (bytes.Length - offset < 2)
+            {
+                return false;
+            }
+
+            if (bytes[offset] != (byte)'\r' || bytes[offset + 1] != (byte)'\n')
+            {
+                throw new IOException("Invalid chunked response body.");
+            }
+
+            offset += 2;
+            _chunkState = ChunkParserState.ReadingSize;
+            return true;
+        }
+
+        private bool TryReadChunkSize(byte[] bytes, ref int offset)
+        {
+            var lineEnd = IndexOfCrlf(bytes, offset);
+            if (lineEnd < 0)
+            {
+                return false;
+            }
+
+            var line = Encoding.ASCII.GetString(bytes, offset, lineEnd - offset);
+            var separator = line.IndexOf(';', StringComparison.Ordinal);
+            if (separator >= 0)
+            {
+                line = line[..separator];
+            }
+
+            if (!long.TryParse(line.Trim(), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out _chunkBytesRemaining) || _chunkBytesRemaining < 0)
+            {
+                throw new IOException("Invalid chunked response body.");
+            }
+
+            offset = lineEnd + 2;
+            _chunkState = _chunkBytesRemaining == 0 ? ChunkParserState.ReadingTrailers : ChunkParserState.ReadingData;
+            return true;
         }
 
         private void StartResponseStream()
