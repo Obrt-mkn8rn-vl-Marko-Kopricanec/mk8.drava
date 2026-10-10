@@ -9,32 +9,22 @@ using Microsoft.Extensions.Logging;
 using YamlDotNet.Core;
 
 namespace Mk8.Drava.Application.DAL.Configuration.Loading;
-public sealed partial class ProxyConfigurationLoader : IProxyConfigurationLoader, IProxyRestoreConfigurationValidator
+public sealed partial class ProxyConfigurationLoader(IMdravaDataDirectoryProvider dataDirectoryProvider, ProxyDataDirectoryBootstrapper bootstrapper,
+    SiteConfigurationParser siteParser, IProxyAdminUrlPolicy adminUrlPolicy, IProxyEndpointAddressPolicy endpointAddressPolicy,
+    IProxyRelativeStoragePathPolicy relativeStoragePathPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy, IProxyTrustedProxyPolicy trustedProxyPolicy,
+    ILogger<ProxyConfigurationLoader> logger, TimeProvider timeProvider) : IProxyConfigurationLoader, IProxyRestoreConfigurationValidator
 {
-    private readonly IMdravaDataDirectoryProvider _dataDirectoryProvider;
-    private readonly ProxyDataDirectoryBootstrapper _bootstrapper;
-    private readonly SiteConfigurationParser _siteParser;
-    private readonly IProxyAdminUrlPolicy _adminUrlPolicy;
-    private readonly IProxyEndpointAddressPolicy _endpointAddressPolicy;
-    private readonly IProxyRelativeStoragePathPolicy _relativeStoragePathPolicy;
-    private readonly IProxyUrlSyntaxPolicy _urlSyntaxPolicy;
-    private readonly IProxyTrustedProxyPolicy _trustedProxyPolicy;
-    private readonly ILogger<ProxyConfigurationLoader> _logger;
-    private readonly TimeProvider _timeProvider;
+    private readonly IMdravaDataDirectoryProvider _dataDirectoryProvider = dataDirectoryProvider;
+    private readonly ProxyDataDirectoryBootstrapper _bootstrapper = bootstrapper;
+    private readonly SiteConfigurationParser _siteParser = siteParser;
+    private readonly IProxyAdminUrlPolicy _adminUrlPolicy = adminUrlPolicy;
+    private readonly IProxyEndpointAddressPolicy _endpointAddressPolicy = endpointAddressPolicy;
+    private readonly IProxyRelativeStoragePathPolicy _relativeStoragePathPolicy = relativeStoragePathPolicy;
+    private readonly IProxyUrlSyntaxPolicy _urlSyntaxPolicy = urlSyntaxPolicy;
+    private readonly IProxyTrustedProxyPolicy _trustedProxyPolicy = trustedProxyPolicy;
+    private readonly ILogger<ProxyConfigurationLoader> _logger = logger;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private int _nextVersion;
-    public ProxyConfigurationLoader(IMdravaDataDirectoryProvider dataDirectoryProvider, ProxyDataDirectoryBootstrapper bootstrapper, SiteConfigurationParser siteParser, IProxyAdminUrlPolicy adminUrlPolicy, IProxyEndpointAddressPolicy endpointAddressPolicy, IProxyRelativeStoragePathPolicy relativeStoragePathPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy, IProxyTrustedProxyPolicy trustedProxyPolicy, ILogger<ProxyConfigurationLoader> logger, TimeProvider timeProvider)
-    {
-        _dataDirectoryProvider = dataDirectoryProvider;
-        _bootstrapper = bootstrapper;
-        _siteParser = siteParser;
-        _adminUrlPolicy = adminUrlPolicy;
-        _endpointAddressPolicy = endpointAddressPolicy;
-        _relativeStoragePathPolicy = relativeStoragePathPolicy;
-        _urlSyntaxPolicy = urlSyntaxPolicy;
-        _trustedProxyPolicy = trustedProxyPolicy;
-        _logger = logger;
-        _timeProvider = timeProvider;
-    }
 
     public async ValueTask<ProxyConfigurationLoadResult> LoadAsync(CancellationToken cancellationToken)
     {
@@ -67,21 +57,10 @@ public sealed partial class ProxyConfigurationLoader : IProxyConfigurationLoader
         List<ProxyConfigurationFileDiscovery> discoveredFiles = [..bootstrapDiscovery.Files];
         var discoveredSiteFiles = SiteConfigurationFileDiscovery.DiscoverLoadableSiteFiles(sourceDirectory, discoveredFiles);
         var siteFiles = discoveredSiteFiles.Select(static file => file.Path).ToArray();
-        List<SiteConfigurationSource> sites = [];
         List<ProxyConfigurationFileError> errors = [];
-        foreach (var(siteFile, format)in discoveredSiteFiles)
-        {
-            var site = await ReadSiteAsync(siteFile, format, discoveredFiles, errors, cancellationToken).ConfigureAwait(false);
-            if (site is not null)
-            {
-                sites.Add(SiteConfigurationSource.FromFile(siteFile, site));
-            }
-        }
+        var sites = await ReadSitesAsync(discoveredSiteFiles, discoveredFiles, errors, cancellationToken).ConfigureAwait(false);
 
-        ProxyConfigurationDiscovery BuildDiscovery()
-        {
-            return bootstrapDiscovery.WithFiles(discoveredFiles);
-        }
+        ProxyConfigurationDiscovery BuildDiscovery() => bootstrapDiscovery.WithFiles(discoveredFiles);
 
         if (errors.Count > 0)
         {
@@ -91,7 +70,7 @@ public sealed partial class ProxyConfigurationLoader : IProxyConfigurationLoader
         var listenerMergeFailures = ProxyConfigurationValidationRules.ValidateListenerMergeCompatibility(sites);
         if (listenerMergeFailures.Count > 0)
         {
-            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), listenerMergeFailures.Select(static failure => ProxyConfigurationFileError.Global(failure)).ToArray(), wouldBeVersion);
+            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), [.. listenerMergeFailures.Select(static failure => ProxyConfigurationFileError.Global(failure))], wouldBeVersion);
         }
 
         var operationalOptions = await ReadOperationalOptionsAsync(operationalConfigPath, discoveredFiles, errors, cancellationToken).ConfigureAwait(false);
@@ -103,30 +82,14 @@ public sealed partial class ProxyConfigurationLoader : IProxyConfigurationLoader
         var operationalFailures = ProxyOperationalOptionsValidationRules.Validate(operationalOptions, Environment.GetEnvironmentVariable, _adminUrlPolicy, _relativeStoragePathPolicy, _urlSyntaxPolicy, _trustedProxyPolicy);
         if (operationalFailures.Count > 0)
         {
-            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), operationalFailures.Select(failure => ProxyConfigurationFileError.ForPath(operationalConfigPath, failure)).ToArray(), wouldBeVersion);
+            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), [.. operationalFailures.Select(failure => ProxyConfigurationFileError.ForPath(operationalConfigPath, failure))], wouldBeVersion);
         }
 
         var options = SiteOptionsAggregator.ToProxyOptions(sites);
-        var certificateValidationFailures = ProxyConfigurationValidationRules.ValidateTlsReferences(options, operationalOptions);
-        if (certificateValidationFailures.Count > 0)
+        var optionFailures = ValidateSiteOptions(options, operationalOptions, siteFiles.Length, sourceDirectory);
+        if (optionFailures.Count > 0)
         {
-            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), certificateValidationFailures.Select(static failure => ProxyConfigurationFileError.Global(failure)).ToArray(), wouldBeVersion);
-        }
-
-        if (siteFiles.Length > 0)
-        {
-            var validationFailures = ProxyOptionsValidationRules.Validate(options, _endpointAddressPolicy, _urlSyntaxPolicy);
-            if (validationFailures.Count > 0)
-            {
-                return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), validationFailures.Select(static failure => ProxyConfigurationFileError.Global(failure)).ToArray(), wouldBeVersion);
-            }
-        }
-        else
-        {
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            {
-                LogNoProxySiteConfigurationFiles10000(_logger, sourceDirectory, null);
-            }
+            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), [.. optionFailures.Select(static failure => ProxyConfigurationFileError.Global(failure))], wouldBeVersion);
         }
 
         var certificates = LoadCertificates(operationalOptions, _dataDirectoryProvider.GetDataDirectory(), errors);
@@ -145,6 +108,35 @@ public sealed partial class ProxyConfigurationLoader : IProxyConfigurationLoader
         var version = Interlocked.Increment(ref _nextVersion);
         var snapshot = ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(options, operationalOptions, ProxyAdminSecurityTokenPolicy.Resolve(operationalOptions.Admin, Environment.GetEnvironmentVariable), certificates, version, _timeProvider.GetUtcNow(), sourceDirectory, siteFiles, BuildDiscovery());
         return ProxyConfigurationLoadResult.Loaded(sourceDirectory, snapshot, BuildDiscovery());
+    }
+
+    private async ValueTask<List<SiteConfigurationSource>> ReadSitesAsync(IReadOnlyList<(string Path, SiteConfigurationFormat Format)> siteFiles,
+        List<ProxyConfigurationFileDiscovery> discoveredFiles, List<ProxyConfigurationFileError> errors, CancellationToken cancellationToken)
+    {
+        List<SiteConfigurationSource> sites = [];
+        foreach (var (siteFile, format) in siteFiles)
+        {
+            var site = await ReadSiteAsync(siteFile, format, discoveredFiles, errors, cancellationToken).ConfigureAwait(false);
+            if (site is not null)
+                sites.Add(SiteConfigurationSource.FromFile(siteFile, site));
+        }
+
+        return sites;
+    }
+
+    private IReadOnlyList<string> ValidateSiteOptions(ProxyOptions options, ProxyOperationalOptions operationalOptions, int siteFileCount, string sourceDirectory)
+    {
+        var certificateFailures = ProxyConfigurationValidationRules.ValidateTlsReferences(options, operationalOptions);
+        if (certificateFailures.Count > 0)
+            return certificateFailures;
+
+        if (siteFileCount > 0)
+            return ProxyOptionsValidationRules.Validate(options, _endpointAddressPolicy, _urlSyntaxPolicy);
+
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
+            LogNoProxySiteConfigurationFiles10000(_logger, sourceDirectory, exception: null);
+
+        return [];
     }
 
     private static Dictionary<string, RuntimeCertificate> LoadCertificates(ProxyOperationalOptions operationalOptions, string dataDirectory, List<ProxyConfigurationFileError> errors)
@@ -217,7 +209,7 @@ public sealed partial class ProxyConfigurationLoader : IProxyConfigurationLoader
             discoveries.Add(new ProxyConfigurationFileDiscovery(operationalConfigPath, "json", "skipped", "Proxy operational configuration file does not exist; defaults are used."));
             if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Information))
             {
-                LogProxyOperationalConfigurationFileWas10001(_logger, operationalConfigPath, null);
+                LogProxyOperationalConfigurationFileWas10001(_logger, operationalConfigPath, exception: null);
             }
             return new ProxyOperationalOptions();
         }

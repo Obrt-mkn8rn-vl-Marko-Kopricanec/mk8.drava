@@ -1,37 +1,32 @@
 using Mk8.Drava.Application.BLL.ControlPlane.Status;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.ControlPlane.AdminAudit;
 using Mk8.Drava.Application.BLL.ControlPlane.Observability;
 using Microsoft.Extensions.Logging;
 
 namespace Mk8.Drava.Application.DAL.Observability;
-public sealed partial class ProxyPersistentLogWriter : IProxyLogPersistenceStore
+public sealed partial class ProxyPersistentLogWriter(IMdravaDataDirectoryProvider dataDirectoryProvider,
+    IProxyLogPersistenceSettingsReader settingsReader, ILogger<ProxyPersistentLogWriter> logger, TimeProvider timeProvider) : IProxyLogPersistenceStore
 {
     private const int MaxTextLength = 256;
     private const int MaxPathLength = 512;
     private static readonly Encoding LogEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        WriteIndented = false
+        WriteIndented = false,
     };
-    private readonly IMdravaDataDirectoryProvider _dataDirectoryProvider;
-    private readonly IProxyLogPersistenceSettingsReader _settingsReader;
-    private readonly ILogger<ProxyPersistentLogWriter> _logger;
-    private readonly TimeProvider _timeProvider;
+    private readonly IMdravaDataDirectoryProvider _dataDirectoryProvider = dataDirectoryProvider;
+    private readonly IProxyLogPersistenceSettingsReader _settingsReader = settingsReader;
+    private readonly ILogger<ProxyPersistentLogWriter> _logger = logger;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly object _accessGate = new();
     private readonly object _auditGate = new();
     private readonly Lock _statusGate = new();
     private DateTimeOffset? _lastSuccessfulWriteAtUtc;
     private ProxyLogPersistenceFailureStatus? _lastWriteFailure;
-    public ProxyPersistentLogWriter(IMdravaDataDirectoryProvider dataDirectoryProvider, IProxyLogPersistenceSettingsReader settingsReader, ILogger<ProxyPersistentLogWriter> logger, TimeProvider timeProvider)
-    {
-        _dataDirectoryProvider = dataDirectoryProvider;
-        _settingsReader = settingsReader;
-        _logger = logger;
-        _timeProvider = timeProvider;
-    }
 
     public void WriteAccess(ProxyAccessLogEntry entry)
     {
@@ -50,7 +45,9 @@ public sealed partial class ProxyPersistentLogWriter : IProxyLogPersistenceStore
             requestId = SafeValue(entry.RequestId),
             configVersion = entry.ConfigVersion,
             listener = SafeValue(entry.ListenerName),
+#pragma warning disable CA1308 // Persisted access-log transport values retain their lowercase format; this is output, not identifier comparison.
             transport = SafeValue(entry.Transport?.ToLowerInvariant()),
+#pragma warning restore CA1308
             protocol = SafeValue(entry.Protocol),
             method = SafeValue(entry.Method),
             host = SafeValue(entry.Host),
@@ -66,7 +63,7 @@ public sealed partial class ProxyPersistentLogWriter : IProxyLogPersistenceStore
             responseStarted = entry.ResponseStarted,
             keepAlive = entry.KeepClientConnectionOpen,
             upgrade = entry.IsUpgrade,
-            tunnel = entry.TunnelEstablished
+            tunnel = entry.TunnelEstablished,
         };
         WriteLine("access", JsonSerializer.Serialize(payload, JsonOptions), settings, _accessGate);
     }
@@ -89,7 +86,7 @@ public sealed partial class ProxyPersistentLogWriter : IProxyLogPersistenceStore
             path = SafeTargetPath(auditEvent.Path),
             authResult = SafeValue(auditEvent.AuthResult),
             status = auditEvent.StatusCode,
-            succeeded = auditEvent.Succeeded
+            succeeded = auditEvent.Succeeded,
         };
         WriteLine("audit", JsonSerializer.Serialize(entry, JsonOptions), settings, _auditGate);
     }
@@ -193,7 +190,7 @@ public sealed partial class ProxyPersistentLogWriter : IProxyLogPersistenceStore
         var directory = Path.GetDirectoryName(path)!;
         var fileName = Path.GetFileNameWithoutExtension(path);
         var extension = Path.GetExtension(path);
-        return Path.Combine(directory, $"{fileName}.{index}{extension}");
+        return Path.Combine(directory, $"{fileName}.{index.ToString(CultureInfo.InvariantCulture)}{extension}");
     }
 
     private static string? SafeTargetPath(string? value)

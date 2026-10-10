@@ -2,13 +2,9 @@ using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.ControlPlane.Backup;
 
 namespace Mk8.Drava.Application.DAL.DataDirectory;
-public sealed class ProxyBackupFileSystem : IProxyBackupFileSystem
+public sealed class ProxyBackupFileSystem(IProxyDataDirectoryPathSafety pathSafety) : IProxyBackupFileSystem
 {
-    private readonly IProxyDataDirectoryPathSafety _pathSafety;
-    public ProxyBackupFileSystem(IProxyDataDirectoryPathSafety pathSafety)
-    {
-        _pathSafety = pathSafety;
-    }
+    private readonly IProxyDataDirectoryPathSafety _pathSafety = pathSafety;
 
     public bool DirectoryExists(string root, string relativePath)
     {
@@ -37,49 +33,29 @@ public sealed class ProxyBackupFileSystem : IProxyBackupFileSystem
     private void ScanDirectory(string root, string directory, List<ProxyBackupFileSystemEntry> files, List<ProxyBackupFileSystemWarning> warnings)
     {
         DirectoryInfo directoryInfo;
+        FileInfo[] directoryFiles;
+        bool isReparsePoint;
         try
         {
             directoryInfo = new DirectoryInfo(directory);
+            isReparsePoint = directoryInfo.Attributes.HasFlag(FileAttributes.ReparsePoint);
+            directoryFiles = isReparsePoint ? [] : directoryInfo.GetFiles();
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             warnings.Add(new ProxyBackupFileSystemWarning("directory_unreadable", SafeRelativeOrNull(root, directory)));
             return;
         }
 
-        if (directoryInfo.Attributes.HasFlag(FileAttributes.ReparsePoint))
+        if (isReparsePoint)
         {
             warnings.Add(new ProxyBackupFileSystemWarning("reparse_point_skipped", SafeRelativeOrNull(root, directory)));
             return;
         }
 
-        FileInfo[] directoryFiles;
-        try
-        {
-            directoryFiles = directoryInfo.GetFiles();
-        }
-        catch
-        {
-            warnings.Add(new ProxyBackupFileSystemWarning("directory_unreadable", SafeRelativeOrNull(root, directory)));
-            return;
-        }
-
         foreach (var file in directoryFiles)
         {
-            if (file.Attributes.HasFlag(FileAttributes.ReparsePoint))
-            {
-                warnings.Add(new ProxyBackupFileSystemWarning("reparse_point_skipped", SafeRelativeOrNull(root, file.FullName)));
-                continue;
-            }
-
-            var safePath = _pathSafety.GetSafeRelativePath(root, file.FullName);
-            if (safePath is not ProxySafeRelativePathResult.SafeResult safeRelativePath)
-            {
-                warnings.Add(new ProxyBackupFileSystemWarning("unsafe_path_skipped", null));
-                continue;
-            }
-
-            files.Add(new ProxyBackupFileSystemEntry(safeRelativePath.RelativePath, file.Length, new DateTimeOffset(file.LastWriteTimeUtc)));
+            ScanFile(root, file, files, warnings);
         }
 
         DirectoryInfo[] children;
@@ -87,7 +63,7 @@ public sealed class ProxyBackupFileSystem : IProxyBackupFileSystem
         {
             children = directoryInfo.GetDirectories();
         }
-        catch
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             warnings.Add(new ProxyBackupFileSystemWarning("directory_unreadable", SafeRelativeOrNull(root, directory)));
             return;
@@ -97,6 +73,24 @@ public sealed class ProxyBackupFileSystem : IProxyBackupFileSystem
         {
             ScanDirectory(root, child.FullName, files, warnings);
         }
+    }
+
+    private void ScanFile(string root, FileInfo file, List<ProxyBackupFileSystemEntry> files, List<ProxyBackupFileSystemWarning> warnings)
+    {
+        if (file.Attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            warnings.Add(new ProxyBackupFileSystemWarning("reparse_point_skipped", SafeRelativeOrNull(root, file.FullName)));
+            return;
+        }
+
+        var safePath = _pathSafety.GetSafeRelativePath(root, file.FullName);
+        if (safePath is not ProxySafeRelativePathResult.SafeResult safeRelativePath)
+        {
+            warnings.Add(new ProxyBackupFileSystemWarning("unsafe_path_skipped", RelativePath: null));
+            return;
+        }
+
+        files.Add(new ProxyBackupFileSystemEntry(safeRelativePath.RelativePath, file.Length, new DateTimeOffset(file.LastWriteTimeUtc)));
     }
 
     private static string ResolveRelativePath(string root, string relativePath)

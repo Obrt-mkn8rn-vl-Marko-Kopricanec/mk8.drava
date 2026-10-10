@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Globalization;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using Mk8.Drava.Application.BLL.Configuration;
@@ -10,11 +11,11 @@ public sealed class SiteConfigurationParser
     {
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
+        AllowTrailingCommas = true,
     };
     public static readonly JsonSerializerOptions WriteJsonOptions = new(ReadJsonOptions)
     {
-        WriteIndented = true
+        WriteIndented = true,
     };
     private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder().WithDuplicateKeyChecking().WithAttemptingUnquotedStringTypeDeserialization().Build();
     private static readonly ISerializer YamlJsonSerializer = new SerializerBuilder().JsonCompatible().Build();
@@ -24,6 +25,8 @@ public sealed class SiteConfigurationParser
         return ReadSiteText(text, format);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Retain the instance parser API used by injected lint and normalization adapters; making this member static breaks existing callers.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "MA0038", Justification = "Deprecated lower-priority duplicate of CA1822; the existing instance parser contract is retained.")]
     public SiteOptions? ReadSiteText(string text, SiteConfigurationFormat format)
     {
         var json = format == SiteConfigurationFormat.Json ? text : ConvertYamlToJson(text);
@@ -39,11 +42,7 @@ public sealed class SiteConfigurationParser
 
     private static string ConvertYamlToJson(string yaml)
     {
-        var yamlObject = YamlDeserializer.Deserialize<object?>(yaml);
-        if (yamlObject is null)
-        {
-            throw new YamlException("YAML did not contain a document.");
-        }
+        var yamlObject = YamlDeserializer.Deserialize<object?>(yaml) ?? throw new YamlException("YAML did not contain a document.");
 
         return YamlJsonSerializer.Serialize(yamlObject);
     }
@@ -80,7 +79,7 @@ public sealed class SiteConfigurationParser
                 var index = 0;
                 foreach (var item in element.EnumerateArray())
                 {
-                    RejectRemovedHttp3Properties(item, $"{path}[{index}]");
+                    RejectRemovedHttp3Properties(item, $"{path}[{index.ToString(CultureInfo.InvariantCulture)}]");
                     index++;
                 }
 
