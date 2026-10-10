@@ -2149,6 +2149,88 @@ internal static class ConfigurationTests
         var projection = ProxyConfigurationReloadResultAssertions.Reloaded(result).ActiveConfiguration;
         var route = projection.Routes[0];
         var upstream = route.Upstreams[0];
+        VerifyRouteInspectionIdentityAndViews(projection, route, upstream);
+        VerifyHealthReadModelGuards();
+        var failureStatusCodes = new List<int>
+        {
+            503
+        };
+        var directCircuitBreaker = new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: failureStatusCodes);
+        var directUpstream = new RuntimeUpstreamProjection(RouteName: "home", Name: "local-test", Scheme: "http", Protocol: "http1", Address: "127.0.0.1", Port: 15000, Weight: 1, Tls: new RuntimeUpstreamTlsProjection(false, null), Endpoint: "127.0.0.1:15000", UriEndpoint: "http://127.0.0.1:15000", EffectiveSniHost: "127.0.0.1", Identity: "home/local-test", CircuitBreaker: directCircuitBreaker);
+        failureStatusCodes[0] = 502;
+        failureStatusCodes.Clear();
+        VerifyCircuitBreakerAndUpstreamReferenceGuards(directCircuitBreaker);
+        VerifyUpstreamReadModelGuards();
+        VerifyUpstreamCircuitBreakerCopies(directCircuitBreaker, directUpstream);
+        var directRouteUpstreams = new List<RuntimeUpstreamProjection>
+        {
+            directUpstream
+        };
+        var directRoute = new RuntimeRouteProjection(Name: "home", Host: route.Host, PathPrefix: route.PathPrefix, Action: route.Action, LoadBalancingPolicy: route.LoadBalancingPolicy, HealthCheck: route.HealthCheck, Upstreams: directRouteUpstreams, HttpsRedirect: route.HttpsRedirect, CanonicalHost: route.CanonicalHost, HeaderPolicy: route.HeaderPolicy, PathRewrite: route.PathRewrite, Redirect: route.Redirect, StaticResponse: route.StaticResponse, Maintenance: route.Maintenance, Cache: route.Cache, ResolvedOptions: route.ResolvedOptions, SiteName: "home", Retry: route.Retry);
+        directRouteUpstreams[0] = upstream;
+        directRouteUpstreams.Clear();
+        VerifyRouteReferenceGuards(route);
+        VerifyRouteRuntimeGuards();
+        VerifyRouteProjectionInputGuards();
+        VerifyHttpsRedirectGuards();
+        VerifyCanonicalHostGuards();
+        VerifyRedirectGuards();
+        VerifyPathRewriteGuards();
+        VerifyStaticResponseGuards();
+        VerifyMaintenanceGuards();
+        VerifyTimeoutReadModelGuards();
+        VerifyExplicitLongFlowTimeouts();
+        VerifyObservabilityReadModelGuards();
+        VerifyLogPersistenceReadModelGuards();
+        VerifyRouteBudgetReadModelGuards();
+        AssertEx.Equal("local-test", directRoute.Upstreams[0].Name);
+        AssertEx.Equal("home", directRoute.SiteName);
+        AssertEx.False(directRoute.Upstreams is RuntimeUpstreamProjection[]);
+    }
+
+    private static void VerifyUpstreamCircuitBreakerCopies(RuntimeCircuitBreakerProjection directCircuitBreaker, RuntimeUpstreamProjection directUpstream)
+    {
+        AssertEx.Equal(503, directCircuitBreaker.FailureStatusCodes[0]);
+        AssertEx.Equal(503, directUpstream.CircuitBreaker.FailureStatusCodes[0]);
+        AssertEx.Equal("home/local-test", directUpstream.Identity);
+        AssertEx.False(directCircuitBreaker.FailureStatusCodes is int[]);
+    }
+
+    private static void VerifyRouteReferenceGuards(RuntimeRouteProjection route)
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteProjection(Name: "home", Host: route.Host, PathPrefix: route.PathPrefix, Action: route.Action, LoadBalancingPolicy: route.LoadBalancingPolicy, HealthCheck: null!, Upstreams: [], HttpsRedirect: route.HttpsRedirect, CanonicalHost: route.CanonicalHost, HeaderPolicy: route.HeaderPolicy, PathRewrite: route.PathRewrite, Redirect: route.Redirect, StaticResponse: route.StaticResponse, Maintenance: route.Maintenance, Cache: route.Cache, ResolvedOptions: route.ResolvedOptions, SiteName: "home", Retry: route.Retry));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteProjection(Name: "home", Host: route.Host, PathPrefix: route.PathPrefix, Action: route.Action, LoadBalancingPolicy: route.LoadBalancingPolicy, HealthCheck: route.HealthCheck, Upstreams: null!, HttpsRedirect: route.HttpsRedirect, CanonicalHost: route.CanonicalHost, HeaderPolicy: route.HeaderPolicy, PathRewrite: route.PathRewrite, Redirect: route.Redirect, StaticResponse: route.StaticResponse, Maintenance: route.Maintenance, Cache: route.Cache, ResolvedOptions: route.ResolvedOptions, SiteName: "home", Retry: route.Retry));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteProjection(Name: "home", Host: route.Host, PathPrefix: route.PathPrefix, Action: route.Action, LoadBalancingPolicy: route.LoadBalancingPolicy, HealthCheck: route.HealthCheck, Upstreams: [], HttpsRedirect: route.HttpsRedirect, CanonicalHost: route.CanonicalHost, HeaderPolicy: route.HeaderPolicy, PathRewrite: route.PathRewrite, Redirect: route.Redirect, StaticResponse: route.StaticResponse, Maintenance: route.Maintenance, Cache: route.Cache, ResolvedOptions: route.ResolvedOptions, SiteName: "home", Retry: null!));
+    }
+
+    private static void VerifyCircuitBreakerAndUpstreamReferenceGuards(RuntimeCircuitBreakerProjection directCircuitBreaker)
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: null!));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 0, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.Zero, OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.Zero, HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 0, FailureStatusCodes: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeUpstreamProjection(RouteName: "home", Name: "local-test", Scheme: "http", Protocol: "http1", Address: "127.0.0.1", Port: 15000, Weight: 1, Tls: null!, Endpoint: "127.0.0.1:15000", UriEndpoint: "http://127.0.0.1:15000", EffectiveSniHost: "127.0.0.1", Identity: "home/local-test", CircuitBreaker: directCircuitBreaker));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeUpstreamProjection(RouteName: "home", Name: "local-test", Scheme: "http", Protocol: "http1", Address: "127.0.0.1", Port: 15000, Weight: 1, Tls: new RuntimeUpstreamTlsProjection(false, null), Endpoint: "127.0.0.1:15000", UriEndpoint: "http://127.0.0.1:15000", EffectiveSniHost: "127.0.0.1", Identity: "home/local-test", CircuitBreaker: null!));
+    }
+
+    private static void VerifyRouteProjectionInputGuards()
+    {
+        AssertRuntimeRouteProjectionRejects(name: null!);
+        AssertRuntimeRouteProjectionRejects(name: " ");
+        AssertRuntimeRouteProjectionRejects(host: null!);
+        AssertRuntimeRouteProjectionRejects(host: " ");
+        AssertRuntimeRouteProjectionRejects(pathPrefix: null!);
+        AssertRuntimeRouteProjectionRejects(pathPrefix: " ");
+        AssertRuntimeRouteProjectionRejects(pathPrefix: "api");
+        AssertRuntimeRouteProjectionRejects(action: (RuntimeRouteAction)99);
+        AssertRuntimeRouteProjectionRejects(loadBalancingPolicy: null!);
+        AssertRuntimeRouteProjectionRejects(loadBalancingPolicy: " ");
+        AssertRuntimeRouteProjectionRejects(siteName: null!);
+    }
+
+    private static void VerifyRouteInspectionIdentityAndViews(ProxyConfigurationProjection projection, RuntimeRouteProjection route, RuntimeUpstreamProjection upstream)
+    {
         object routeCollection = projection.Routes;
         object upstreamCollection = route.Upstreams;
         AssertEx.Equal("home", route.Name);
@@ -2164,6 +2246,10 @@ internal static class ConfigurationTests
         object healthCheck = route.HealthCheck;
         AssertEx.True(healthCheck is RuntimeHealthCheckProjection);
         AssertEx.False(healthCheck is RuntimeHealthCheckOptions);
+    }
+
+    private static void VerifyHealthReadModelGuards()
+    {
         AssertHealthCheckOptionsRejects(path: null!);
         AssertHealthCheckOptionsRejects(path: "health");
         AssertHealthCheckOptionsRejects(interval: TimeSpan.Zero);
@@ -2186,21 +2272,10 @@ internal static class ConfigurationTests
         AssertHealthCheckProjectionRejects(healthyThreshold: 101);
         AssertHealthCheckProjectionRejects(unhealthyThreshold: 0);
         AssertHealthCheckProjectionRejects(unhealthyThreshold: 101);
-        var failureStatusCodes = new List<int>
-        {
-            503
-        };
-        var directCircuitBreaker = new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: failureStatusCodes);
-        var directUpstream = new RuntimeUpstreamProjection(RouteName: "home", Name: "local-test", Scheme: "http", Protocol: "http1", Address: "127.0.0.1", Port: 15000, Weight: 1, Tls: new RuntimeUpstreamTlsProjection(false, null), Endpoint: "127.0.0.1:15000", UriEndpoint: "http://127.0.0.1:15000", EffectiveSniHost: "127.0.0.1", Identity: "home/local-test", CircuitBreaker: directCircuitBreaker);
-        failureStatusCodes[0] = 502;
-        failureStatusCodes.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: null!));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 0, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.Zero, OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.Zero, HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 0, FailureStatusCodes: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeUpstreamProjection(RouteName: "home", Name: "local-test", Scheme: "http", Protocol: "http1", Address: "127.0.0.1", Port: 15000, Weight: 1, Tls: null!, Endpoint: "127.0.0.1:15000", UriEndpoint: "http://127.0.0.1:15000", EffectiveSniHost: "127.0.0.1", Identity: "home/local-test", CircuitBreaker: directCircuitBreaker));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeUpstreamProjection(RouteName: "home", Name: "local-test", Scheme: "http", Protocol: "http1", Address: "127.0.0.1", Port: 15000, Weight: 1, Tls: new RuntimeUpstreamTlsProjection(false, null), Endpoint: "127.0.0.1:15000", UriEndpoint: "http://127.0.0.1:15000", EffectiveSniHost: "127.0.0.1", Identity: "home/local-test", CircuitBreaker: null!));
+    }
+
+    private static void VerifyUpstreamReadModelGuards()
+    {
         AssertRuntimeUpstreamRejects(routeName: null!);
         AssertRuntimeUpstreamRejects(routeName: " ");
         AssertRuntimeUpstreamRejects(name: null!);
@@ -2225,6 +2300,11 @@ internal static class ConfigurationTests
         AssertRuntimeUpstreamTlsRejects(sniHost: "app.internal/path");
         AssertRuntimeUpstreamTlsRejects(sniHost: "app.internal:443");
         AssertRuntimeUpstreamTlsRejects(sniHost: "*.internal");
+        VerifyUpstreamProjectionGuards();
+    }
+
+    private static void VerifyUpstreamProjectionGuards()
+    {
         AssertRuntimeUpstreamProjectionRejects(routeName: null!);
         AssertRuntimeUpstreamProjectionRejects(routeName: " ");
         AssertRuntimeUpstreamProjectionRejects(name: null!);
@@ -2257,20 +2337,10 @@ internal static class ConfigurationTests
         AssertRuntimeUpstreamTlsProjectionRejects(sniHost: "app.internal/path");
         AssertRuntimeUpstreamTlsProjectionRejects(sniHost: "app.internal:443");
         AssertRuntimeUpstreamTlsProjectionRejects(sniHost: "*.internal");
-        AssertEx.Equal(503, directCircuitBreaker.FailureStatusCodes[0]);
-        AssertEx.Equal(503, directUpstream.CircuitBreaker.FailureStatusCodes[0]);
-        AssertEx.Equal("home/local-test", directUpstream.Identity);
-        AssertEx.False(directCircuitBreaker.FailureStatusCodes is int[]);
-        var directRouteUpstreams = new List<RuntimeUpstreamProjection>
-        {
-            directUpstream
-        };
-        var directRoute = new RuntimeRouteProjection(Name: "home", Host: route.Host, PathPrefix: route.PathPrefix, Action: route.Action, LoadBalancingPolicy: route.LoadBalancingPolicy, HealthCheck: route.HealthCheck, Upstreams: directRouteUpstreams, HttpsRedirect: route.HttpsRedirect, CanonicalHost: route.CanonicalHost, HeaderPolicy: route.HeaderPolicy, PathRewrite: route.PathRewrite, Redirect: route.Redirect, StaticResponse: route.StaticResponse, Maintenance: route.Maintenance, Cache: route.Cache, ResolvedOptions: route.ResolvedOptions, SiteName: "home", Retry: route.Retry);
-        directRouteUpstreams[0] = upstream;
-        directRouteUpstreams.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteProjection(Name: "home", Host: route.Host, PathPrefix: route.PathPrefix, Action: route.Action, LoadBalancingPolicy: route.LoadBalancingPolicy, HealthCheck: null!, Upstreams: [], HttpsRedirect: route.HttpsRedirect, CanonicalHost: route.CanonicalHost, HeaderPolicy: route.HeaderPolicy, PathRewrite: route.PathRewrite, Redirect: route.Redirect, StaticResponse: route.StaticResponse, Maintenance: route.Maintenance, Cache: route.Cache, ResolvedOptions: route.ResolvedOptions, SiteName: "home", Retry: route.Retry));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteProjection(Name: "home", Host: route.Host, PathPrefix: route.PathPrefix, Action: route.Action, LoadBalancingPolicy: route.LoadBalancingPolicy, HealthCheck: route.HealthCheck, Upstreams: null!, HttpsRedirect: route.HttpsRedirect, CanonicalHost: route.CanonicalHost, HeaderPolicy: route.HeaderPolicy, PathRewrite: route.PathRewrite, Redirect: route.Redirect, StaticResponse: route.StaticResponse, Maintenance: route.Maintenance, Cache: route.Cache, ResolvedOptions: route.ResolvedOptions, SiteName: "home", Retry: route.Retry));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteProjection(Name: "home", Host: route.Host, PathPrefix: route.PathPrefix, Action: route.Action, LoadBalancingPolicy: route.LoadBalancingPolicy, HealthCheck: route.HealthCheck, Upstreams: [], HttpsRedirect: route.HttpsRedirect, CanonicalHost: route.CanonicalHost, HeaderPolicy: route.HeaderPolicy, PathRewrite: route.PathRewrite, Redirect: route.Redirect, StaticResponse: route.StaticResponse, Maintenance: route.Maintenance, Cache: route.Cache, ResolvedOptions: route.ResolvedOptions, SiteName: "home", Retry: null!));
+    }
+
+    private static void VerifyRouteRuntimeGuards()
+    {
         AssertRuntimeRouteRejects(name: null!);
         AssertRuntimeRouteRejects(name: " ");
         AssertRuntimeRouteRejects(host: null!);
@@ -2282,17 +2352,10 @@ internal static class ConfigurationTests
         AssertRuntimeRouteRejects(loadBalancingPolicy: null!);
         AssertRuntimeRouteRejects(loadBalancingPolicy: " ");
         AssertRuntimeRouteRejects(siteName: null!);
-        AssertRuntimeRouteProjectionRejects(name: null!);
-        AssertRuntimeRouteProjectionRejects(name: " ");
-        AssertRuntimeRouteProjectionRejects(host: null!);
-        AssertRuntimeRouteProjectionRejects(host: " ");
-        AssertRuntimeRouteProjectionRejects(pathPrefix: null!);
-        AssertRuntimeRouteProjectionRejects(pathPrefix: " ");
-        AssertRuntimeRouteProjectionRejects(pathPrefix: "api");
-        AssertRuntimeRouteProjectionRejects(action: (RuntimeRouteAction)99);
-        AssertRuntimeRouteProjectionRejects(loadBalancingPolicy: null!);
-        AssertRuntimeRouteProjectionRejects(loadBalancingPolicy: " ");
-        AssertRuntimeRouteProjectionRejects(siteName: null!);
+    }
+
+    private static void VerifyHttpsRedirectGuards()
+    {
         AssertRuntimeHttpsRedirectRejects(statusCode: 300);
         AssertRuntimeHttpsRedirectRejects(statusCode: 309);
         AssertRuntimeHttpsRedirectRejects(httpsPort: 0);
@@ -2301,6 +2364,10 @@ internal static class ConfigurationTests
         AssertRuntimeHttpsRedirectProjectionRejects(statusCode: 309);
         AssertRuntimeHttpsRedirectProjectionRejects(httpsPort: 0);
         AssertRuntimeHttpsRedirectProjectionRejects(httpsPort: 65536);
+    }
+
+    private static void VerifyCanonicalHostGuards()
+    {
         AssertRuntimeCanonicalHostRejects(enabled: true, targetHost: "");
         AssertRuntimeCanonicalHostRejects(targetHost: null!);
         AssertRuntimeCanonicalHostRejects(targetHost: "api.test/path");
@@ -2313,6 +2380,10 @@ internal static class ConfigurationTests
         AssertRuntimeCanonicalHostProjectionRejects(targetHost: "https://api.test");
         AssertRuntimeCanonicalHostProjectionRejects(targetHost: "api test");
         AssertRuntimeCanonicalHostProjectionRejects(statusCode: 300);
+    }
+
+    private static void VerifyRedirectGuards()
+    {
         AssertRuntimeRedirectRejects(statusCode: 300);
         AssertRuntimeRedirectRejects(statusCode: 309);
         AssertRuntimeRedirectRejects(targetUrl: null!);
@@ -2323,12 +2394,20 @@ internal static class ConfigurationTests
         AssertRuntimeRedirectProjectionRejects(targetUrl: null!);
         AssertRuntimeRedirectProjectionRejects(targetPath: null!);
         AssertRuntimeRedirectProjectionRejects(targetPath: "redirect");
+    }
+
+    private static void VerifyPathRewriteGuards()
+    {
         AssertRuntimePathRewriteRejects(stripPrefix: null!);
         AssertRuntimePathRewriteRejects(replacePrefix: null!);
         AssertRuntimePathRewriteRejects(replacement: null!);
         AssertRuntimePathRewriteProjectionRejects(stripPrefix: null!);
         AssertRuntimePathRewriteProjectionRejects(replacePrefix: null!);
         AssertRuntimePathRewriteProjectionRejects(replacement: null!);
+    }
+
+    private static void VerifyStaticResponseGuards()
+    {
         AssertRuntimeStaticResponseRejects(statusCode: 199);
         AssertRuntimeStaticResponseRejects(statusCode: 600);
         AssertRuntimeStaticResponseRejects(contentType: null!);
@@ -2343,6 +2422,10 @@ internal static class ConfigurationTests
         AssertRuntimeStaticResponseProjectionRejects(contentType: "text/plain\r\nX-Bad: value");
         AssertRuntimeStaticResponseProjectionRejects(body: null!);
         AssertRuntimeStaticResponseProjectionRejects(body: new string ('x', 64 * 1024 + 1));
+    }
+
+    private static void VerifyMaintenanceGuards()
+    {
         AssertRuntimeMaintenanceRejects(retryAfterSeconds: -1);
         AssertRuntimeMaintenanceRejects(retryAfterSeconds: 86401);
         AssertRuntimeMaintenanceRejects(contentType: null!);
@@ -2357,6 +2440,10 @@ internal static class ConfigurationTests
         AssertRuntimeMaintenanceProjectionRejects(contentType: "text/plain\r\nX-Bad: value");
         AssertRuntimeMaintenanceProjectionRejects(body: null!);
         AssertRuntimeMaintenanceProjectionRejects(body: new string ('x', 64 * 1024 + 1));
+    }
+
+    private static void VerifyTimeoutReadModelGuards()
+    {
         AssertRuntimeTimeoutsRejects(clientRequestHeadTimeout: TimeSpan.FromMilliseconds(99));
         AssertRuntimeTimeoutsRejects(clientRequestBodyIdleTimeout: TimeSpan.FromMilliseconds(99));
         AssertRuntimeTimeoutsRejects(upstreamConnectTimeout: TimeSpan.FromMilliseconds(99));
@@ -2377,13 +2464,20 @@ internal static class ConfigurationTests
         AssertRuntimeTimeoutsProjectionRejects(clientKeepAliveIdleTimeout: TimeSpan.FromMilliseconds(600001));
         AssertRuntimeTimeoutsProjectionRejects(upstreamIdleConnectionLifetime: TimeSpan.FromMilliseconds(600001));
         AssertRuntimeTimeoutsProjectionRejects(tunnelIdleTimeout: TimeSpan.FromMilliseconds(600001));
-        VerifyExplicitLongFlowTimeouts();
+    }
+
+    private static void VerifyObservabilityReadModelGuards()
+    {
         AssertRuntimeObservabilityRejects(recentDiagnosticsCapacity: 0);
         AssertRuntimeObservabilityRejects(recentDiagnosticsCapacity: 10001);
         AssertRuntimeObservabilityRejects(useNullLogPersistence: true);
         AssertRuntimeObservabilityProjectionRejects(recentDiagnosticsCapacity: 0);
         AssertRuntimeObservabilityProjectionRejects(recentDiagnosticsCapacity: 10001);
         AssertRuntimeObservabilityProjectionRejects(useNullLogPersistence: true);
+    }
+
+    private static void VerifyLogPersistenceReadModelGuards()
+    {
         AssertRuntimeLogPersistenceRejects(maxFileBytes: 4095);
         AssertRuntimeLogPersistenceRejects(maxFileBytes: 1024L * 1024 * 1024 + 1);
         AssertRuntimeLogPersistenceRejects(maxFiles: 0);
@@ -2392,6 +2486,10 @@ internal static class ConfigurationTests
         AssertRuntimeLogPersistenceProjectionRejects(maxFileBytes: 1024L * 1024 * 1024 + 1);
         AssertRuntimeLogPersistenceProjectionRejects(maxFiles: 0);
         AssertRuntimeLogPersistenceProjectionRejects(maxFiles: 129);
+    }
+
+    private static void VerifyRouteBudgetReadModelGuards()
+    {
         AssertRuntimeRouteResolvedOptionsRejects(maxRequestBodyBytes: -1);
         AssertRuntimeRouteResolvedOptionsRejects(maxRequestBodyBytes: 1L * 1024 * 1024 * 1024 * 1024 + 1);
         AssertRuntimeRouteResolvedOptionsRejects(clientRequestHeadTimeout: TimeSpan.FromMilliseconds(99));
@@ -2404,156 +2502,154 @@ internal static class ConfigurationTests
         AssertRuntimeRouteResolvedOptionsProjectionRejects(clientRequestHeadTimeout: TimeSpan.FromMilliseconds(600001));
         AssertRuntimeRouteResolvedOptionsProjectionRejects(upstreamResponseHeadTimeout: TimeSpan.FromMilliseconds(99));
         AssertRuntimeRouteResolvedOptionsProjectionRejects(upstreamResponseHeadTimeout: TimeSpan.FromMilliseconds(600001));
-        AssertEx.Equal("local-test", directRoute.Upstreams[0].Name);
-        AssertEx.Equal("home", directRoute.SiteName);
-        AssertEx.False(directRoute.Upstreams is RuntimeUpstreamProjection[]);
-        static void AssertHealthCheckOptionsRejects(string path = "/health", TimeSpan? interval = null, TimeSpan? timeout = null, int healthyThreshold = 1, int unhealthyThreshold = 1)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHealthCheckOptions(Enabled: true, path, interval ?? TimeSpan.FromSeconds(2), timeout ?? TimeSpan.FromSeconds(1), healthyThreshold, unhealthyThreshold));
-        }
+    }
 
-        static void AssertHealthCheckProjectionRejects(string path = "/health", TimeSpan? interval = null, TimeSpan? timeout = null, int healthyThreshold = 1, int unhealthyThreshold = 1)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHealthCheckProjection(Enabled: true, path, interval ?? TimeSpan.FromSeconds(2), timeout ?? TimeSpan.FromSeconds(1), healthyThreshold, unhealthyThreshold));
-        }
+    private static void AssertHealthCheckOptionsRejects(string path = "/health", TimeSpan? interval = null, TimeSpan? timeout = null, int healthyThreshold = 1, int unhealthyThreshold = 1)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHealthCheckOptions(Enabled: true, path, interval ?? TimeSpan.FromSeconds(2), timeout ?? TimeSpan.FromSeconds(1), healthyThreshold, unhealthyThreshold));
+    }
 
-        static void AssertRuntimeUpstreamRejects(string routeName = "home", string name = "local-test", string scheme = "http", string protocol = RuntimeUpstreamProtocol.Http1, string address = "127.0.0.1", int port = 15000, int weight = 1)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeUpstream(routeName, name, scheme, protocol, address, port, weight, RuntimeUpstreamTlsOptions.Default));
-        }
+    private static void AssertHealthCheckProjectionRejects(string path = "/health", TimeSpan? interval = null, TimeSpan? timeout = null, int healthyThreshold = 1, int unhealthyThreshold = 1)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHealthCheckProjection(Enabled: true, path, interval ?? TimeSpan.FromSeconds(2), timeout ?? TimeSpan.FromSeconds(1), healthyThreshold, unhealthyThreshold));
+    }
 
-        static void AssertRuntimeUpstreamProjectionRejects(string routeName = "home", string name = "local-test", string scheme = "http", string protocol = RuntimeUpstreamProtocol.Http1, string address = "127.0.0.1", int port = 15000, int weight = 1, string endpoint = "127.0.0.1:15000", string uriEndpoint = "http://127.0.0.1:15000", string effectiveSniHost = "127.0.0.1", string identity = "home/local-test")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeUpstreamProjection(routeName, name, scheme, protocol, address, port, weight, new RuntimeUpstreamTlsProjection(false, null), endpoint, uriEndpoint, effectiveSniHost, identity, new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: [])));
-        }
+    private static void AssertRuntimeUpstreamRejects(string routeName = "home", string name = "local-test", string scheme = "http", string protocol = RuntimeUpstreamProtocol.Http1, string address = "127.0.0.1", int port = 15000, int weight = 1)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeUpstream(routeName, name, scheme, protocol, address, port, weight, RuntimeUpstreamTlsOptions.Default));
+    }
 
-        static void AssertRuntimeUpstreamTlsRejects(string? sniHost)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeUpstreamTlsOptions(ValidateCertificate: true, sniHost));
-        }
+    private static void AssertRuntimeUpstreamProjectionRejects(string routeName = "home", string name = "local-test", string scheme = "http", string protocol = RuntimeUpstreamProtocol.Http1, string address = "127.0.0.1", int port = 15000, int weight = 1, string endpoint = "127.0.0.1:15000", string uriEndpoint = "http://127.0.0.1:15000", string effectiveSniHost = "127.0.0.1", string identity = "home/local-test")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeUpstreamProjection(routeName, name, scheme, protocol, address, port, weight, new RuntimeUpstreamTlsProjection(false, null), endpoint, uriEndpoint, effectiveSniHost, identity, new RuntimeCircuitBreakerProjection(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: [])));
+    }
 
-        static void AssertRuntimeUpstreamTlsProjectionRejects(string? sniHost)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeUpstreamTlsProjection(ValidateCertificate: true, sniHost));
-        }
+    private static void AssertRuntimeUpstreamTlsRejects(string? sniHost)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeUpstreamTlsOptions(ValidateCertificate: true, sniHost));
+    }
 
-        static void AssertRuntimeRouteRejects(string name = "home", string host = "home.test", string pathPrefix = "/", RuntimeRouteAction action = RuntimeRouteAction.Proxy, string loadBalancingPolicy = "round-robin", string siteName = "home")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeRoute(name, host, pathPrefix, action, loadBalancingPolicy, new RuntimeHealthCheckOptions(Enabled: false, Path: "/health", Interval: TimeSpan.FromSeconds(2), Timeout: TimeSpan.FromSeconds(1), HealthyThreshold: 1, UnhealthyThreshold: 1), [], new RuntimeHttpsRedirectPolicy(false, 308, null), new RuntimeCanonicalHostPolicy(false, "", 308), RuntimeHeaderPolicy.Empty, new RuntimePathRewritePolicy("", "", ""), new RuntimeRedirectPolicy(308, "", "", true), new RuntimeStaticResponse(200, "text/plain; charset=utf-8", "ok"), new RuntimeMaintenancePolicy(false, null, "text/plain; charset=utf-8", "Service Unavailable"), RuntimeCachePolicy.Disabled, new RuntimeRouteResolvedOptions(MaxRequestBodyBytes: 104857600, ClientRequestHeadTimeout: TimeSpan.FromSeconds(10), UpstreamResponseHeadTimeout: TimeSpan.FromSeconds(30), AccessLogEnabled: true), siteName, RuntimeRetryPolicy.Disabled));
-        }
+    private static void AssertRuntimeUpstreamTlsProjectionRejects(string? sniHost)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeUpstreamTlsProjection(ValidateCertificate: true, sniHost));
+    }
 
-        static void AssertRuntimeRouteProjectionRejects(string name = "home", string host = "home.test", string pathPrefix = "/", RuntimeRouteAction action = RuntimeRouteAction.Proxy, string loadBalancingPolicy = "round-robin", string siteName = "home")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeRouteProjection(name, host, pathPrefix, action, loadBalancingPolicy, new RuntimeHealthCheckProjection(Enabled: false, Path: "/health", Interval: TimeSpan.FromSeconds(2), Timeout: TimeSpan.FromSeconds(1), HealthyThreshold: 1, UnhealthyThreshold: 1), [], new RuntimeHttpsRedirectProjection(false, 308, null), new RuntimeCanonicalHostProjection(false, "", 308), new RuntimeHeaderPolicyProjection([], [], [], []), new RuntimePathRewriteProjection("", "", ""), new RuntimeRedirectProjection(308, "", "", true), new RuntimeStaticResponseProjection(200, "text/plain; charset=utf-8", "ok"), new RuntimeMaintenanceProjection(false, null, "text/plain; charset=utf-8", "Service Unavailable"), new RuntimeCacheProjection(Enabled: false, MaxEntryBytes: 0, MaxTotalBytes: 0, DefaultTtl: TimeSpan.Zero, RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []), new RuntimeRouteResolvedOptionsProjection(MaxRequestBodyBytes: 104857600, ClientRequestHeadTimeout: TimeSpan.FromSeconds(10), UpstreamResponseHeadTimeout: TimeSpan.FromSeconds(30), AccessLogEnabled: true), siteName, new RuntimeRetryProjection(Enabled: false, MaxAttempts: 1, PerAttemptTimeout: null, RetryOnConnectFailure: false, RetryOnUpstreamResponseHeadTimeout: false, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.Zero)));
-        }
+    private static void AssertRuntimeRouteRejects(string name = "home", string host = "home.test", string pathPrefix = "/", RuntimeRouteAction action = RuntimeRouteAction.Proxy, string loadBalancingPolicy = "round-robin", string siteName = "home")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeRoute(name, host, pathPrefix, action, loadBalancingPolicy, new RuntimeHealthCheckOptions(Enabled: false, Path: "/health", Interval: TimeSpan.FromSeconds(2), Timeout: TimeSpan.FromSeconds(1), HealthyThreshold: 1, UnhealthyThreshold: 1), [], new RuntimeHttpsRedirectPolicy(false, 308, null), new RuntimeCanonicalHostPolicy(false, "", 308), RuntimeHeaderPolicy.Empty, new RuntimePathRewritePolicy("", "", ""), new RuntimeRedirectPolicy(308, "", "", true), new RuntimeStaticResponse(200, "text/plain; charset=utf-8", "ok"), new RuntimeMaintenancePolicy(false, null, "text/plain; charset=utf-8", "Service Unavailable"), RuntimeCachePolicy.Disabled, new RuntimeRouteResolvedOptions(MaxRequestBodyBytes: 104857600, ClientRequestHeadTimeout: TimeSpan.FromSeconds(10), UpstreamResponseHeadTimeout: TimeSpan.FromSeconds(30), AccessLogEnabled: true), siteName, RuntimeRetryPolicy.Disabled));
+    }
 
-        static void AssertRuntimeHttpsRedirectRejects(int statusCode = 308, int? httpsPort = null)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHttpsRedirectPolicy(Enabled: true, statusCode, httpsPort));
-        }
+    private static void AssertRuntimeRouteProjectionRejects(string name = "home", string host = "home.test", string pathPrefix = "/", RuntimeRouteAction action = RuntimeRouteAction.Proxy, string loadBalancingPolicy = "round-robin", string siteName = "home")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeRouteProjection(name, host, pathPrefix, action, loadBalancingPolicy, new RuntimeHealthCheckProjection(Enabled: false, Path: "/health", Interval: TimeSpan.FromSeconds(2), Timeout: TimeSpan.FromSeconds(1), HealthyThreshold: 1, UnhealthyThreshold: 1), [], new RuntimeHttpsRedirectProjection(false, 308, null), new RuntimeCanonicalHostProjection(false, "", 308), new RuntimeHeaderPolicyProjection([], [], [], []), new RuntimePathRewriteProjection("", "", ""), new RuntimeRedirectProjection(308, "", "", true), new RuntimeStaticResponseProjection(200, "text/plain; charset=utf-8", "ok"), new RuntimeMaintenanceProjection(false, null, "text/plain; charset=utf-8", "Service Unavailable"), new RuntimeCacheProjection(Enabled: false, MaxEntryBytes: 0, MaxTotalBytes: 0, DefaultTtl: TimeSpan.Zero, RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []), new RuntimeRouteResolvedOptionsProjection(MaxRequestBodyBytes: 104857600, ClientRequestHeadTimeout: TimeSpan.FromSeconds(10), UpstreamResponseHeadTimeout: TimeSpan.FromSeconds(30), AccessLogEnabled: true), siteName, new RuntimeRetryProjection(Enabled: false, MaxAttempts: 1, PerAttemptTimeout: null, RetryOnConnectFailure: false, RetryOnUpstreamResponseHeadTimeout: false, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.Zero)));
+    }
 
-        static void AssertRuntimeHttpsRedirectProjectionRejects(int statusCode = 308, int? httpsPort = null)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeHttpsRedirectProjection(Enabled: true, statusCode, httpsPort));
-        }
+    private static void AssertRuntimeHttpsRedirectRejects(int statusCode = 308, int? httpsPort = null)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHttpsRedirectPolicy(Enabled: true, statusCode, httpsPort));
+    }
 
-        static void AssertRuntimeCanonicalHostRejects(bool enabled = false, string targetHost = "api.test", int statusCode = 308)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeCanonicalHostPolicy(enabled, targetHost, statusCode));
-        }
+    private static void AssertRuntimeHttpsRedirectProjectionRejects(int statusCode = 308, int? httpsPort = null)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHttpsRedirectProjection(Enabled: true, statusCode, httpsPort));
+    }
 
-        static void AssertRuntimeCanonicalHostProjectionRejects(bool enabled = false, string targetHost = "api.test", int statusCode = 308)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeCanonicalHostProjection(enabled, targetHost, statusCode));
-        }
+    private static void AssertRuntimeCanonicalHostRejects(bool enabled = false, string targetHost = "api.test", int statusCode = 308)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeCanonicalHostPolicy(enabled, targetHost, statusCode));
+    }
 
-        static void AssertRuntimeRedirectRejects(int statusCode = 308, string targetUrl = "", string targetPath = "/redirect")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeRedirectPolicy(statusCode, targetUrl, targetPath, PreserveQuery: true));
-        }
+    private static void AssertRuntimeCanonicalHostProjectionRejects(bool enabled = false, string targetHost = "api.test", int statusCode = 308)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeCanonicalHostProjection(enabled, targetHost, statusCode));
+    }
 
-        static void AssertRuntimeRedirectProjectionRejects(int statusCode = 308, string targetUrl = "", string targetPath = "/redirect")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeRedirectProjection(statusCode, targetUrl, targetPath, PreserveQuery: true));
-        }
+    private static void AssertRuntimeRedirectRejects(int statusCode = 308, string targetUrl = "", string targetPath = "/redirect")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeRedirectPolicy(statusCode, targetUrl, targetPath, PreserveQuery: true));
+    }
 
-        static void AssertRuntimePathRewriteRejects(string stripPrefix = "", string replacePrefix = "", string replacement = "")
-        {
-            AssertEx.Throws<ArgumentNullException>(() => new RuntimePathRewritePolicy(stripPrefix, replacePrefix, replacement));
-        }
+    private static void AssertRuntimeRedirectProjectionRejects(int statusCode = 308, string targetUrl = "", string targetPath = "/redirect")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeRedirectProjection(statusCode, targetUrl, targetPath, PreserveQuery: true));
+    }
 
-        static void AssertRuntimePathRewriteProjectionRejects(string stripPrefix = "", string replacePrefix = "", string replacement = "")
-        {
-            AssertEx.Throws<ArgumentNullException>(() => new RuntimePathRewriteProjection(stripPrefix, replacePrefix, replacement));
-        }
+    private static void AssertRuntimePathRewriteRejects(string stripPrefix = "", string replacePrefix = "", string replacement = "")
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimePathRewritePolicy(stripPrefix, replacePrefix, replacement));
+    }
 
-        static void AssertRuntimeStaticResponseRejects(int statusCode = 200, string contentType = "text/plain; charset=utf-8", string body = "ok")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeStaticResponse(statusCode, contentType, body));
-        }
+    private static void AssertRuntimePathRewriteProjectionRejects(string stripPrefix = "", string replacePrefix = "", string replacement = "")
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimePathRewriteProjection(stripPrefix, replacePrefix, replacement));
+    }
 
-        static void AssertRuntimeStaticResponseProjectionRejects(int statusCode = 200, string contentType = "text/plain; charset=utf-8", string body = "ok")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeStaticResponseProjection(statusCode, contentType, body));
-        }
+    private static void AssertRuntimeStaticResponseRejects(int statusCode = 200, string contentType = "text/plain; charset=utf-8", string body = "ok")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeStaticResponse(statusCode, contentType, body));
+    }
 
-        static void AssertRuntimeMaintenanceRejects(int? retryAfterSeconds = null, string contentType = "text/plain; charset=utf-8", string body = "Service Unavailable")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeMaintenancePolicy(Enabled: true, retryAfterSeconds, contentType, body));
-        }
+    private static void AssertRuntimeStaticResponseProjectionRejects(int statusCode = 200, string contentType = "text/plain; charset=utf-8", string body = "ok")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeStaticResponseProjection(statusCode, contentType, body));
+    }
 
-        static void AssertRuntimeMaintenanceProjectionRejects(int? retryAfterSeconds = null, string contentType = "text/plain; charset=utf-8", string body = "Service Unavailable")
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeMaintenanceProjection(Enabled: true, retryAfterSeconds, contentType, body));
-        }
+    private static void AssertRuntimeMaintenanceRejects(int? retryAfterSeconds = null, string contentType = "text/plain; charset=utf-8", string body = "Service Unavailable")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeMaintenancePolicy(Enabled: true, retryAfterSeconds, contentType, body));
+    }
 
-        static void AssertRuntimeRouteResolvedOptionsRejects(long maxRequestBodyBytes = 104857600, TimeSpan? clientRequestHeadTimeout = null, TimeSpan? upstreamResponseHeadTimeout = null)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeRouteResolvedOptions(maxRequestBodyBytes, clientRequestHeadTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseHeadTimeout ?? TimeSpan.FromSeconds(30), AccessLogEnabled: true));
-        }
+    private static void AssertRuntimeMaintenanceProjectionRejects(int? retryAfterSeconds = null, string contentType = "text/plain; charset=utf-8", string body = "Service Unavailable")
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeMaintenanceProjection(Enabled: true, retryAfterSeconds, contentType, body));
+    }
 
-        static void AssertRuntimeRouteResolvedOptionsProjectionRejects(long maxRequestBodyBytes = 104857600, TimeSpan? clientRequestHeadTimeout = null, TimeSpan? upstreamResponseHeadTimeout = null)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeRouteResolvedOptionsProjection(maxRequestBodyBytes, clientRequestHeadTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseHeadTimeout ?? TimeSpan.FromSeconds(30), AccessLogEnabled: true));
-        }
+    private static void AssertRuntimeRouteResolvedOptionsRejects(long maxRequestBodyBytes = 104857600, TimeSpan? clientRequestHeadTimeout = null, TimeSpan? upstreamResponseHeadTimeout = null)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeRouteResolvedOptions(maxRequestBodyBytes, clientRequestHeadTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseHeadTimeout ?? TimeSpan.FromSeconds(30), AccessLogEnabled: true));
+    }
 
-        static void AssertRuntimeTimeoutsRejects(TimeSpan? clientRequestHeadTimeout = null, TimeSpan? clientRequestBodyIdleTimeout = null, TimeSpan? upstreamConnectTimeout = null, TimeSpan? upstreamResponseHeadTimeout = null, TimeSpan? upstreamResponseBodyIdleTimeout = null, TimeSpan? downstreamWriteTimeout = null, TimeSpan? tlsHandshakeTimeout = null, TimeSpan? clientKeepAliveIdleTimeout = null, TimeSpan? upstreamIdleConnectionLifetime = null, TimeSpan? tunnelIdleTimeout = null)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeTimeouts(clientRequestHeadTimeout ?? TimeSpan.FromSeconds(10), clientRequestBodyIdleTimeout ?? TimeSpan.FromSeconds(10), upstreamConnectTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseHeadTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseBodyIdleTimeout ?? TimeSpan.FromSeconds(10), downstreamWriteTimeout ?? TimeSpan.FromSeconds(10), tlsHandshakeTimeout ?? TimeSpan.FromSeconds(10), clientKeepAliveIdleTimeout ?? TimeSpan.FromSeconds(10), upstreamIdleConnectionLifetime ?? TimeSpan.FromSeconds(10), tunnelIdleTimeout ?? TimeSpan.FromSeconds(10)));
-        }
+    private static void AssertRuntimeRouteResolvedOptionsProjectionRejects(long maxRequestBodyBytes = 104857600, TimeSpan? clientRequestHeadTimeout = null, TimeSpan? upstreamResponseHeadTimeout = null)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeRouteResolvedOptionsProjection(maxRequestBodyBytes, clientRequestHeadTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseHeadTimeout ?? TimeSpan.FromSeconds(30), AccessLogEnabled: true));
+    }
 
-        static void AssertRuntimeTimeoutsProjectionRejects(TimeSpan? clientRequestHeadTimeout = null, TimeSpan? clientRequestBodyIdleTimeout = null, TimeSpan? upstreamConnectTimeout = null, TimeSpan? upstreamResponseHeadTimeout = null, TimeSpan? upstreamResponseBodyIdleTimeout = null, TimeSpan? downstreamWriteTimeout = null, TimeSpan? tlsHandshakeTimeout = null, TimeSpan? clientKeepAliveIdleTimeout = null, TimeSpan? upstreamIdleConnectionLifetime = null, TimeSpan? tunnelIdleTimeout = null)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeTimeoutsProjection(clientRequestHeadTimeout ?? TimeSpan.FromSeconds(10), clientRequestBodyIdleTimeout ?? TimeSpan.FromSeconds(10), upstreamConnectTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseHeadTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseBodyIdleTimeout ?? TimeSpan.FromSeconds(10), downstreamWriteTimeout ?? TimeSpan.FromSeconds(10), tlsHandshakeTimeout ?? TimeSpan.FromSeconds(10), clientKeepAliveIdleTimeout ?? TimeSpan.FromSeconds(10), upstreamIdleConnectionLifetime ?? TimeSpan.FromSeconds(10), tunnelIdleTimeout ?? TimeSpan.FromSeconds(10)));
-        }
+    private static void AssertRuntimeTimeoutsRejects(TimeSpan? clientRequestHeadTimeout = null, TimeSpan? clientRequestBodyIdleTimeout = null, TimeSpan? upstreamConnectTimeout = null, TimeSpan? upstreamResponseHeadTimeout = null, TimeSpan? upstreamResponseBodyIdleTimeout = null, TimeSpan? downstreamWriteTimeout = null, TimeSpan? tlsHandshakeTimeout = null, TimeSpan? clientKeepAliveIdleTimeout = null, TimeSpan? upstreamIdleConnectionLifetime = null, TimeSpan? tunnelIdleTimeout = null)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeTimeouts(clientRequestHeadTimeout ?? TimeSpan.FromSeconds(10), clientRequestBodyIdleTimeout ?? TimeSpan.FromSeconds(10), upstreamConnectTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseHeadTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseBodyIdleTimeout ?? TimeSpan.FromSeconds(10), downstreamWriteTimeout ?? TimeSpan.FromSeconds(10), tlsHandshakeTimeout ?? TimeSpan.FromSeconds(10), clientKeepAliveIdleTimeout ?? TimeSpan.FromSeconds(10), upstreamIdleConnectionLifetime ?? TimeSpan.FromSeconds(10), tunnelIdleTimeout ?? TimeSpan.FromSeconds(10)));
+    }
 
-        static void AssertRuntimeObservabilityRejects(int recentDiagnosticsCapacity = 500, RuntimeLogPersistenceOptions? logPersistence = null, bool useNullLogPersistence = false)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeObservabilityOptions(AccessLogEnabled: true, recentDiagnosticsCapacity, useNullLogPersistence ? null! : logPersistence ?? CreateValidLogPersistenceOptions()));
-            static RuntimeLogPersistenceOptions CreateValidLogPersistenceOptions()
-            {
-                return new RuntimeLogPersistenceOptions(AccessLogEnabled: true, AdminAuditEnabled: true, MaxFileBytes: 1_048_576, MaxFiles: 8);
-            }
-        }
+    private static void AssertRuntimeTimeoutsProjectionRejects(TimeSpan? clientRequestHeadTimeout = null, TimeSpan? clientRequestBodyIdleTimeout = null, TimeSpan? upstreamConnectTimeout = null, TimeSpan? upstreamResponseHeadTimeout = null, TimeSpan? upstreamResponseBodyIdleTimeout = null, TimeSpan? downstreamWriteTimeout = null, TimeSpan? tlsHandshakeTimeout = null, TimeSpan? clientKeepAliveIdleTimeout = null, TimeSpan? upstreamIdleConnectionLifetime = null, TimeSpan? tunnelIdleTimeout = null)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeTimeoutsProjection(clientRequestHeadTimeout ?? TimeSpan.FromSeconds(10), clientRequestBodyIdleTimeout ?? TimeSpan.FromSeconds(10), upstreamConnectTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseHeadTimeout ?? TimeSpan.FromSeconds(10), upstreamResponseBodyIdleTimeout ?? TimeSpan.FromSeconds(10), downstreamWriteTimeout ?? TimeSpan.FromSeconds(10), tlsHandshakeTimeout ?? TimeSpan.FromSeconds(10), clientKeepAliveIdleTimeout ?? TimeSpan.FromSeconds(10), upstreamIdleConnectionLifetime ?? TimeSpan.FromSeconds(10), tunnelIdleTimeout ?? TimeSpan.FromSeconds(10)));
+    }
 
-        static void AssertRuntimeObservabilityProjectionRejects(int recentDiagnosticsCapacity = 500, RuntimeLogPersistenceProjection? logPersistence = null, bool useNullLogPersistence = false)
+    private static void AssertRuntimeObservabilityRejects(int recentDiagnosticsCapacity = 500, RuntimeLogPersistenceOptions? logPersistence = null, bool useNullLogPersistence = false)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeObservabilityOptions(AccessLogEnabled: true, recentDiagnosticsCapacity, useNullLogPersistence ? null! : logPersistence ?? CreateValidLogPersistenceOptions()));
+        static RuntimeLogPersistenceOptions CreateValidLogPersistenceOptions()
         {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeObservabilityProjection(AccessLogEnabled: true, recentDiagnosticsCapacity, useNullLogPersistence ? null! : logPersistence ?? CreateValidLogPersistenceProjection()));
-            static RuntimeLogPersistenceProjection CreateValidLogPersistenceProjection()
-            {
-                return new RuntimeLogPersistenceProjection(AccessLogEnabled: true, AdminAuditEnabled: true, MaxFileBytes: 1_048_576, MaxFiles: 8);
-            }
+            return new RuntimeLogPersistenceOptions(AccessLogEnabled: true, AdminAuditEnabled: true, MaxFileBytes: 1_048_576, MaxFiles: 8);
         }
+    }
 
-        static void AssertRuntimeLogPersistenceRejects(long maxFileBytes = 1_048_576, int maxFiles = 8)
+    private static void AssertRuntimeObservabilityProjectionRejects(int recentDiagnosticsCapacity = 500, RuntimeLogPersistenceProjection? logPersistence = null, bool useNullLogPersistence = false)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeObservabilityProjection(AccessLogEnabled: true, recentDiagnosticsCapacity, useNullLogPersistence ? null! : logPersistence ?? CreateValidLogPersistenceProjection()));
+        static RuntimeLogPersistenceProjection CreateValidLogPersistenceProjection()
         {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeLogPersistenceOptions(AccessLogEnabled: true, AdminAuditEnabled: true, maxFileBytes, maxFiles));
+            return new RuntimeLogPersistenceProjection(AccessLogEnabled: true, AdminAuditEnabled: true, MaxFileBytes: 1_048_576, MaxFiles: 8);
         }
+    }
 
-        static void AssertRuntimeLogPersistenceProjectionRejects(long maxFileBytes = 1_048_576, int maxFiles = 8)
-        {
-            AssertEx.Throws<ArgumentException>(() => new RuntimeLogPersistenceProjection(AccessLogEnabled: true, AdminAuditEnabled: true, maxFileBytes, maxFiles));
-        }
+    private static void AssertRuntimeLogPersistenceRejects(long maxFileBytes = 1_048_576, int maxFiles = 8)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeLogPersistenceOptions(AccessLogEnabled: true, AdminAuditEnabled: true, maxFileBytes, maxFiles));
+    }
+
+    private static void AssertRuntimeLogPersistenceProjectionRejects(long maxFileBytes = 1_048_576, int maxFiles = 8)
+    {
+        AssertEx.Throws<ArgumentException>(() => new RuntimeLogPersistenceProjection(AccessLogEnabled: true, AdminAuditEnabled: true, maxFileBytes, maxFiles));
     }
 
     public static async Task ConfigReloadControllerReturnsConfigurationResponseAsync()
