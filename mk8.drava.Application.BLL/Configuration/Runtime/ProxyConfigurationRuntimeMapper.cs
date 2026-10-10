@@ -58,6 +58,7 @@ public static partial class ProxyConfigurationRuntimeMapper
         return new RuntimeMetricsOptions(options.Enabled, RuntimeMetricsOptions.FixedAdminEndpointPath, ProtectedByAdminAuth: true, options.IncludePerRouteLabels, options.IncludePerUpstreamLabels, options.PublicMetricsEnabled);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1055", Justification = "Resolution deliberately returns trimmed configuration text or an empty disabled-state value; operational validation owns URI parsing, without choosing or inventing a provider authority.")]
     public static string ResolveAcmeDirectoryUrl(ProxyAcmeOptions options)
     {
         return ProxyAcmeDirectoryPolicy.ResolveDirectoryUrl(options);

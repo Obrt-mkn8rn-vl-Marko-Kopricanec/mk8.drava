@@ -32,6 +32,7 @@ public sealed class CachedProxyResponse
     public int StatusCode { get; }
     public string ReasonPhrase { get; }
     public IReadOnlyList<ProxyHeaderField> Headers { get; }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1819", Justification = "This getter returns a fresh caller-owned byte-array copy and never exposes its private backing storage. The imported cache/PFX byte-consumer API intentionally retains copy-on-read isolation.")]
     public byte[] Body => _body.ToArray();
     public DateTimeOffset StoredAtUtc { get; }
     public DateTimeOffset ExpiresAtUtc { get; }

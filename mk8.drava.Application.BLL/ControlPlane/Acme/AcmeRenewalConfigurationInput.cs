@@ -3,6 +3,7 @@ using Mk8.Drava.Application.BLL.Configuration;
 namespace Mk8.Drava.Application.BLL.ControlPlane.Acme;
 public sealed record AcmeRenewalConfigurationInput
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1054", Justification = "ACME runtime/status snapshots preserve configured directory text and empty disabled-state values; URI parsing and admission remain in operational validation and transport policy.")]
     public AcmeRenewalConfigurationInput(bool Enabled, string StoragePath, string DirectoryUrl, IEnumerable<string> ContactEmails, bool TermsAccepted, int RetryAfterMinutes, IEnumerable<AcmeRenewalCertificateInput> Certificates, TimeSpan? RetryAfter = null)
     {
         ArgumentNullException.ThrowIfNull(Certificates);
@@ -22,6 +23,7 @@ public sealed record AcmeRenewalConfigurationInput
 
     public bool Enabled { get; }
     public string StoragePath { get; }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056", Justification = "ACME runtime/status snapshots preserve configured directory text and empty disabled-state values; URI parsing and admission remain in operational validation and transport policy.")]
     public string DirectoryUrl { get; }
     public IReadOnlyList<string> ContactEmails { get; }
     public bool TermsAccepted { get; }

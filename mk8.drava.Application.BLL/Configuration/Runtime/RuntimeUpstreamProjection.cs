@@ -1,6 +1,7 @@
 namespace Mk8.Drava.Application.BLL.Configuration;
 public sealed record RuntimeUpstreamProjection
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1054", Justification = "UriEndpoint is diagnostic/wire display text, not a connection destination; connectors use separately validated address, port, scheme and SNI facts. Preserve its exact formatting and projection guards.")]
     public RuntimeUpstreamProjection(string RouteName, string Name, string Scheme, string Protocol, string Address, int Port, int Weight, RuntimeUpstreamTlsProjection Tls, string Endpoint, string UriEndpoint, string EffectiveSniHost, string Identity, RuntimeCircuitBreakerProjection CircuitBreaker)
     {
         RuntimeUpstreamFacts.ValidateProjection(RouteName, Name, Scheme, Protocol, Address, Port, Weight, Endpoint, UriEndpoint, EffectiveSniHost, Identity);
@@ -30,6 +31,7 @@ public sealed record RuntimeUpstreamProjection
     public int Weight { get; }
     public RuntimeUpstreamTlsProjection Tls { get; }
     public string Endpoint { get; }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056", Justification = "UriEndpoint is diagnostic/wire display text, not a connection destination; connectors use separately validated address, port, scheme and SNI facts. Preserve its exact formatting and projection guards.")]
     public string UriEndpoint { get; }
     public string EffectiveSniHost { get; }
     public string Identity { get; }

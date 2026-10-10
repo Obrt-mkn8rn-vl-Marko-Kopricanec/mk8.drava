@@ -20,5 +20,6 @@ public sealed record AcmeCertificateMaterialWriteRequest
     public IReadOnlyList<string> Domains { get; }
     public string DataDirectory { get; }
     public DateTimeOffset WrittenAtUtc { get; }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1819", Justification = "This getter returns a fresh caller-owned byte-array copy and never exposes its private backing storage. The imported cache/PFX byte-consumer API intentionally retains copy-on-read isolation.")]
     public byte[] PfxBytes => _pfxBytes.ToArray();
 }

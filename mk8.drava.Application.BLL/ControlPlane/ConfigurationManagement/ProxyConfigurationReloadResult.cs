@@ -50,11 +50,13 @@ public abstract partial record ProxyConfigurationReloadResult<TProjection>
     public IReadOnlyList<string> Errors { get; }
     public IReadOnlyList<ProxyConfigurationFileError> FileErrors { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000", Justification = "This member constructs or represents a case of the closed result union for its own configuration/projection type parameter, preserving typed absent/success/failure states and existing guards. It is not an unrelated static utility on a generic type.")]
     public static ProxyConfigurationReloadResult<TProjection> LoadFailed(string sourceDirectory, DateTimeOffset attemptedAtUtc, int? activeVersion, DateTimeOffset? loadedAtUtc, ProxyConfigurationDiscovery discovery, IReadOnlyList<string> errors, IReadOnlyList<ProxyConfigurationFileError> fileErrors, TProjection? activeConfiguration)
     {
         return new LoadFailedResult(sourceDirectory, attemptedAtUtc, activeVersion, loadedAtUtc, discovery, errors, fileErrors, activeConfiguration);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000", Justification = "This member constructs or represents a case of the closed result union for its own configuration/projection type parameter, preserving typed absent/success/failure states and existing guards. It is not an unrelated static utility on a generic type.")]
     public static ProxyConfigurationReloadResult<TProjection> ListenerReloadFailed(string sourceDirectory, DateTimeOffset attemptedAtUtc, int? activeVersion, DateTimeOffset? loadedAtUtc, ProxyConfigurationDiscovery discovery, ProxyListenerReloadResult listenerReload, TProjection? activeConfiguration)
     {
         ArgumentNullException.ThrowIfNull(listenerReload);
@@ -66,6 +68,7 @@ public abstract partial record ProxyConfigurationReloadResult<TProjection>
         return new ListenerReloadFailedResult(sourceDirectory, attemptedAtUtc, activeVersion, loadedAtUtc, discovery, listenerReload, activeConfiguration);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000", Justification = "This member constructs or represents a case of the closed result union for its own configuration/projection type parameter, preserving typed absent/success/failure states and existing guards. It is not an unrelated static utility on a generic type.")]
     public static ProxyConfigurationReloadResult<TProjection> Reloaded(string sourceDirectory, DateTimeOffset attemptedAtUtc, int activeVersion, DateTimeOffset loadedAtUtc, ProxyConfigurationDiscovery discovery, ProxyListenerReloadResult listenerReload, TProjection activeConfiguration)
     {
         if (listenerReload is not ProxyListenerReloadResult.AppliedResult)

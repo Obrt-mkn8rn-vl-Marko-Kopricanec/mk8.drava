@@ -1,6 +1,7 @@
 namespace Mk8.Drava.Application.BLL.Configuration;
 public sealed record RuntimeAcmeProjection
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1054", Justification = "ACME runtime/status snapshots preserve configured directory text and empty disabled-state values; URI parsing and admission remain in operational validation and transport policy.")]
     public RuntimeAcmeProjection(bool Enabled, bool UseStaging, string DirectoryUrl, IReadOnlyList<string> ContactEmails, bool TermsAccepted, string StoragePath, int RenewBeforeDays, int CheckIntervalMinutes, int RetryAfterMinutes, IReadOnlyList<RuntimeAcmeCertificateProjection> Certificates)
     {
         ArgumentNullException.ThrowIfNull(DirectoryUrl);
@@ -19,6 +20,7 @@ public sealed record RuntimeAcmeProjection
 
     public bool Enabled { get; }
     public bool UseStaging { get; }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056", Justification = "ACME runtime/status snapshots preserve configured directory text and empty disabled-state values; URI parsing and admission remain in operational validation and transport policy.")]
     public string DirectoryUrl { get; }
     public IReadOnlyList<string> ContactEmails { get; }
     public bool TermsAccepted { get; }

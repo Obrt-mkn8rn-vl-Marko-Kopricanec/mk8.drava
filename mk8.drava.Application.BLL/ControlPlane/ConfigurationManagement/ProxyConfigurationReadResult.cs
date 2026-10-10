@@ -6,8 +6,10 @@ public abstract record ProxyConfigurationReadResult<TConfiguration>
     {
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000", Justification = "This member constructs or represents a case of the closed result union for its own configuration/projection type parameter, preserving typed absent/success/failure states and existing guards. It is not an unrelated static utility on a generic type.")]
     public static ProxyConfigurationReadResult<TConfiguration> MissingConfiguration { get; } = new MissingConfigurationResult();
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000", Justification = "This member constructs or represents a case of the closed result union for its own configuration/projection type parameter, preserving typed absent/success/failure states and existing guards. It is not an unrelated static utility on a generic type.")]
     public static ProxyConfigurationReadResult<TConfiguration> Available(TConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);

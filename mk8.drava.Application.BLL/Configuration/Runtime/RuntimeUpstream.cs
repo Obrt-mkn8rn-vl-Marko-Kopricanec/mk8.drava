@@ -35,6 +35,7 @@ public sealed record RuntimeUpstream
     public int Weight { get; }
     public RuntimeUpstreamTlsOptions Tls { get; }
     public string Endpoint => $"{Address}:{Port}";
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056", Justification = "UriEndpoint is diagnostic/wire display text, not a connection destination; connectors use separately validated address, port, scheme and SNI facts. Preserve its exact formatting and projection guards.")]
     public string UriEndpoint => $"{Scheme}://{Address}:{Port}";
     public string EffectiveSniHost => string.IsNullOrWhiteSpace(Tls.SniHost) ? Address : Tls.SniHost!;
     public string Identity => $"{RouteName}|{Name}|{Scheme}|{Protocol}|{Address}|{Port}|{EffectiveSniHost}|{Tls.ValidateCertificate}" + (Membership is null ? "" : "|membership=" + Membership.Partition) + (Tls.TrustedRoot is null ? "" : "|" + Tls.TrustedRoot.Identity);
