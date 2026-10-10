@@ -3,18 +3,27 @@ public sealed class ProxyShutdownCoordinator : IDisposable
 {
     private readonly Lock _gate = new();
     private readonly TimeProvider _timeProvider;
-    private CancellationTokenSource? _shutdownCts;
+    private readonly CancellationTokenSource _shutdownCts;
+    private bool _disposed;
     private int _isShuttingDown;
     private DateTimeOffset? _startedAtUtc;
     private DateTimeOffset? _deadlineUtc;
     public ProxyShutdownCoordinator(TimeProvider timeProvider)
     {
         _timeProvider = timeProvider;
+        _shutdownCts = new CancellationTokenSource(Timeout.InfiniteTimeSpan, timeProvider);
     }
 
     public bool IsShuttingDown => Volatile.Read(ref _isShuttingDown) == 1;
-    public DateTimeOffset? StartedAtUtc => _startedAtUtc;
-    public DateTimeOffset? DeadlineUtc => _deadlineUtc;
+    public DateTimeOffset? StartedAtUtc
+    {
+        get { lock (_gate) return _startedAtUtc; }
+    }
+
+    public DateTimeOffset? DeadlineUtc
+    {
+        get { lock (_gate) return _deadlineUtc; }
+    }
 
     public CancellationToken Token
     {
@@ -22,7 +31,8 @@ public sealed class ProxyShutdownCoordinator : IDisposable
         {
             lock (_gate)
             {
-                return _shutdownCts?.Token ?? CancellationToken.None;
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                return _shutdownCts.Token;
             }
         }
     }
@@ -31,15 +41,21 @@ public sealed class ProxyShutdownCoordinator : IDisposable
     {
         lock (_gate)
         {
-            if (_shutdownCts is not null)
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_isShuttingDown != 0)
             {
                 return _shutdownCts.Token;
             }
 
-            _startedAtUtc = _timeProvider.GetUtcNow();
-            _deadlineUtc = _startedAtUtc.Value.Add(gracePeriod);
+            var milliseconds = (long)gracePeriod.TotalMilliseconds;
+            ArgumentOutOfRangeException.ThrowIfLessThan(milliseconds, -1, nameof(gracePeriod));
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(milliseconds, (long)uint.MaxValue - 1, nameof(gracePeriod));
+            var startedAtUtc = _timeProvider.GetUtcNow();
+            var deadlineUtc = startedAtUtc.Add(gracePeriod);
+            _startedAtUtc = startedAtUtc;
+            _deadlineUtc = deadlineUtc;
             Volatile.Write(ref _isShuttingDown, 1);
-            _shutdownCts = new CancellationTokenSource(gracePeriod);
+            _shutdownCts.CancelAfter(gracePeriod);
             return _shutdownCts.Token;
         }
     }
@@ -48,7 +64,9 @@ public sealed class ProxyShutdownCoordinator : IDisposable
     {
         lock (_gate)
         {
-            _shutdownCts?.Dispose();
+            if (_disposed) return;
+            _disposed = true;
+            _shutdownCts.Dispose();
         }
     }
 }
