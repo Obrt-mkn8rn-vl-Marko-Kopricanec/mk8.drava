@@ -109,7 +109,7 @@ internal sealed partial class ClientConnection
         await using var ownedClientStream = clientStream.ConfigureAwait(false);
         if (tlsResult?.NegotiatedHttp2 == true)
         {
-            var http2Connection = new Http2ClientConnection(clientStream, GetRemoteEndPoint(), _configurationSnapshot, _listener, _routeMatcher, _upstreamSelector, _healthStore, _forwarder, _forwardedHeadersPolicy, _routeActionPolicy, _pathRewritePolicy, _cacheStore, _altSvcPolicy, _circuitBreakerStore, _acmeChallengeResponder, _metrics, _requestIdGenerator, _accessLogEmitter, _rateLimiter, _timeProvider, _logger);
+            using var http2Connection = new Http2ClientConnection(clientStream, GetRemoteEndPoint(), _configurationSnapshot, _listener, _routeMatcher, _upstreamSelector, _healthStore, _forwarder, _forwardedHeadersPolicy, _routeActionPolicy, _pathRewritePolicy, _cacheStore, _altSvcPolicy, _circuitBreakerStore, _acmeChallengeResponder, _metrics, _requestIdGenerator, _accessLogEmitter, _rateLimiter, _timeProvider, _logger);
             await http2Connection.RunAsync(cancellationToken).ConfigureAwait(false);
             return;
         }

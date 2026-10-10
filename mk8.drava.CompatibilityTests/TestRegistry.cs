@@ -13,6 +13,7 @@ internal static partial class TestRegistry
         tests.AddRange(FoundationAndConfig());
         tests.AddRange(AdminTlsCacheMetricsDiagnostics());
         tests.AddRange(Http2AndHttp3());
+        tests.Add(Test("HTTP/3 scenario cleanup joins stop failure and asynchronous host disposal", ClientHttp3Tests.ScenarioCleanupJoinsStopFailureAndAsyncHostDisposalAsync, TestTaxonomy.Http3));
         tests.AddRange(ResilienceAndHttp1Proxy());
         tests.AddRange(OperatorRuntimeAndLimits());
         return tests.ToArray();

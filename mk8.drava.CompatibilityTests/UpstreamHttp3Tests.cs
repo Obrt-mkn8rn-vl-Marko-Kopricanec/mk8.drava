@@ -501,7 +501,7 @@ internal static class UpstreamHttp3Tests
                     var stream = await connection.AcceptInboundStreamAsync(cancellationToken).ConfigureAwait(false);
                     if (stream.Type != QuicStreamType.Bidirectional)
                     {
-                        drains.Add(ObserveAsync(() => DrainAsync(stream, drainStop.Token)));
+                        drains.Add(ObserveAsync(async () => await DrainAsync(stream, drainStop.Token).ConfigureAwait(false)));
                         continue;
                     }
 
@@ -617,9 +617,17 @@ internal static class UpstreamHttp3Tests
                 while (!connectionStop.IsCancellationRequested)
                 {
                     var stream = await connection.AcceptInboundStreamAsync(connectionStop.Token).ConfigureAwait(false);
-                    children.Add(ObserveAsync(() => stream.Type == QuicStreamType.Bidirectional
-                        ? HandleStreamAsync(connection, stream, connectionStop.Token, controls)
-                        : DrainAsync(stream, connectionStop.Token)));
+                    children.Add(ObserveAsync(async () =>
+                    {
+                        if (stream.Type == QuicStreamType.Bidirectional)
+                        {
+                            await HandleStreamAsync(connection, stream, connectionStop.Token, controls).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await DrainAsync(stream, connectionStop.Token).ConfigureAwait(false);
+                        }
+                    }));
                 }
             }
             finally

@@ -24,7 +24,7 @@ using Microsoft.Extensions.Logging;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests;
-internal static class ClientHttp3Tests
+internal static partial class ClientHttp3Tests
 {
     private static readonly SslApplicationProtocol Http3Alpn = new("h3");
     public static void Http3DefaultEnabledForEligibleTlsListener()
@@ -461,7 +461,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/hello?x=1", "hello-h3").ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/hello?x=1", "hello-h3").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("200", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("hello-h3", result.Body);
         AssertEx.True(result.Metrics.Http3.AcceptedConnections >= 1);
@@ -475,7 +476,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("HEAD", "/head", "head-body").ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteScenarioAsync("HEAD", "/head", "head-body").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("200", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("9", HeaderValue(result.Headers, "content-length"));
         AssertEx.Equal("", result.Body);
@@ -488,7 +490,7 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/old?id=1", "unused", routeJson: """
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/old?id=1", "unused", routeJson: """
                 {
                   "name": "redirect",
                   "pathPrefix": "/old",
@@ -500,6 +502,7 @@ internal static class ClientHttp3Tests
                   }
                 }
             """).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("308", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("/new?id=1", HeaderValue(result.Headers, "location"));
         AssertEx.Equal("", result.Body);
@@ -512,7 +515,7 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/maintenance", "unused", routeJson: """
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/maintenance", "unused", routeJson: """
                 {
                   "name": "maintenance",
                   "pathPrefix": "/maintenance",
@@ -531,6 +534,7 @@ internal static class ClientHttp3Tests
                   ]
                 }
             """).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("503", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("120", HeaderValue(result.Headers, "retry-after"));
         AssertEx.Equal("maintenance-h3", result.Body);
@@ -543,7 +547,7 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/missing", "unused", routeJson: """
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/missing", "unused", routeJson: """
                 {
                   "name": "known",
                   "pathPrefix": "/known",
@@ -555,6 +559,7 @@ internal static class ClientHttp3Tests
                   }
                 }
             """).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("404", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("Not Found", result.Body);
     }
@@ -608,7 +613,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/proxy", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 9\r\n\r\nh3-proxy").ConfigureAwait(false);
+        var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/proxy", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 9\r\n\r\nh3-proxy").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("200", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("h3-proxy", result.Body);
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /proxy HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
@@ -622,7 +628,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("HEAD", "/head", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 9\r\nX-Head: yes\r\n\r\nh3-proxy").ConfigureAwait(false);
+        var result = await RunHttp3ProxyRouteScenarioAsync("HEAD", "/head", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 9\r\nX-Head: yes\r\n\r\nh3-proxy").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("200", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("yes", HeaderValue(result.Headers, "x-head"));
         AssertEx.Equal("", result.Body);
@@ -636,7 +643,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/search?q=one&sort=two", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok").ConfigureAwait(false);
+        var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/search?q=one&sort=two", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /search?q=one&sort=two HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
@@ -647,7 +655,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/headers", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok").ConfigureAwait(false);
+        var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/headers", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.False(result.UpstreamRequest.Contains(":method", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(result.UpstreamRequest.Contains(":scheme", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(result.UpstreamRequest.Contains(":authority", StringComparison.OrdinalIgnoreCase));
@@ -661,7 +670,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/safe-headers", "HTTP/1.1 200 OK\r\nConnection: close\r\nKeep-Alive: timeout=5\r\nContent-Length: 2\r\nX-Safe: yes\r\n\r\nok").ConfigureAwait(false);
+        var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/safe-headers", "HTTP/1.1 200 OK\r\nConnection: close\r\nKeep-Alive: timeout=5\r\nContent-Length: 2\r\nX-Safe: yes\r\n\r\nok").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("200", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("yes", HeaderValue(result.Headers, "x-safe"));
         AssertEx.False(HeaderExists(result.Headers, "connection"));
@@ -675,7 +685,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/chunked", "HTTP/1.1 200 OK\r\nConnection: close\r\nTransfer-Encoding: chunked\r\nX-Mode: chunked\r\n\r\n4\r\nwiki\r\n5\r\npedia\r\n0\r\nX-Trailer: ignored\r\n\r\n").ConfigureAwait(false);
+        var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/chunked", "HTTP/1.1 200 OK\r\nConnection: close\r\nTransfer-Encoding: chunked\r\nX-Mode: chunked\r\n\r\n4\r\nwiki\r\n5\r\npedia\r\n0\r\nX-Trailer: ignored\r\n\r\n").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("200", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("chunked", HeaderValue(result.Headers, "x-mode"));
         AssertEx.Equal("wikipedia", result.Body);
@@ -862,7 +873,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteRawHeadersScenarioAsync([new ProxyHeaderField(":method", "CONNECT"), new ProxyHeaderField(":authority", "upstream.test:443")]).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteRawHeadersScenarioAsync([new ProxyHeaderField(":method", "CONNECT"), new ProxyHeaderField(":authority", "upstream.test:443")]).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("501", HeaderValue(result.Headers, ":status"));
         AssertEx.True(result.Metrics.Http3.RejectedRequests.ContainsKey("connect_unsupported"));
         AssertEx.Equal("", result.UpstreamRequest);
@@ -875,7 +887,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteRawHeadersScenarioAsync([new ProxyHeaderField(":method", "CONNECT"), new ProxyHeaderField(":authority", "not/a/tunnel")]).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteRawHeadersScenarioAsync([new ProxyHeaderField(":method", "CONNECT"), new ProxyHeaderField(":authority", "not/a/tunnel")]).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("invalid_connect_target"));
     }
@@ -896,7 +909,8 @@ internal static class ClientHttp3Tests
 
         )
         {
-            using var result = await RunHttp3GeneratedRouteRawHeadersScenarioAsync([new ProxyHeaderField(":method", "CONNECT"), new ProxyHeaderField(":scheme", "https"), new ProxyHeaderField(":authority", "localhost"), new ProxyHeaderField(":path", "/chat"), new ProxyHeaderField(":protocol", protocol)]).ConfigureAwait(false);
+            var result = await RunHttp3GeneratedRouteRawHeadersScenarioAsync([new ProxyHeaderField(":method", "CONNECT"), new ProxyHeaderField(":scheme", "https"), new ProxyHeaderField(":authority", "localhost"), new ProxyHeaderField(":path", "/chat"), new ProxyHeaderField(":protocol", protocol)]).ConfigureAwait(false);
+            await using var resultDisposal = result.ConfigureAwait(false);
             AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
             AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("extended_connect_unsupported"));
             AssertEx.Equal("", result.UpstreamRequest);
@@ -910,7 +924,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("POST", "/submit?x=1", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok", requestBody: "hello=world").ConfigureAwait(false);
+        var result = await RunHttp3ProxyRouteScenarioAsync("POST", "/submit?x=1", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok", requestBody: "hello=world").ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("200", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("ok", result.Body);
         AssertEx.True(result.UpstreamRequest.StartsWith("POST /submit?x=1 HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
@@ -967,11 +982,12 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/public/api/users?id=1", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok", routeExtraJson: """
+        var result = await RunHttp3ProxyRouteScenarioAsync("GET", "/public/api/users?id=1", "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok", routeExtraJson: """
                   "pathRewrite": {
                     "stripPrefix": "/public"
                   },
             """).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.True(result.UpstreamRequest.StartsWith("GET /api/users?id=1 HTTP/1.1", StringComparison.Ordinal), result.UpstreamRequest);
     }
 
@@ -982,11 +998,12 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3ProxyRouteScenarioAsync("POST", "/too-large", "", requestBody: "too-large", routeExtraJson: """
+        var result = await RunHttp3ProxyRouteScenarioAsync("POST", "/too-large", "", requestBody: "too-large", routeExtraJson: """
                   "overrides": {
                     "maxRequestBodyBytes": 4
                   },
             """).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("413", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("Payload Too Large", result.Body);
         AssertEx.Equal("", result.UpstreamRequest);
@@ -1067,7 +1084,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/sequence", "unused", dataBeforeHeaders: true).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/sequence", "unused", dataBeforeHeaders: true).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unexpected_data"));
     }
@@ -1079,7 +1097,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/control", "unused", settingsAfterHeaders: true).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/control", "unused", settingsAfterHeaders: true).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unexpected_control_frame"));
     }
@@ -1091,7 +1110,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/goaway", "unused", goAwayAfterHeaders: true).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/goaway", "unused", goAwayAfterHeaders: true).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unexpected_control_frame"));
     }
@@ -1103,7 +1123,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/duplicate", "unused", duplicateHeadersAfterHeaders: true).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/duplicate", "unused", duplicateHeadersAfterHeaders: true).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("duplicate_headers"));
         AssertEx.Equal(0L, result.Metrics.Http3.ActiveStreams);
@@ -1116,7 +1137,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/unknown", "unused", unknownFrameBeforeHeaders: true).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/unknown", "unused", unknownFrameBeforeHeaders: true).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unsupported_frame"));
         AssertEx.Equal(0L, result.Metrics.Http3.ActiveStreams);
@@ -1129,7 +1151,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/max-push", "unused", maxPushAfterHeaders: true).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteScenarioAsync("GET", "/max-push", "unused", maxPushAfterHeaders: true).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
         AssertEx.True(result.Metrics.Http3.ProtocolErrors.ContainsKey("unexpected_control_frame"));
         AssertEx.Equal(0L, result.Metrics.Http3.ActiveStreams);
@@ -1227,7 +1250,8 @@ internal static class ClientHttp3Tests
             return;
         }
 
-        using var result = await RunHttp3GeneratedRouteRawHeaderBlockScenarioAsync([0, 0, 0x80]).ConfigureAwait(false);
+        var result = await RunHttp3GeneratedRouteRawHeaderBlockScenarioAsync([0, 0, 0x80]).ConfigureAwait(false);
+        await using var resultDisposal = result.ConfigureAwait(false);
         AssertEx.Equal("400", HeaderValue(result.Headers, ":status"));
         AssertEx.Equal("Bad Request", result.Body);
         AssertEx.Equal(0L, result.Metrics.Http3.Requests);
@@ -2261,10 +2285,12 @@ internal static class ClientHttp3Tests
         }
     }
 
-    private sealed class Http3ScenarioResult : IDisposable
+    private sealed class Http3ScenarioResult : IAsyncDisposable
     {
         private readonly TemporaryDirectory _directory;
         private readonly IHost _host;
+        private readonly Lock _disposeGate = new();
+        private Task? _disposeTask;
         public Http3ScenarioResult(TemporaryDirectory directory, IHost host, IReadOnlyList<ProxyHeaderField> headers, string body, ProxyMetricsSnapshot metrics, string upstreamRequest)
         {
             _directory = directory;
@@ -2280,12 +2306,33 @@ internal static class ClientHttp3Tests
         public ProxyMetricsSnapshot Metrics { get; }
         public string UpstreamRequest { get; }
 
-        public void Dispose()
+        public ValueTask DisposeAsync()
+        {
+            lock (_disposeGate)
+            {
+                return new ValueTask(_disposeTask ??= DisposeOwnedAsync());
+            }
+        }
+
+        private async Task DisposeOwnedAsync()
         {
             try
             {
-                _host.StopAsync(CancellationToken.None).GetAwaiter().GetResult();
-                _host.Dispose();
+                try
+                {
+                    await _host.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (_host is IAsyncDisposable asyncHost)
+                    {
+                        await asyncHost.DisposeAsync().ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        _host.Dispose();
+                    }
+                }
             }
             finally
             {

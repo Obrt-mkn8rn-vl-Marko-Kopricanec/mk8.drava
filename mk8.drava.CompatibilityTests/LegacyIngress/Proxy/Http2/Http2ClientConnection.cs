@@ -32,9 +32,10 @@ using Mk8.Drava.Application.INF.Observability;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
 namespace Mk8.Drava.CompatibilityTests.LegacyIngress.Proxy.Http2;
-internal sealed partial class Http2ClientConnection
+internal sealed partial class Http2ClientConnection : IDisposable
 {
     private static readonly byte[] ClientPreface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"u8.ToArray();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2213", Justification = "ClientConnection owns the transport stream and awaits RunAsync before disposing this connection's semaphore and stream buffers.")]
     private readonly Stream _stream;
     private readonly IPEndPoint? _remoteEndPoint;
     private readonly ProxyConfigurationSnapshot _configurationSnapshot;
@@ -122,6 +123,26 @@ internal sealed partial class Http2ClientConnection
         }
     }
 
+    // The caller awaits RunAsync before disposing this owner; ClientConnection owns _stream.
+    public void Dispose()
+    {
+        foreach (var stream in _streams.Values)
+        {
+            stream.Dispose();
+        }
+
+        _streams.Clear();
+        _writeGate.Dispose();
+    }
+
+    private void RemoveStream(int streamId)
+    {
+        if (_streams.TryRemove(streamId, out var stream))
+        {
+            stream.Dispose();
+        }
+    }
+
     private async ValueTask<bool> HandleFrameAsync(Http2Frame frame, CancellationToken cancellationToken)
     {
         switch (frame.Type)
@@ -133,7 +154,7 @@ internal sealed partial class Http2ClientConnection
             case Http2FrameType.Priority:
                 return true;
             case Http2FrameType.RstStream:
-                _streams.TryRemove(frame.StreamId, out _);
+                RemoveStream(frame.StreamId);
                 return true;
             case Http2FrameType.Settings:
                 if ((frame.Flags & Http2Flags.Ack) == 0)
@@ -261,7 +282,7 @@ internal sealed partial class Http2ClientConnection
         {
             _metrics.RequestBodySizeRejected();
             await WriteGeneratedResponseAsync(frame.StreamId, 413, "Payload Too Large", CreateRequestContext(), ProxyFailureKind.RequestPayloadTooLarge, "GET", cancellationToken).ConfigureAwait(false);
-            _streams.TryRemove(frame.StreamId, out _);
+            RemoveStream(frame.StreamId);
             return true;
         }
 
@@ -291,7 +312,7 @@ internal sealed partial class Http2ClientConnection
         finally
         {
             stream.Completed = true;
-            _streams.TryRemove(stream.Id, out _);
+            RemoveStream(stream.Id);
             _metrics.Http2StreamEnded();
         }
     }
@@ -1009,7 +1030,7 @@ internal sealed partial class Http2ClientConnection
         public override void SetLength(long value) => throw new NotSupportedException();
     }
 
-    private sealed class StreamState
+    private sealed class StreamState : IDisposable
     {
         public StreamState(int id)
         {
@@ -1023,6 +1044,12 @@ internal sealed partial class Http2ClientConnection
         public bool EndStreamReceived { get; set; }
         public bool ProcessingStarted { get; set; }
         public bool Completed { get; set; }
+
+        public void Dispose()
+        {
+            HeaderBlock.Dispose();
+            Body.Dispose();
+        }
     }
 
     private readonly record struct HeaderField(string Name, string Value);
