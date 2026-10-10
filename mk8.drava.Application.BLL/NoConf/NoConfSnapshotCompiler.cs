@@ -47,7 +47,8 @@ public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses
         {
             var resolved = NoConfPolicyResolver.Resolve(index, serviceId, domain);
             var identity = new RegisteredUpstreamIdentity(localNodeId, "validation", serviceId, "v1", new string('2', 32), new string('1', 32));
-            var intent = new InstanceIntent(identity, "validation", "127.0.0.1", 1, "http1", "http", "/", "validation", 1, draining: false);
+            var scheme = resolved.Tls.TrustedRoot is null ? "http" : "https";
+            var intent = new InstanceIntent(identity, "validation", "127.0.0.1", 1, "http1", scheme, "/", "validation", 1, draining: false);
             return CompileService(resolved, [intent], baseline, localNodeId, validateIngress: false);
         }
     }

@@ -4,12 +4,13 @@ namespace Mk8.Drava.Application.INF.Proxy.Connections;
 
 // Observe only byte boundaries below the framework TLS implementation. Neither
 // ciphertext nor handshake records are modified, buffered, decrypted or validated here.
-internal sealed class TlsRecordReadStream(Stream inner) : Stream
+internal sealed class TlsRecordReadStream(Stream inner, IDisposable? certificateTrust = null) : Stream
 {
+    private readonly Lock _disposeGate = new();
     private readonly byte[] _header = new byte[5];
     private int _headerBytes;
     private int _payloadBytesRemaining;
-    private bool _disposed;
+    private Task? _disposeTask;
     public bool HasPartialRecord => _headerBytes != 0 || _payloadBytesRemaining != 0;
     public override bool CanRead => inner.CanRead;
     public override bool CanWrite => inner.CanWrite;
@@ -42,7 +43,11 @@ internal sealed class TlsRecordReadStream(Stream inner) : Stream
     {
         try
         {
-            if (disposing && !_disposed) { _disposed = true; inner.Dispose(); }
+            // Stream's synchronous disposal must join a pending asynchronous close.
+            // Owned network/relay continuations never require its calling thread.
+#pragma warning disable VSTHRD002
+            if (disposing) GetDisposalAsync().GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
         }
         finally { base.Dispose(disposing); }
     }
@@ -50,9 +55,20 @@ internal sealed class TlsRecordReadStream(Stream inner) : Stream
     {
         try
         {
-            if (!_disposed) { _disposed = true; await inner.DisposeAsync().ConfigureAwait(false); }
+            await GetDisposalAsync().ConfigureAwait(false);
         }
         finally { await base.DisposeAsync().ConfigureAwait(false); }
+    }
+
+    private Task GetDisposalAsync()
+    {
+        lock (_disposeGate) return _disposeTask ??= DisposeOwnedAsync();
+    }
+
+    private async Task DisposeOwnedAsync()
+    {
+        try { await inner.DisposeAsync().ConfigureAwait(false); }
+        finally { certificateTrust?.Dispose(); }
     }
 
     private void Observe(ReadOnlySpan<byte> bytes)

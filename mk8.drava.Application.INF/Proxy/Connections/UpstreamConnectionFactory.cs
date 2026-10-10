@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
@@ -20,6 +19,8 @@ public sealed class UpstreamConnectionFactory
     public async ValueTask<UpstreamTransportConnection> ConnectAsync(UpstreamTransportEndpoint endpoint, TimeSpan connectTimeout, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
+        if (endpoint.TrustedRoot is not null && (!endpoint.ValidateCertificate || !string.Equals(endpoint.Scheme, "https", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("A trusted upstream root requires verified HTTPS.");
         if (endpoint.MembershipPartition.Length != 0)
         {
             if (_registered is null) throw new IOException("Registered connections require their current authority adapter.");
@@ -94,27 +95,43 @@ public sealed class UpstreamConnectionFactory
             return networkStream;
         }
 
-        var tlsStream = TlsReadBoundary.Create(networkStream, (_, _, _, errors) => errors == SslPolicyErrors.None || !endpoint.ValidateCertificate);
-        var targetHost = endpoint.EffectiveSniHost;
+        UpstreamCertificateTrust? certificateTrust = null;
+        SslStream? tlsStream = null;
         try
         {
+            certificateTrust = UpstreamCertificateTrust.Load(endpoint);
+            var options = certificateTrust.CreateOptions(endpoint, BuildApplicationProtocols(endpoint));
+            var transferredTrust = certificateTrust;
+            certificateTrust = null; // Create owns cleanup even if it cannot construct the record reader.
+            tlsStream = TlsReadBoundary.Create(networkStream, validate: null, transferredTrust);
+            var authenticatingStream = tlsStream;
             await ProxyTimeoutPolicy.RunAsync(async timeoutToken =>
             {
-                await tlsStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = targetHost, EnabledSslProtocols = SslProtocols.None, CertificateRevocationCheckMode = X509RevocationMode.NoCheck, ApplicationProtocols = BuildApplicationProtocols(endpoint) }, timeoutToken).ConfigureAwait(false);
+                await authenticatingStream.AuthenticateAsClientAsync(options, timeoutToken).ConfigureAwait(false);
             }, connectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
             if (RuntimeUpstreamProtocol.IsHttp2(endpoint.Protocol) && tlsStream.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
             {
                 throw new UpstreamTlsException($"TLS ALPN negotiation for upstream '{endpoint.Name}' selected '{FormatNegotiatedProtocol(tlsStream.NegotiatedApplicationProtocol)}' instead of 'h2'.", new AuthenticationException("Upstream did not negotiate HTTP/2."));
             }
 
-            return tlsStream;
+            var result = tlsStream;
+            tlsStream = null;
+            return result;
         }
         catch (Exception exception)
         {
-            await tlsStream.DisposeAsync().ConfigureAwait(false);
             if ((exception is AuthenticationException or IOException) && exception is not UpstreamTlsException)
                 throw new UpstreamTlsException($"TLS authentication failed for upstream '{endpoint.Name}'.", exception);
             throw;
+        }
+        finally
+        {
+            // Authentication/ALPN failure retains this local; only successful transfer clears it.
+            // Actual canceled-authentication peer closure and negative TLS checks exercise this path.
+#pragma warning disable CA1508
+            try { if (tlsStream is not null) await tlsStream.DisposeAsync().ConfigureAwait(false); }
+#pragma warning restore CA1508
+            finally { certificateTrust?.Dispose(); }
         }
     }
 

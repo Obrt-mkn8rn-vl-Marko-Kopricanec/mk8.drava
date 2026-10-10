@@ -95,7 +95,7 @@ internal static class Program
         app.MapControllers();
         if (enrolled) app.MapGrpcService<GatewayRegistrationService>();
         app.MapGet("/_drava/live", () => Results.Text("running"));
-        app.MapFallback(context =>
+        app.MapFallback("{**path}", context =>
         {
             if (context.Connection.LocalPort != bootstrap.RegistrationPort && context.Connection.LocalPort != bootstrap.ManagementPort)
                 return app.Services.GetRequiredService<GatewayProxy>().InvokeAsync(context);

@@ -5,6 +5,7 @@ using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
 using Mk8.Drava.Application.INF.NodeRelay;
+using Mk8.Drava.Application.INF.Proxy.Connections;
 using Mk8.Drava.Contracts.Relay.V1;
 
 namespace Mk8.Drava.Application.INF.NoConf;
@@ -29,6 +30,8 @@ public sealed class RegisteredReadinessProbe : IRegisteredReadinessProbe
         var address = IPAddress.Parse(intent.Address);
         var host = string.Equals(intent.Scheme, "https", StringComparison.Ordinal) ? upstream.EffectiveSniHost : intent.Address;
         if (IPAddress.TryParse(host, out var literal) && literal.AddressFamily == AddressFamily.InterNetworkV6) host = "[" + host + "]";
+        var endpoint = UpstreamTransportEndpointMapper.FromUpstream(upstream);
+        using var certificateTrust = UpstreamCertificateTrust.Load(endpoint);
         // A separate handler bounds each check and avoids retaining pools for expired boot identities.
         using var handler = new SocketsHttpHandler
         {
@@ -43,11 +46,7 @@ public sealed class RegisteredReadinessProbe : IRegisteredReadinessProbe
                 }
                 return await ConnectAsync(new IPEndPoint(address, intent.Port), token).ConfigureAwait(false);
             },
-            SslOptions = new SslClientAuthenticationOptions
-            {
-                // This is the explicit, validated per-service setting also used by native forwarding. Secure by default.
-                RemoteCertificateValidationCallback = (_, _, _, errors) => errors == SslPolicyErrors.None || !upstream.Tls.ValidateCertificate,
-            },
+            SslOptions = certificateTrust.CreateOptions(endpoint, applicationProtocols: null),
         };
         using var client = new HttpClient(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{intent.Scheme}://{host}:{intent.Port}{intent.ReadinessPath}"));

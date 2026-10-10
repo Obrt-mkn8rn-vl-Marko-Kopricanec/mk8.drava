@@ -9,6 +9,43 @@ namespace Mk8.Drava.UnitTests;
 
 public sealed class NoConfCompilerTests
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "HLQ005", Justification = "xUnit Assert.Single verifies exactly one item; LINQ First would remove the cardinality assertion.")]
+    private static T Only<T>(IReadOnlyList<T> items) => Assert.Single(items);
+
+    [Fact]
+    public async Task OperatorTrustIsRetainedWhenTheRegistryCompilesAnHttpsServiceAsync()
+    {
+        using var fixture = new RegistryTestFixture();
+        await fixture.InitializeAsync().ConfigureAwait(true);
+        var source = RegistryTestFixture.Intent();
+        var intent = new InstanceIntent(source.Identity, source.DeploymentId, source.Address, source.Port, source.Protocol,
+            "https", source.ReadinessPath, source.Zone, source.Weight, source.Draining);
+        await fixture.ReadyAsync(intent).ConfigureAwait(true);
+        var path = Path.GetFullPath("operator-root.cer");
+        var policy = new NoConfPolicy
+        {
+            Site = new NoConfPolicyPatch
+            {
+                UpstreamTls = new UpstreamTlsOptions
+                {
+                    SniHost = "backend.drava.invalid",
+                    TrustedRoot = new TrustedRootCertificateOptions { CertificatePath = path, Sha256 = new string('A', 64) },
+                },
+            },
+        };
+        var cold = Compiler().Compile(RegistryState.Empty, Baseline(), policy, "site.example", "node");
+        Assert.Empty(cold.Services);
+        var compiled = Compiler().Compile(fixture.Registry.State, Baseline(), policy, "site.example", "node");
+        var upstream = Only(compiled.Services["svc"].Route.Upstreams);
+        Assert.True(upstream.Tls.ValidateCertificate);
+        Assert.Equal(path, upstream.Tls.TrustedRoot?.CertificatePath);
+        Assert.Equal(new string('A', 64), upstream.Tls.TrustedRoot?.Sha256);
+        Assert.Equal(intent.Identity, upstream.Membership);
+        Assert.Equal("site", compiled.Services["svc"].Provenance["upstreamTls"]);
+        await fixture.ReadyAsync(RegistryTestFixture.Intent()).ConfigureAwait(true);
+        Assert.Throws<InvalidDataException>(() => Compiler().Compile(fixture.Registry.State, Baseline(), policy, "site.example", "node"));
+    }
+
     [Fact]
     public async Task RegistryCompilesDirectlyToAnImmutablePoolWithP2cAndNoImplicitCacheOrReplayAsync()
     {

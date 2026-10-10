@@ -95,13 +95,22 @@ public sealed class Http3UpstreamConnectionPool : IDisposable, IAsyncDisposable
             }
             else if (!transferred)
             {
-                try { await transport.ControlStream.DisposeAsync().ConfigureAwait(false); }
-                finally
-                {
-                    await transport.Connection.DisposeAsync().ConfigureAwait(false);
-                    _metrics.UpstreamHttp3ConnectionClosed();
-                    _metrics.UpstreamHttp3PoolConnectionClosed();
-                }
+                await DisposeUntransferredTransportAsync(transport).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task DisposeUntransferredTransportAsync(Http3UpstreamTransport transport)
+    {
+        try { await transport.ControlStream.DisposeAsync().ConfigureAwait(false); }
+        finally
+        {
+            try { await transport.Connection.DisposeAsync().ConfigureAwait(false); }
+            finally
+            {
+                transport.CertificateTrust?.Dispose();
+                _metrics.UpstreamHttp3ConnectionClosed();
+                _metrics.UpstreamHttp3PoolConnectionClosed();
             }
         }
     }

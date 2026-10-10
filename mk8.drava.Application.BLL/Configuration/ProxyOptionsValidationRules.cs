@@ -133,7 +133,7 @@ public static partial class ProxyOptionsValidationRules
                 failures.Add($"{upstreamPrefix}:Weight must be between 1 and 100000.");
             }
 
-            ValidateUpstreamTls(failures, upstreamPrefix, upstream.UpstreamTls, endpointAddressPolicy);
+            ValidateUpstreamTls(failures, upstreamPrefix, upstream.UpstreamTls, endpointAddressPolicy, upstreamScheme);
             ValidateCircuitBreaker(failures, upstreamPrefix, upstream.CircuitBreaker);
         }
     }
@@ -262,14 +262,27 @@ public static partial class ProxyOptionsValidationRules
         return string.Equals(protocol, RuntimeUpstreamProtocol.Http1, StringComparison.OrdinalIgnoreCase) || string.Equals(protocol, RuntimeUpstreamProtocol.Http2, StringComparison.OrdinalIgnoreCase) || string.Equals(protocol, RuntimeUpstreamProtocol.Http3, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void ValidateUpstreamTls(List<string> failures, string upstreamPrefix, UpstreamTlsOptions tls, IProxyEndpointAddressPolicy endpointAddressPolicy)
+    private static void ValidateUpstreamTls(List<string> failures, string upstreamPrefix, UpstreamTlsOptions tls, IProxyEndpointAddressPolicy endpointAddressPolicy, string upstreamScheme)
     {
-        if (string.IsNullOrWhiteSpace(tls.SniHost))
+        if (tls.TrustedRoot is { } root)
         {
-            return;
+            if (!string.Equals(upstreamScheme, "https", StringComparison.OrdinalIgnoreCase))
+                failures.Add($"{upstreamPrefix}:UpstreamTls:TrustedRoot requires scheme 'https'.");
+            try
+            {
+                _ = new RuntimeTrustedRootCertificate(root.CertificatePath, root.Sha256);
+            }
+            catch (ArgumentException)
+            {
+                failures.Add($"{upstreamPrefix}:UpstreamTls:TrustedRoot requires a bounded absolute certificate path and 64 canonical uppercase SHA256 characters.");
+            }
+            if (!tls.ValidateCertificate)
+            {
+                failures.Add($"{upstreamPrefix}:UpstreamTls:TrustedRoot requires certificate validation.");
+            }
         }
 
-        if (!endpointAddressPolicy.IsValidSniHost(tls.SniHost))
+        if (!string.IsNullOrWhiteSpace(tls.SniHost) && !endpointAddressPolicy.IsValidSniHost(tls.SniHost))
         {
             failures.Add($"{upstreamPrefix}:UpstreamTls:SniHost must be a DNS host name or IP literal without scheme, path, port, whitespace, or wildcard.");
         }

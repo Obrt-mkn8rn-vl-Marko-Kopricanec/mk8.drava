@@ -12,6 +12,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
+using Mk8.Drava.Application.INF.Proxy.Connections;
 
 namespace Mk8.Drava.Application.INF.Proxy.Http3;
-internal sealed record Http3UpstreamTransport(QuicConnection Connection, QuicStream ControlStream);
+internal sealed record Http3UpstreamTransport(QuicConnection Connection, QuicStream ControlStream, UpstreamCertificateTrust? CertificateTrust = null);

@@ -6,6 +6,7 @@ using System.Text.Json;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Application.BLL.Registry;
+using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.DAL.Registry;
 using Mk8.Drava.Application.DAL.Acme;
 
@@ -87,7 +88,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null)
     {
         if (upstreamHttp2 && upstreamHttp3) throw new ArgumentException("Development upstream protocol must be unambiguous.", nameof(upstreamHttp3));
         var directory = Path.Combine(Path.GetTempPath(), "drava_" + Guid.NewGuid().ToString("N"));
@@ -106,7 +107,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var tlsPort = enrolledSite ? UnusedPort() : 0;
         var managementPort = administration ? UnusedPort() : 0;
         var relayAddress = relayNode ? LocalRelayAddress() : null;
-        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs).ConfigureAwait(false);
+        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs, verifiedUpstreamTls).ConfigureAwait(false);
         var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath) : null;
         DevelopmentProcess? gateway = null;
         try
@@ -135,7 +136,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         await File.WriteAllTextAsync(Path.Combine(evidence, "startup-failure.log"), exception.ToString()).ConfigureAwait(false);
     }
 
-    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery, string? relayAddress, DevelopmentLifecycleSettings lifecycleSettings, bool upstreamHttp2, bool manualCache, bool upstreamHttp3, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits, long? routeBodyLimit, int? responseHeadTimeoutMs)
+    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery, string? relayAddress, DevelopmentLifecycleSettings lifecycleSettings, bool upstreamHttp2, bool manualCache, bool upstreamHttp3, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits, long? routeBodyLimit, int? responseHeadTimeoutMs, UpstreamTlsOptions? verifiedUpstreamTls)
     {
         ControllerBootstrap? controller = null;
         if (enrolledSite)
@@ -161,8 +162,9 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         {
             name = "test", host, listeners = new[] { new { name = "http", address = "127.0.0.1", port } },
             pathPrefix = "/", upstreams = new[] { new { name = "test", address = "127.0.0.1", port = upstreamPort,
-                scheme = upstreamHttp2 || upstreamHttp3 ? "https" : "http", protocol = upstreamHttp2 ? "http2" : upstreamHttp3 ? "http3" : "http1",
-                upstreamTls = new { validateCertificate = !upstreamHttp2 && !upstreamHttp3, sniHost = upstreamHttp2 || upstreamHttp3 ? "upstream.test" : "" } } },
+                scheme = upstreamHttp2 || upstreamHttp3 || verifiedUpstreamTls is not null ? "https" : "http", protocol = upstreamHttp2 ? "http2" : upstreamHttp3 ? "http3" : "http1",
+                upstreamTls = new { validateCertificate = verifiedUpstreamTls?.ValidateCertificate ?? (!upstreamHttp2 && !upstreamHttp3),
+                    sniHost = verifiedUpstreamTls?.SniHost ?? (upstreamHttp2 || upstreamHttp3 ? "upstream.test" : ""), trustedRoot = verifiedUpstreamTls?.TrustedRoot } } },
             overrides = new { maxRequestBodyBytes = routeBodyLimit, upstreamResponseHeadTimeoutMs = responseHeadTimeoutMs },
             cache = new { enabled = manualCache, maxEntryBytes = 4096, maxTotalBytes = 8192, defaultTtlSeconds = 60, respectOriginCacheControl = true },
         })).ConfigureAwait(false);

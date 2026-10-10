@@ -152,7 +152,12 @@ public static partial class SiteOptionsAggregator
             UpstreamTls = new UpstreamTlsOptions
             {
                 ValidateCertificate = source.UpstreamTls.ValidateCertificate,
-                SniHost = source.UpstreamTls.SniHost
+                SniHost = source.UpstreamTls.SniHost,
+                TrustedRoot = source.UpstreamTls.TrustedRoot is { } root ? new TrustedRootCertificateOptions
+                {
+                    CertificatePath = root.CertificatePath,
+                    Sha256 = root.Sha256,
+                } : null
             },
             CircuitBreaker = new ProxyCircuitBreakerOptions
             {

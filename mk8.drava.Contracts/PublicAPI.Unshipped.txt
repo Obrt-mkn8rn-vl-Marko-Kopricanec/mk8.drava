@@ -2691,3 +2691,19 @@ Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Action.get -> string
 Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.Action.init -> void
 Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.PathPrefix.get -> string!
 Mk8.Drava.Contracts.Administration.V1.ServicePolicyResponse.PathPrefix.init -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.<Clone>$() -> Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse!
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.Equals(Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse? other) -> bool
+override Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.Equals(object? obj) -> bool
+override Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.GetHashCode() -> int
+override Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.ToString() -> string!
+static Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.operator !=(Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse? left, Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse? right) -> bool
+static Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.operator ==(Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse? left, Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse? right) -> bool
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.CertificatePath.get -> string!
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.CertificatePath.init -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.Sha256.get -> string!
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.Sha256.init -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse.TrustedRoot.get -> Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse?
+Mk8.Drava.Contracts.Administration.V1.RuntimeUpstreamTlsResponse.TrustedRoot.init -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.Deconstruct(out string! CertificatePath, out string! Sha256) -> void
+Mk8.Drava.Contracts.Administration.V1.RuntimeTrustedRootCertificateResponse.RuntimeTrustedRootCertificateResponse(string! CertificatePath, string! Sha256) -> void

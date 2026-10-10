@@ -12,6 +12,8 @@ public sealed record RuntimeUpstream
         RuntimeUpstreamFacts.Validate(RouteName, Name, Scheme, Protocol, Address, Port, Weight);
         ArgumentNullException.ThrowIfNull(Tls);
         ArgumentNullException.ThrowIfNull(CircuitBreaker);
+        if (Tls.TrustedRoot is not null && !string.Equals(Scheme, "https", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("A trusted upstream root requires HTTPS.", nameof(Scheme));
         this.RouteName = RouteName;
         this.Name = Name;
         this.Scheme = Scheme;
@@ -35,7 +37,7 @@ public sealed record RuntimeUpstream
     public string Endpoint => $"{Address}:{Port}";
     public string UriEndpoint => $"{Scheme}://{Address}:{Port}";
     public string EffectiveSniHost => string.IsNullOrWhiteSpace(Tls.SniHost) ? Address : Tls.SniHost!;
-    public string Identity => $"{RouteName}|{Name}|{Scheme}|{Protocol}|{Address}|{Port}|{EffectiveSniHost}|{Tls.ValidateCertificate}" + (Membership is null ? "" : "|membership=" + Membership.Partition);
+    public string Identity => $"{RouteName}|{Name}|{Scheme}|{Protocol}|{Address}|{Port}|{EffectiveSniHost}|{Tls.ValidateCertificate}" + (Membership is null ? "" : "|membership=" + Membership.Partition) + (Tls.TrustedRoot is null ? "" : "|" + Tls.TrustedRoot.Identity);
     public RegisteredUpstreamIdentity? Membership { get; }
     public RuntimeCircuitBreakerPolicy CircuitBreaker { get; }
 }

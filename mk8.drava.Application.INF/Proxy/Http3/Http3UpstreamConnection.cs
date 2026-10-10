@@ -12,6 +12,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
+using Mk8.Drava.Application.INF.Proxy.Connections;
 
 namespace Mk8.Drava.Application.INF.Proxy.Http3;
 internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
@@ -22,8 +23,11 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
     private readonly int _maxFramePayloadBytes;
     private readonly Http3UpstreamPooledConnection? _pooledConnection;
     private readonly QuicStream? _controlStream;
+    private readonly UpstreamCertificateTrust? _certificateTrust;
+    private readonly Lock _disposeGate = new();
+    private Task? _disposeTask;
     private bool _connectionUsable = true;
-    private Http3UpstreamConnection(QuicConnection connection, QuicStream stream, ProxyMetrics metrics, int maxFramePayloadBytes, QuicStream? controlStream, Http3UpstreamPooledConnection? pooledConnection)
+    private Http3UpstreamConnection(QuicConnection connection, QuicStream stream, ProxyMetrics metrics, int maxFramePayloadBytes, QuicStream? controlStream, Http3UpstreamPooledConnection? pooledConnection, UpstreamCertificateTrust? certificateTrust = null)
     {
         Connection = connection;
         Stream = stream;
@@ -31,6 +35,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
         _maxFramePayloadBytes = Math.Clamp(maxFramePayloadBytes, 16 * 1024, MaxFramePayloadBytes);
         _controlStream = controlStream;
         _pooledConnection = pooledConnection;
+        _certificateTrust = certificateTrust;
     }
 
     private QuicConnection Connection { get; }
@@ -54,19 +59,15 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
             stream = await ProxyTimeoutPolicy.RunAsync(async timeoutToken => await transport.Connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, timeoutToken).ConfigureAwait(false), timeouts.UpstreamConnectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
             metrics.UpstreamHttp3StreamStarted();
             streamStarted = true;
-            return new Http3UpstreamConnection(transport.Connection, stream, metrics, maxFramePayloadBytes, transport.ControlStream, pooledConnection: null);
+            return new Http3UpstreamConnection(transport.Connection, stream, metrics, maxFramePayloadBytes, transport.ControlStream, pooledConnection: null, transport.CertificateTrust);
         }
-        catch (Http3UpstreamProtocolException)
+        catch (Exception exception)
         {
             metrics.UpstreamHttp3ConnectionFailed();
             await DisposePartialConnectionAsync(transport, stream, metrics, streamStarted).ConfigureAwait(false);
+            if (exception is not Http3UpstreamProtocolException && exception is AuthenticationException or IOException or QuicException)
+                throw new Http3UpstreamProtocolException("Failed to connect to the upstream HTTP/3 endpoint.", Http3UpstreamFailureKind.ConnectFailure, exception);
             throw;
-        }
-        catch (Exception exception)when (exception is AuthenticationException or IOException or QuicException)
-        {
-            metrics.UpstreamHttp3ConnectionFailed();
-            await DisposePartialConnectionAsync(transport, stream, metrics, streamStarted).ConfigureAwait(false);
-            throw new Http3UpstreamProtocolException("Failed to connect to the upstream HTTP/3 endpoint.", Http3UpstreamFailureKind.ConnectFailure, exception);
         }
     }
 
@@ -94,7 +95,7 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
             streamStarted = true;
             return new Http3UpstreamConnection(pooledConnection.Connection, stream, metrics, maxFramePayloadBytes, controlStream: null, pooledConnection);
         }
-        catch (Exception exception)when (exception is QuicException or IOException)
+        catch (Exception exception)
         {
             if (stream is not null)
             {
@@ -108,7 +109,9 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
 
             pooledConnection.MarkUnusable();
             pooledConnection.ReleaseStream(connectionUsable: false);
-            throw new Http3UpstreamProtocolException("Failed to open an upstream HTTP/3 request stream.", Http3UpstreamFailureKind.ConnectFailure, exception);
+            if (exception is QuicException or IOException)
+                throw new Http3UpstreamProtocolException("Failed to open an upstream HTTP/3 request stream.", Http3UpstreamFailureKind.ConnectFailure, exception);
+            throw;
         }
     }
 
@@ -242,7 +245,12 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
+    {
+        lock (_disposeGate) return new ValueTask(_disposeTask ??= DisposeOwnedAsync());
+    }
+
+    private async Task DisposeOwnedAsync()
     {
         try
         {
@@ -259,20 +267,23 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
             {
                 try
                 {
-                    if (_controlStream is not null)
+                    try
                     {
-                        await _controlStream.DisposeAsync().ConfigureAwait(false);
+                        if (_controlStream is not null) await _controlStream.DisposeAsync().ConfigureAwait(false);
+                        await Connection.CloseAsync(0, CancellationToken.None).ConfigureAwait(false);
                     }
-
-                    await Connection.CloseAsync(0, CancellationToken.None).ConfigureAwait(false);
+                    catch (QuicException) { }
                 }
-                catch (QuicException)
+                finally
                 {
+                    try { await Connection.DisposeAsync().ConfigureAwait(false); }
+                    finally
+                    {
+                        _certificateTrust?.Dispose();
+                        _metrics.UpstreamHttp3ConnectionClosed();
+                        _metrics.UpstreamHttp3PoolConnectionClosed();
+                    }
                 }
-
-                await Connection.DisposeAsync().ConfigureAwait(false);
-                _metrics.UpstreamHttp3ConnectionClosed();
-                _metrics.UpstreamHttp3PoolConnectionClosed();
             }
         }
     }
@@ -280,41 +291,55 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
     private static async ValueTask<Http3UpstreamTransport> OpenTransportAsync(UpstreamTransportEndpoint endpoint, IPEndPoint remoteEndPoint, RuntimeTimeouts timeouts, ProxyMetrics metrics, CancellationToken cancellationToken)
     {
         QuicConnection? connection = null;
+        UpstreamCertificateTrust? certificateTrust = UpstreamCertificateTrust.Load(endpoint);
         try
         {
-            connection = await ProxyTimeoutPolicy.RunAsync(async timeoutToken => await QuicConnection.ConnectAsync(new QuicClientConnectionOptions { RemoteEndPoint = remoteEndPoint, ClientAuthenticationOptions = new SslClientAuthenticationOptions { TargetHost = endpoint.EffectiveSniHost, EnabledSslProtocols = SslProtocols.Tls13, ApplicationProtocols = [Http3Alpn], CertificateRevocationCheckMode = X509RevocationMode.NoCheck, RemoteCertificateValidationCallback = endpoint.ValidateCertificate ? null : static (_, _, _, _) => true }, MaxInboundBidirectionalStreams = 16, MaxInboundUnidirectionalStreams = 4, IdleTimeout = timeouts.UpstreamIdleConnectionLifetime, HandshakeTimeout = timeouts.UpstreamConnectTimeout, DefaultCloseErrorCode = 0x100, DefaultStreamErrorCode = 0x100 }, timeoutToken).ConfigureAwait(false), timeouts.UpstreamConnectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
+            connection = await ProxyTimeoutPolicy.RunAsync(async timeoutToken => await QuicConnection.ConnectAsync(new QuicClientConnectionOptions { RemoteEndPoint = remoteEndPoint, ClientAuthenticationOptions = certificateTrust.CreateOptions(endpoint, [Http3Alpn]), MaxInboundBidirectionalStreams = 16, MaxInboundUnidirectionalStreams = 4, IdleTimeout = timeouts.UpstreamIdleConnectionLifetime, HandshakeTimeout = timeouts.UpstreamConnectTimeout, DefaultCloseErrorCode = 0x100, DefaultStreamErrorCode = 0x100 }, timeoutToken).ConfigureAwait(false), timeouts.UpstreamConnectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
             metrics.UpstreamHttp3ConnectionSucceeded();
             metrics.UpstreamHttp3ConnectionOpened();
             metrics.UpstreamHttp3PoolConnectionOpened();
             var controlStream = await SendSettingsAsync(connection, timeouts, cancellationToken).ConfigureAwait(false);
-            return new Http3UpstreamTransport(connection, controlStream);
+            var transport = new Http3UpstreamTransport(connection, controlStream, certificateTrust);
+            certificateTrust = null;
+            return transport;
         }
         catch
         {
             if (connection is not null)
             {
-                await connection.DisposeAsync().ConfigureAwait(false);
-                metrics.UpstreamHttp3ConnectionClosed();
-                metrics.UpstreamHttp3PoolConnectionClosed();
+                try { await connection.DisposeAsync().ConfigureAwait(false); }
+                finally
+                {
+                    metrics.UpstreamHttp3ConnectionClosed();
+                    metrics.UpstreamHttp3PoolConnectionClosed();
+                }
             }
-
             throw;
         }
+        finally { certificateTrust?.Dispose(); }
     }
 
     private static async ValueTask<QuicStream> SendSettingsAsync(QuicConnection connection, RuntimeTimeouts timeouts, CancellationToken cancellationToken)
     {
         var control = await ProxyTimeoutPolicy.RunAsync(async timeoutToken => await connection.OpenOutboundStreamAsync(QuicStreamType.Unidirectional, timeoutToken).ConfigureAwait(false), timeouts.UpstreamConnectTimeout, ProxyTimeoutKind.UpstreamConnect, cancellationToken).ConfigureAwait(false);
-        using var payload = new MemoryStream();
-        Http3Codec.WriteVarInt(payload, Http3Codec.ControlStream);
-        using var settings = new MemoryStream();
-        Http3Codec.WriteVarInt(settings, Http3Codec.QpackMaxTableCapacitySetting);
-        Http3Codec.WriteVarInt(settings, 0);
-        Http3Codec.WriteVarInt(settings, Http3Codec.QpackBlockedStreamsSetting);
-        Http3Codec.WriteVarInt(settings, 0);
-        Http3Codec.WriteFrame(payload, Http3Codec.SettingsFrame, settings.ToArray());
-        await ProxyTimeoutPolicy.RunAsync(async timeoutToken => await control.WriteAsync(payload.ToArray(), completeWrites: false, timeoutToken).ConfigureAwait(false), timeouts.DownstreamWriteTimeout, ProxyTimeoutKind.DownstreamWrite, cancellationToken).ConfigureAwait(false);
-        return control;
+        try
+        {
+            using var payload = new MemoryStream();
+            Http3Codec.WriteVarInt(payload, Http3Codec.ControlStream);
+            using var settings = new MemoryStream();
+            Http3Codec.WriteVarInt(settings, Http3Codec.QpackMaxTableCapacitySetting);
+            Http3Codec.WriteVarInt(settings, 0);
+            Http3Codec.WriteVarInt(settings, Http3Codec.QpackBlockedStreamsSetting);
+            Http3Codec.WriteVarInt(settings, 0);
+            Http3Codec.WriteFrame(payload, Http3Codec.SettingsFrame, settings.ToArray());
+            await ProxyTimeoutPolicy.RunAsync(async timeoutToken => await control.WriteAsync(payload.ToArray(), completeWrites: false, timeoutToken).ConfigureAwait(false), timeouts.DownstreamWriteTimeout, ProxyTimeoutKind.DownstreamWrite, cancellationToken).ConfigureAwait(false);
+            return control;
+        }
+        catch
+        {
+            await control.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     private async ValueTask<Http3FrameReadResult> ReadFrameAsync(TimeSpan timeout, ProxyTimeoutKind timeoutKind, CancellationToken cancellationToken)
@@ -461,29 +486,27 @@ internal sealed partial class Http3UpstreamConnection : IAsyncDisposable
 
     private static async ValueTask DisposePartialConnectionAsync(Http3UpstreamTransport? transport, QuicStream? stream, ProxyMetrics metrics, bool streamStarted)
     {
-        if (stream is not null)
+        try
         {
-            await stream.DisposeAsync().ConfigureAwait(false);
+            if (stream is not null) await stream.DisposeAsync().ConfigureAwait(false);
         }
-
-        if (streamStarted)
+        finally
         {
-            metrics.UpstreamHttp3StreamEnded();
-        }
-
-        if (transport is not null)
-        {
-            try
+            if (streamStarted) metrics.UpstreamHttp3StreamEnded();
+            if (transport is not null)
             {
-                await transport.ControlStream.DisposeAsync().ConfigureAwait(false);
+                try { await transport.ControlStream.DisposeAsync().ConfigureAwait(false); }
+                finally
+                {
+                    try { await transport.Connection.DisposeAsync().ConfigureAwait(false); }
+                    finally
+                    {
+                        transport.CertificateTrust?.Dispose();
+                        metrics.UpstreamHttp3ConnectionClosed();
+                        metrics.UpstreamHttp3PoolConnectionClosed();
+                    }
+                }
             }
-            finally
-            {
-                await transport.Connection.DisposeAsync().ConfigureAwait(false);
-            }
-
-            metrics.UpstreamHttp3ConnectionClosed();
-            metrics.UpstreamHttp3PoolConnectionClosed();
         }
     }
 

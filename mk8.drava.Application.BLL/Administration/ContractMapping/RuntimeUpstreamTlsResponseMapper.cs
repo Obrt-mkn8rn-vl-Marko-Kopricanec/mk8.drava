@@ -9,6 +9,10 @@ public static class RuntimeUpstreamTlsResponseMapper
     public static RuntimeUpstreamTlsResponse FromProjection(BusinessRuntimeUpstreamTlsProjection projection)
     {
         ArgumentNullException.ThrowIfNull(projection);
-        return new RuntimeUpstreamTlsResponse(projection.ValidateCertificate, projection.SniHost);
+        var root = projection.TrustedRoot;
+        return new RuntimeUpstreamTlsResponse(projection.ValidateCertificate, projection.SniHost)
+        {
+            TrustedRoot = root is null ? null : new RuntimeTrustedRootCertificateResponse(root.CertificatePath, root.Sha256),
+        };
     }
 }

@@ -47,7 +47,7 @@ public static class ProxyConfigurationProjectionMapper
     private static RuntimeUpstreamProjection ToUpstreamProjection(RuntimeUpstream upstream)
     {
         ArgumentNullException.ThrowIfNull(upstream);
-        return new RuntimeUpstreamProjection(upstream.RouteName, upstream.Name, upstream.Scheme, upstream.Protocol, upstream.Address, upstream.Port, upstream.Weight, new RuntimeUpstreamTlsProjection(upstream.Tls.ValidateCertificate, upstream.Tls.SniHost), upstream.Endpoint, upstream.UriEndpoint, upstream.EffectiveSniHost, upstream.Identity, new RuntimeCircuitBreakerProjection(upstream.CircuitBreaker.Enabled, upstream.CircuitBreaker.FailureThreshold, upstream.CircuitBreaker.SamplingWindow, upstream.CircuitBreaker.OpenDuration, upstream.CircuitBreaker.HalfOpenMaxAttempts, upstream.CircuitBreaker.FailureStatusCodes));
+        return new RuntimeUpstreamProjection(upstream.RouteName, upstream.Name, upstream.Scheme, upstream.Protocol, upstream.Address, upstream.Port, upstream.Weight, new RuntimeUpstreamTlsProjection(upstream.Tls.ValidateCertificate, upstream.Tls.SniHost, upstream.Tls.TrustedRoot), upstream.Endpoint, upstream.UriEndpoint, upstream.EffectiveSniHost, upstream.Identity, new RuntimeCircuitBreakerProjection(upstream.CircuitBreaker.Enabled, upstream.CircuitBreaker.FailureThreshold, upstream.CircuitBreaker.SamplingWindow, upstream.CircuitBreaker.OpenDuration, upstream.CircuitBreaker.HalfOpenMaxAttempts, upstream.CircuitBreaker.FailureStatusCodes));
     }
 
     private static RuntimeHeaderFieldProjection ToHeaderFieldProjection(ProxyHeaderField header)

@@ -12,6 +12,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
+using Mk8.Drava.Application.INF.Proxy.Connections;
 
 namespace Mk8.Drava.Application.INF.Proxy.Http3;
 internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
@@ -19,6 +20,7 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
     private const int MaxControlFramePayloadBytes = 64 * 1024;
     private readonly Lock _gate = new();
     private readonly ProxyMetrics _metrics;
+    private readonly UpstreamCertificateTrust? _certificateTrust;
     private readonly TimeProvider _timeProvider;
     private readonly CancellationTokenSource _controlMonitorStop = new();
     private readonly Task _controlMonitor;
@@ -36,6 +38,7 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
         Key = key;
         Connection = transport.Connection;
         ControlStream = transport.ControlStream;
+        _certificateTrust = transport.CertificateTrust;
         _metrics = metrics;
         _timeProvider = timeProvider;
         MaxConcurrentStreams = Math.Clamp(maxConcurrentStreams, 1, 64);
@@ -195,6 +198,7 @@ internal sealed class Http3UpstreamPooledConnection : IAsyncDisposable
             }
             finally
             {
+                _certificateTrust?.Dispose();
                 _controlMonitorStop.Dispose();
                 _metrics.UpstreamHttp3ConnectionClosed();
                 _metrics.UpstreamHttp3PoolConnectionClosed();
