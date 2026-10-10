@@ -1554,6 +1554,12 @@ internal static partial class ClientHttp3Tests
         metrics.Http3ProtocolError("invalid_frame");
         metrics.SetActiveQuicListeners(1);
         var snapshot = metrics.Snapshot();
+        VerifyHttp3CounterSnapshot(snapshot);
+
+    }
+
+    private static void VerifyHttp3CounterSnapshot(ProxyMetricsSnapshot snapshot)
+    {
         AssertEx.Equal(1L, snapshot.Http3.QuicListenerStartSuccesses);
         AssertEx.Equal(1L, snapshot.Http3.AcceptedConnections);
         AssertEx.Equal(0L, snapshot.Http3.ActiveConnections);

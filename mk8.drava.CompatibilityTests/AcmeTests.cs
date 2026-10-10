@@ -152,6 +152,13 @@ internal static class AcmeTests
         writeDomains.Clear();
         lifecycleDomains.Clear();
         certificates.Clear();
+        VerifyAcmeInputCopies(issue, write, lifecycle, status);
+        VerifyAcmeRequestAndLifecycleGuards();
+        VerifyAcmeStatusResponseCopies(status, issue, write, lifecycle);
+    }
+
+    private static void VerifyAcmeInputCopies(AcmeCertificateIssueRequest issue, AcmeCertificateMaterialWriteRequest write, AcmeCertificateLifecycleStatus lifecycle, AcmeStatus status)
+    {
         AssertEx.Equal("home.example.test", issue.Domains[0]);
         AssertEx.Equal("ops@example.test", issue.ContactEmails[0]);
         AssertEx.Equal("home.example.test", write.Domains[0]);
@@ -166,6 +173,10 @@ internal static class AcmeTests
         AssertEx.Equal("loaded", lifecycle.LastResult);
         AssertEx.Equal("home.example.test", lifecycle.Domains[0]);
         AssertEx.Equal("home-acme", status.Certificates[0].CertificateId);
+    }
+
+    private static void VerifyAcmeRequestAndLifecycleGuards()
+    {
         AssertEx.Throws<ArgumentException>(() => new AcmeCertificateIssueRequest(CertificateId: " ", Domains: ["home.example.test"], DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true));
         AssertEx.Throws<ArgumentException>(() => new AcmeCertificateIssueRequest(CertificateId: "home-acme", Domains: [], DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true));
         AssertEx.Throws<ArgumentException>(() => new AcmeCertificateIssueRequest(CertificateId: "home-acme", Domains: [" "], DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true));
@@ -187,6 +198,10 @@ internal static class AcmeTests
         AssertEx.Throws<ArgumentException>(() => new AcmeCertificateLifecycleStatus(CertificateId: "home-acme", Enabled: true, Domains: ["home.example.test"], Active: true, Source: "acme", NotBeforeUtc: DateTimeOffset.UnixEpoch, NotAfterUtc: DateTimeOffset.UnixEpoch.AddDays(30), RenewalDueAtUtc: DateTimeOffset.UnixEpoch.AddDays(20), LastAttemptAtUtc: null, LastSucceededAtUtc: DateTimeOffset.UnixEpoch, LastFailedAtUtc: null, NextAttemptNotBeforeUtc: null, LastResult: " ", ErrorSummary: null));
         AssertEx.Throws<ArgumentNullException>(() => new AcmeCertificateLifecycleStatus(CertificateId: "home-acme", Enabled: true, Domains: [null!], Active: true, Source: "acme", NotBeforeUtc: DateTimeOffset.UnixEpoch, NotAfterUtc: DateTimeOffset.UnixEpoch.AddDays(30), RenewalDueAtUtc: DateTimeOffset.UnixEpoch.AddDays(20), LastAttemptAtUtc: null, LastSucceededAtUtc: DateTimeOffset.UnixEpoch, LastFailedAtUtc: null, NextAttemptNotBeforeUtc: null, LastResult: "loaded", ErrorSummary: null));
         AssertEx.Throws<ArgumentNullException>(() => AcmeStatus.FromSources(enabled: true, directoryUrl: "https://acme.example.test/directory", useStaging: false, certificates: [null!]));
+    }
+
+    private static void VerifyAcmeStatusResponseCopies(AcmeStatus status, AcmeCertificateIssueRequest issue, AcmeCertificateMaterialWriteRequest write, AcmeCertificateLifecycleStatus lifecycle)
+    {
         var apiStatus = AcmeStatusResponseMapper.FromStatus(status);
         AssertEx.Equal("home-acme", apiStatus.Certificates[0].CertificateId);
         AssertEx.Equal("home.example.test", apiStatus.Certificates[0].Domains[0]);
@@ -222,6 +237,8 @@ internal static class AcmeTests
         AssertEx.False(responseLifecycle.Domains is string[], "Direct ACME API lifecycle domains should not expose a mutable array.");
         AssertEx.False(directStatus.Certificates is AcmeCertificateLifecycleStatusResponse[], "Direct ACME API status certificates should not expose a mutable array.");
     }
+
+
 
     public static void AcmeLifecycleStatusConsumesActiveCertificateDates()
     {
@@ -385,6 +402,14 @@ internal static class AcmeTests
         AssertEx.Equal(notAfter, projected.RuntimeCertificates["home-acme"].NotAfterUtc);
         AssertEx.False(projected.Certificates is ProxyAcmeConfiguredCertificateStatus[], "ACME status snapshot certificates should not expose a mutable array.");
         AssertEx.False(projected.Certificates[0].Domains is string[], "ACME configured certificate domains should not expose a mutable array.");
+        VerifyAcmeSnapshotCopiesRuntimeDictionary(configured, notBefore, notAfter);
+        AssertEx.Equal(1, statuses.Count);
+        AssertEx.Equal(lifecycle, statuses[0]);
+        AssertEx.True(missing is ProxyAcmeStatusSnapshotReadResult.MissingConfigurationResult);
+    }
+
+    private static void VerifyAcmeSnapshotCopiesRuntimeDictionary(ProxyAcmeConfiguredCertificateStatus configured, DateTimeOffset notBefore, DateTimeOffset notAfter)
+    {
         var runtimeStatusDictionary = new Dictionary<string, ProxyAcmeRuntimeCertificateStatus>(StringComparer.OrdinalIgnoreCase)
         {
             ["home-acme"] = new ProxyAcmeRuntimeCertificateStatus("home-acme", "acme", notBefore, notAfter)
@@ -392,9 +417,6 @@ internal static class AcmeTests
         var directSnapshot = new ProxyAcmeStatusSnapshot(Enabled: true, DirectoryUrl: "https://acme.example.test/directory", UseStaging: true, Certificates: [configured], RuntimeCertificates: runtimeStatusDictionary);
         runtimeStatusDictionary["home-acme"] = new ProxyAcmeRuntimeCertificateStatus("home-acme", "manualPfx", notBefore.AddDays(1), notAfter.AddDays(1));
         AssertEx.Equal("acme", directSnapshot.RuntimeCertificates["home-acme"].Source);
-        AssertEx.Equal(1, statuses.Count);
-        AssertEx.Equal(lifecycle, statuses[0]);
-        AssertEx.True(missing is ProxyAcmeStatusSnapshotReadResult.MissingConfigurationResult);
     }
 
     public static void AcmeRuntimeCertificateStatusMapperReadsSourcesWithoutConfigurationSnapshot()
@@ -584,17 +606,7 @@ internal static class AcmeTests
         contactEmails.Clear();
         certificateDomains.Clear();
         certificates.Clear();
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalConfigurationSourceSet(Enabled: true, StoragePath: " ", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: []));
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalConfigurationSourceSet(Enabled: true, StoragePath: "acme", DirectoryUrl: " ", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: []));
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalConfigurationSourceSet(Enabled: true, StoragePath: "acme", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: [" "], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: []));
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateSource(" ", Enabled: true, Domains: ["home.example.test"], RenewBeforeDays: 20, ActiveCertificate: null));
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateSource("home-acme", Enabled: true, Domains: [], RenewBeforeDays: 20, ActiveCertificate: null));
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateSource("home-acme", Enabled: true, Domains: [" "], RenewBeforeDays: 20, ActiveCertificate: null));
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalConfigurationInput(Enabled: true, StoragePath: " ", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: []));
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateInput(" ", Enabled: true, Domains: ["home.example.test"], RenewBeforeDays: 20, ActiveCertificate: null));
-        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateInput("home-acme", Enabled: true, Domains: [], RenewBeforeDays: 20, ActiveCertificate: null));
-        AssertEx.Throws<ArgumentNullException>(() => new AcmeRenewalConfigurationSourceSet(Enabled: true, StoragePath: "acme", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: [null!]));
-        AssertEx.Throws<ArgumentNullException>(() => new AcmeRenewalConfigurationInput(Enabled: true, StoragePath: "acme", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: [null!]));
+        VerifyAcmeRenewalInputGuards();
         AssertEx.True(input.Enabled);
         AssertEx.Equal("acme", input.StoragePath);
         AssertEx.Equal("https://acme.example.test/directory", input.DirectoryUrl);
@@ -614,6 +626,21 @@ internal static class AcmeTests
         AssertEx.False(input.ContactEmails is string[], "ACME renewal input contacts should not expose a mutable array.");
         AssertEx.False(input.Certificates is AcmeRenewalCertificateInput[], "ACME renewal input certificates should not expose a mutable array.");
         AssertEx.False(input.Certificates[0].Domains is string[], "ACME renewal input domains should not expose a mutable array.");
+    }
+
+    private static void VerifyAcmeRenewalInputGuards()
+    {
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalConfigurationSourceSet(Enabled: true, StoragePath: " ", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: []));
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalConfigurationSourceSet(Enabled: true, StoragePath: "acme", DirectoryUrl: " ", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: []));
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalConfigurationSourceSet(Enabled: true, StoragePath: "acme", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: [" "], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: []));
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateSource(" ", Enabled: true, Domains: ["home.example.test"], RenewBeforeDays: 20, ActiveCertificate: null));
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateSource("home-acme", Enabled: true, Domains: [], RenewBeforeDays: 20, ActiveCertificate: null));
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateSource("home-acme", Enabled: true, Domains: [" "], RenewBeforeDays: 20, ActiveCertificate: null));
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalConfigurationInput(Enabled: true, StoragePath: " ", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: []));
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateInput(" ", Enabled: true, Domains: ["home.example.test"], RenewBeforeDays: 20, ActiveCertificate: null));
+        AssertEx.Throws<ArgumentException>(() => new AcmeRenewalCertificateInput("home-acme", Enabled: true, Domains: [], RenewBeforeDays: 20, ActiveCertificate: null));
+        AssertEx.Throws<ArgumentNullException>(() => new AcmeRenewalConfigurationSourceSet(Enabled: true, StoragePath: "acme", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: [null!]));
+        AssertEx.Throws<ArgumentNullException>(() => new AcmeRenewalConfigurationInput(Enabled: true, StoragePath: "acme", DirectoryUrl: "https://acme.example.test/directory", ContactEmails: ["ops@example.test"], TermsAccepted: true, RetryAfterMinutes: 15, Certificates: [null!]));
     }
 
     public static void AcmeRenewalConfigurationInputMapperRejectsNullSourceSet()
