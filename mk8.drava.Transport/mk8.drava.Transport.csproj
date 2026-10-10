@@ -10,8 +10,6 @@
     <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
     <PackageReference Include="Haukcode.Mdns" />
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
-    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
-    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     <Protobuf Include="../mk8.drava.Contracts/Proxy/V1/drava.proto" Link="Protocol/drava.proto" GrpcServices="Both" />
   </ItemGroup>
   <Import Project="ProtocolNullability.targets" />

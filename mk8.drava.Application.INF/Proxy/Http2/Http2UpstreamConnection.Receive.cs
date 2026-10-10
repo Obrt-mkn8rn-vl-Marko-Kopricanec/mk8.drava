@@ -68,8 +68,8 @@ internal sealed partial class Http2UpstreamConnection
             _continuationExpected = (frame.Flags & Http2Flags.EndHeaders) == 0;
         }
         if (frame.Type == Http2FrameType.Continuation) _continuationExpected = (frame.Flags & Http2Flags.EndHeaders) == 0;
-        return frame.Type == Http2FrameType.Data && (frame.Flags & Http2Flags.EndStream) != 0
-            || frame.Type is Http2FrameType.Headers or Http2FrameType.Continuation && _headersEndStream && !_continuationExpected;
+        return (frame.Type == Http2FrameType.Data && (frame.Flags & Http2Flags.EndStream) != 0)
+            || ((frame.Type is Http2FrameType.Headers or Http2FrameType.Continuation) && _headersEndStream && !_continuationExpected);
     }
 
     private void ChargeReceiveWindow(int bytes)
@@ -147,7 +147,7 @@ internal sealed partial class Http2UpstreamConnection
 
     private void ApplyWindowUpdate(Http2Frame frame)
     {
-        if (frame.Payload.Length != 4 || frame.StreamId != 0 && frame.StreamId != _streamId)
+        if (frame.Payload.Length != 4 || (frame.StreamId != 0 && frame.StreamId != _streamId))
             throw new Http2UpstreamProtocolException("Malformed upstream HTTP/2 WINDOW_UPDATE.");
         var increment = BinaryPrimitives.ReadUInt32BigEndian(frame.Payload.Span) & 0x7fffffffu;
         _sendFlow.AddCredit(frame.StreamId == 0, increment);

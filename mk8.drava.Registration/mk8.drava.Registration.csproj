@@ -6,7 +6,5 @@
     <ProjectReference Include="../mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
     <ProjectReference Include="../mk8.drava.Transport/mk8.drava.Transport.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
-    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
-    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
   </ItemGroup>
 </Project>
