@@ -309,7 +309,9 @@ internal static class UpstreamTlsTests
             await using var streamDisposal = stream.ConfigureAwait(false);
             try
             {
+                #pragma warning disable CA5398 // Deterministic upstream fixture admits TLS1.2/1.3 only; preserve negotiated protocol and negative tests.
                 await stream.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = certificate, EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13 }, cancellationToken).ConfigureAwait(false);
+                #pragma warning restore CA5398
                 handshakeSucceeded = true;
                 request = await ReadHttpHeadAsync(stream, cancellationToken).ConfigureAwait(false);
                 if (response.Length > 0)

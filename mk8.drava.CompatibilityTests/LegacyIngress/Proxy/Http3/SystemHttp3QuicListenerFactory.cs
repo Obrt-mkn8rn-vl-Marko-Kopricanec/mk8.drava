@@ -57,7 +57,9 @@ internal sealed partial class SystemHttp3QuicListenerFactory : IHttp3QuicListene
                     throw new AuthenticationException("no_certificate");
                 }
 
+                #pragma warning disable CA5398 // HTTP/3 over QUIC requires TLS1.3; keep the exact protocol fixture/ALPN boundary.
                 return ValueTask.FromResult(new QuicServerConnectionOptions { ServerAuthenticationOptions = new SslServerAuthenticationOptions { EnabledSslProtocols = SslProtocols.Tls13, ClientCertificateRequired = false, CertificateRevocationCheckMode = X509RevocationMode.NoCheck, ApplicationProtocols = ListenerProtocolAdvertisement.BuildHttp3Alpn(activeListener), ServerCertificate = certificate }, MaxInboundBidirectionalStreams = Math.Max(1, activeListener.Http2Limits.MaxConcurrentStreams), MaxInboundUnidirectionalStreams = 8, IdleTimeout = activeSnapshot.Timeouts.ClientKeepAliveIdleTimeout, HandshakeTimeout = activeSnapshot.Timeouts.TlsHandshakeTimeout, DefaultCloseErrorCode = 0x100, DefaultStreamErrorCode = 0x100 });
+                #pragma warning restore CA5398
             }
         };
         return await QuicListener.ListenAsync(options, cancellationToken).ConfigureAwait(false);

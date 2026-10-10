@@ -1564,7 +1564,9 @@ internal static partial class ClientHttp3Tests
         AssertEx.Equal(1L, snapshot.Http3.AcceptedConnections);
         AssertEx.Equal(0L, snapshot.Http3.ActiveConnections);
         AssertEx.Equal(1L, snapshot.Http3.Requests);
+        #pragma warning disable HLQ005 // Assert exactly one matching outcome; First would accept duplicate metrics and weaken this test.
         AssertEx.Equal(1L, snapshot.Http3.RequestsByOutcome.Single(static item => string.Equals(item.Method, "GET", StringComparison.Ordinal) && string.Equals(item.Outcome, "success", StringComparison.Ordinal) && string.Equals(item.StatusClass, "2xx", StringComparison.Ordinal)).Count);
+        #pragma warning restore HLQ005
         AssertEx.Equal(1L, snapshot.Http3.ProxiedRequests);
         AssertEx.Equal(1L, snapshot.Http3.GeneratedResponses);
         AssertEx.Equal(0L, snapshot.Http3.ActiveStreams);

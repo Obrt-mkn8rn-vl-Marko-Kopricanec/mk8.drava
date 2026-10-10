@@ -708,7 +708,9 @@ internal static class UpstreamHttp3Tests
         var certificate = CreateServerCertificate("upstream.test");
         try
         {
+            #pragma warning disable CA5398 // HTTP/3 over QUIC requires TLS1.3; keep the exact protocol fixture/ALPN boundary.
             var listener = await QuicListener.ListenAsync(new QuicListenerOptions { ListenEndPoint = new IPEndPoint(IPAddress.Loopback, port), ApplicationProtocols = applicationProtocols?.ToList() ?? [Http3Alpn], ConnectionOptionsCallback = (_, _, _) => ValueTask.FromResult(new QuicServerConnectionOptions { ServerAuthenticationOptions = new SslServerAuthenticationOptions { ServerCertificate = certificate, EnabledSslProtocols = SslProtocols.Tls13, ApplicationProtocols = applicationProtocols?.ToList() ?? [Http3Alpn], CertificateRevocationCheckMode = X509RevocationMode.NoCheck }, MaxInboundBidirectionalStreams = maxInboundBidirectionalStreams, MaxInboundUnidirectionalStreams = 4, IdleTimeout = TimeSpan.FromSeconds(5), HandshakeTimeout = TimeSpan.FromSeconds(5), DefaultCloseErrorCode = 0x100, DefaultStreamErrorCode = 0x100 }) }, cancellationToken).ConfigureAwait(false);
+            #pragma warning restore CA5398
             return new DevelopmentOwnedQuicListener(listener, certificate);
         }
         catch { certificate.Dispose(); throw; }

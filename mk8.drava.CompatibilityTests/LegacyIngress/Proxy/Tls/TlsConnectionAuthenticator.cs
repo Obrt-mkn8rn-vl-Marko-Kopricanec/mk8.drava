@@ -40,7 +40,9 @@ internal sealed partial class TlsConnectionAuthenticator
         using var handshakeLease = acceptedHandshake.Lease;
         var options = new SslServerAuthenticationOptions
         {
+            #pragma warning disable CA5398 // Maintain the native ingress TLS1.2 minimum; OS defaults must not admit older protocols.
             EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            #pragma warning restore CA5398
             ClientCertificateRequired = false,
             CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
             ApplicationProtocols = ListenerProtocolAdvertisement.BuildTcpAlpn(listener.Protocols),

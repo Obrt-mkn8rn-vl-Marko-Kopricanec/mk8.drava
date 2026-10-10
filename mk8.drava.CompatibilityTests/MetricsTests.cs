@@ -769,6 +769,7 @@ internal static class MetricsTests
             _source = source;
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "HLQ006", Justification = "IEnumerable<T> fixture forwards the original IEnumerator<T>; shared instance state detects repeated enumeration.") ]
         public IEnumerator<T> GetEnumerator()
         {
             AssertEx.False(_enumerated, "Metrics HTTP/3 source facts should be enumerated once.");

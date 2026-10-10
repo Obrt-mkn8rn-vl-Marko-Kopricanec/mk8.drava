@@ -265,7 +265,9 @@ internal static class UpstreamHttp2Tests
             using var client = await listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
             var stream = new SslStream(client.GetStream(), leaveInnerStreamOpen: false);
             await using var streamDisposal = stream.ConfigureAwait(false);
+            #pragma warning disable CA5398 // Deterministic upstream fixture admits TLS1.2/1.3 only; preserve negotiated protocol and negative tests.
             await stream.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = certificate, EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13, ApplicationProtocols = applicationProtocols is null ? [SslApplicationProtocol.Http2] : applicationProtocols.ToList() }, cancellationToken).ConfigureAwait(false);
+            #pragma warning restore CA5398
             if (!readRequest || stream.NegotiatedApplicationProtocol != SslApplicationProtocol.Http2)
             {
                 return new Http2UpstreamObservation(stream.NegotiatedApplicationProtocol, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), [], null);
