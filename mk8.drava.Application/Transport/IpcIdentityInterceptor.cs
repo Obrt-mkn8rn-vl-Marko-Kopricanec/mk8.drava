@@ -3,6 +3,7 @@ using System.Text;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Mk8.Drava.Configuration;
+using Mk8.Drava.Transport.Clients;
 
 namespace Mk8.Drava.Application.Transport;
 
@@ -13,11 +14,7 @@ internal sealed class IpcIdentityInterceptor : Interceptor
     public IpcIdentityInterceptor(ApplicationBootstrap bootstrap)
     {
         ArgumentNullException.ThrowIfNull(bootstrap);
-        var file = new FileInfo(bootstrap.Listen.IdentityTokenPath);
-        if (!file.Exists || file.Length is < 32 or > 256) throw new InvalidDataException("Invalid scoped IPC identity file.");
-        var token = File.ReadAllText(file.FullName).Trim();
-        if (token.Length is < 32 or > 256 || token.Any(static value => !char.IsAsciiLetterOrDigit(value) && value is not '-' and not '_'))
-            throw new InvalidDataException("Invalid scoped IPC identity encoding.");
+        var token = PrivateIpcIdentityFile.Read(bootstrap.Listen.IdentityTokenPath);
         _tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(token));
     }
 

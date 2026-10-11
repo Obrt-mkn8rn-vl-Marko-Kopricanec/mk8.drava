@@ -23,7 +23,7 @@ public sealed class TransportFailureCleanupTests
         listener.Start();
         using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-        var endpoint = new UpstreamTransportEndpoint("stalled", "https", "http1", "127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port, false, "stalled.test");
+        var endpoint = new UpstreamTransportEndpoint("stalled", "https", "http1", "127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port, ValidateCertificate: false, "stalled.test");
         var connecting = new UpstreamConnectionFactory().ConnectAsync(endpoint, TimeSpan.FromSeconds(callerCancellation ? 10 : 2), caller.Token).AsTask();
         try
         {
@@ -36,7 +36,7 @@ public sealed class TransportFailureCleanupTests
             Exception? failure = null;
             try { using var unexpected = await connecting.ConfigureAwait(true); }
             catch (Exception exception) when (exception is OperationCanceledException or ProxyTimeoutException or IOException) { failure = exception; }
-            if (callerCancellation) Assert.IsAssignableFrom<OperationCanceledException>(failure);
+            if (callerCancellation) Assert.IsType<OperationCanceledException>(failure, exactMatch: false);
             else Assert.IsType<ProxyTimeoutException>(failure);
             Assert.True(await ReachesClosedAsync(stream, lifetime.Token).ConfigureAwait(true));
         }
@@ -54,8 +54,10 @@ public sealed class TransportFailureCleanupTests
         var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "drava_invalid_frame_" + Guid.NewGuid().ToString("N"))).FullName;
         try
         {
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var token = Path.Combine(directory, "gateway.token");
             await File.WriteAllTextAsync(token, new string('A', 64)).ConfigureAwait(true);
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(token, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             var endpoint = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_missing_" + Guid.NewGuid().ToString("N"), IdentityTokenPath = token }
                 : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "missing.sock"), IdentityTokenPath = token };
             using var channel = new ApplicationChannel(endpoint);

@@ -1058,3 +1058,5 @@ const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingTrustModeFieldNumb
 Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprint.get -> string!
 Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprint.set -> void
 const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprintFieldNumber = 13 -> int
+Mk8.Drava.Transport.Clients.PrivateIpcIdentityFile
+static Mk8.Drava.Transport.Clients.PrivateIpcIdentityFile.Read(string! path) -> string!

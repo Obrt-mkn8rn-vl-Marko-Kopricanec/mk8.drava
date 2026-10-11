@@ -19,7 +19,7 @@ public sealed class ApplicationChannel : IDisposable
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         endpoint.Validate();
-        _identityToken = ReadIdentity(endpoint.IdentityTokenPath);
+        _identityToken = PrivateIpcIdentityFile.Read(endpoint.IdentityTokenPath);
         var handler = CreateHandler(endpoint);
         try
         {
@@ -29,7 +29,7 @@ public sealed class ApplicationChannel : IDisposable
                 _trustedCertificate = X509CertificateLoader.LoadCertificateFromFile(endpoint.TrustedCertificatePath);
                 handler.SslOptions = new SslClientAuthenticationOptions
                 {
-                    ClientCertificates = new X509CertificateCollection { _clientCertificate },
+                    ClientCertificates = [_clientCertificate],
                     RemoteCertificateValidationCallback = ValidateServerCertificate,
                 };
             }
@@ -46,15 +46,6 @@ public sealed class ApplicationChannel : IDisposable
             _trustedCertificate?.Dispose();
             throw;
         }
-    }
-
-    private static string ReadIdentity(string path)
-    {
-        var file = new FileInfo(path);
-        if (!file.Exists || file.Length is < 32 or > 256) throw new InvalidDataException("Scoped transport identity is absent or invalid.");
-        var token = File.ReadAllText(path).Trim();
-        if (token.Length is < 32 or > 256 || token.Any(static value => !char.IsAsciiLetterOrDigit(value) && value is not '-' and not '_')) throw new InvalidDataException("Invalid scoped transport identity encoding.");
-        return token;
     }
 
     private static SocketsHttpHandler CreateHandler(IpcEndpoint endpoint)

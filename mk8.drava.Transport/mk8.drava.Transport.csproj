@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><RootNamespace>Mk8.Drava.Transport</RootNamespace><IsPackable>true</IsPackable></PropertyGroup>
+  <PropertyGroup><RootNamespace>Mk8.Drava.Transport</RootNamespace><IsPackable>true</IsPackable><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../mk8.drava.BuildTools/mk8.drava.BuildTools.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
