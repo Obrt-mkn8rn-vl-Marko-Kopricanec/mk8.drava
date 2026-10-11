@@ -8,6 +8,7 @@ internal enum ApplicationStartupPhase
     RegistrationStateOpen,
     ServiceProviderBuild,
     RuntimeConfigurationLoad,
+    ServingServicesInitialize,
     AutomaticRoutesInitialize,
     ListenerStart,
     HostStarted,

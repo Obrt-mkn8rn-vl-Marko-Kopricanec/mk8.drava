@@ -129,6 +129,11 @@ internal static class Program
         await using var appLifetime = app.ConfigureAwait(false);
         startup.Enter(ApplicationStartupPhase.RuntimeConfigurationLoad);
         await RuntimeInitializer.InitializeAsync(app.Services, CancellationToken.None).ConfigureAwait(false);
+        // Construct authentication and request/control services before publishing IPC.
+        startup.Enter(ApplicationStartupPhase.ServingServicesInitialize);
+        _ = app.Services.GetRequiredService<IpcIdentityInterceptor>();
+        _ = app.Services.GetRequiredService<ProxyExchangeService>();
+        _ = app.Services.GetRequiredService<ControlService>();
         if (registration is not null)
         {
             startup.Enter(ApplicationStartupPhase.AutomaticRoutesInitialize);
