@@ -21,6 +21,11 @@ internal static class Program
 {
     public static async Task Main(string[] args)
     {
+        if (Recovery.SiteRecoveryCommand.Recognizes(args))
+        {
+            await Recovery.SiteRecoveryCommand.RunAsync(args, CancellationToken.None).ConfigureAwait(false);
+            return;
+        }
         if (Recovery.RegistryRecoveryCommand.Recognizes(args))
         {
             await Recovery.RegistryRecoveryCommand.RunAsync(args, CancellationToken.None).ConfigureAwait(false);

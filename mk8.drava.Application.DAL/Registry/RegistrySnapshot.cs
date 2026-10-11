@@ -28,11 +28,23 @@ public static class RegistrySnapshot
         ArgumentOutOfRangeException.ThrowIfGreaterThan(maximumBytes, 1L << 40);
         cancellationToken.ThrowIfCancellationRequested();
         PrivateOwnerFile.RequirePrivateDirectory(sourceDirectory);
-        var sourcePath = Path.Combine(sourceDirectory, "registry.sqlite");
         var applicationLease = PrivateOwnerFile.AcquireLease(Path.Combine(sourceDirectory, "application.lock"));
         await using var applicationLifetime = applicationLease.ConfigureAwait(false);
         var registryLease = PrivateOwnerFile.AcquireLease(Path.Combine(sourceDirectory, "registry-writer.lock"));
         await using var registryLifetime = registryLease.ConfigureAwait(false);
+        return await CopyWithWritersStoppedAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expectedSha256, cancellationToken).ConfigureAwait(false);
+    }
+
+    // Both callers retain Application and registry writer leases through this operation.
+    internal static async ValueTask<RegistrySnapshotReceipt> CopyWithWritersStoppedAsync(string sourceDirectory, string destinationDirectory,
+        string siteId, long maximumBytes, string? expectedSha256, CancellationToken cancellationToken)
+    {
+        RegistryNames.RequireLabel(siteId);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maximumBytes, 4096);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(maximumBytes, 1L << 40);
+        cancellationToken.ThrowIfCancellationRequested();
+        PrivateOwnerFile.RequirePrivateDirectory(sourceDirectory);
+        var sourcePath = Path.Combine(sourceDirectory, "registry.sqlite");
         await using var sourceFile = PrivateOwnerFile.OpenRead(sourcePath).ConfigureAwait(false);
         RequireSidecars(sourcePath, maximumBytes, expectedSha256 is not null);
         if (expectedSha256 is not null) await RequireDigestAsync(sourcePath, maximumBytes, expectedSha256, cancellationToken).ConfigureAwait(false);

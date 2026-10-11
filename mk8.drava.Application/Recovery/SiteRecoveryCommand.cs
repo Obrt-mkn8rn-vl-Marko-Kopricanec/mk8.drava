@@ -1,0 +1,38 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Mk8.Drava.Application.BLL.ControlPlane.Backup;
+using Mk8.Drava.Application.DAL.Registry;
+using Mk8.Drava.Application.DAL.Storage;
+
+namespace Mk8.Drava.Application.Recovery;
+
+internal static class SiteRecoveryCommand
+{
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        AllowDuplicateProperties = false,
+        RespectNullableAnnotations = true,
+    };
+
+    public static bool Recognizes(string[] args) => args.Length > 0 && args[0] is "--site-backup" or "--site-restore";
+
+    public static async Task RunAsync(string[] args, CancellationToken cancellationToken)
+    {
+        if (args.Length != 2) throw new ArgumentException("Use --site-backup or --site-restore with one private absolute request file.", nameof(args));
+        var bytes = PrivateOwnerFile.Read(args[1], 1, 65536);
+        var request = JsonSerializer.Deserialize<SiteRecoveryRequest>(bytes, Options) ?? throw new InvalidDataException("Missing site recovery request.");
+        if (request.SchemaVersion != 1) throw new InvalidDataException("Unsupported site recovery request schema.");
+        var restoring = string.Equals(args[0], "--site-restore", StringComparison.Ordinal);
+        if (restoring ? request.Files.Length != 0 || request.GatewayDirectory.Length != 0 : request.ApprovedFiles.Length != 0 || request.ExpectedManifestSha256.Length != 0)
+            throw new InvalidDataException("Recovery request mixes backup and restore inputs.");
+        var result = restoring
+            ? await SiteRecoveryBundle.RestoreAsync(request.SourceDirectory, request.DestinationDirectory, request.SiteId,
+                request.ExpectedManifestSha256, request.MaximumRegistryBytes, request.MaximumFileBytes,
+                request.ApprovedFiles, request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false)
+            : await SiteRecoveryBundle.CreateAsync(request.SourceDirectory, request.GatewayDirectory, request.DestinationDirectory,
+                request.SiteId, request.MaximumRegistryBytes, request.MaximumFileBytes, request.Files,
+                request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+        Console.WriteLine(JsonSerializer.Serialize(result, Options));
+    }
+}
