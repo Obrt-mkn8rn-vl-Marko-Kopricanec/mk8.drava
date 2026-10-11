@@ -33,7 +33,13 @@ public static class BootstrapFile
             count += read;
         }
         if (count > MaximumBytes) throw new InvalidDataException("Bootstrap file exceeds its size bound.");
-        using var document = JsonDocument.Parse(bytes.AsMemory(0, count), new JsonDocumentOptions { MaxDepth = 16 });
+        return Parse<T>(bytes.AsMemory(0, count));
+    }
+
+    public static T Parse<T>(ReadOnlyMemory<byte> bytes) where T : class
+    {
+        if (bytes.Length > MaximumBytes) throw new InvalidDataException("Bootstrap file exceeds its size bound.");
+        using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 16 });
         RequireUniqueProperties(document.RootElement);
         return document.RootElement.Deserialize<T>(Options) ?? throw new InvalidDataException("Bootstrap file must contain an object.");
     }
@@ -50,7 +56,9 @@ public static class BootstrapFile
             }
         }
         else if (element.ValueKind == JsonValueKind.Array)
+        {
             foreach (var item in element.EnumerateArray()) RequireUniqueProperties(item);
+        }
     }
 
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);

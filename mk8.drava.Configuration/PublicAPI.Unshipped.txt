@@ -143,6 +143,7 @@ override Mk8.Drava.Configuration.RegistrationSiteTrust.ToString() -> string!
 static Mk8.Drava.Configuration.ApplicationBootstrap.operator !=(Mk8.Drava.Configuration.ApplicationBootstrap? left, Mk8.Drava.Configuration.ApplicationBootstrap? right) -> bool
 static Mk8.Drava.Configuration.ApplicationBootstrap.operator ==(Mk8.Drava.Configuration.ApplicationBootstrap? left, Mk8.Drava.Configuration.ApplicationBootstrap? right) -> bool
 static Mk8.Drava.Configuration.BootstrapFile.LoadAsync<T>(string! path, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T!>!
+static Mk8.Drava.Configuration.BootstrapFile.Parse<T>(System.ReadOnlyMemory<byte> bytes) -> T!
 static Mk8.Drava.Configuration.BootstrapFile.Serialize<T>(T value) -> string!
 static Mk8.Drava.Configuration.ControllerBootstrap.operator !=(Mk8.Drava.Configuration.ControllerBootstrap? left, Mk8.Drava.Configuration.ControllerBootstrap? right) -> bool
 static Mk8.Drava.Configuration.ControllerBootstrap.operator ==(Mk8.Drava.Configuration.ControllerBootstrap? left, Mk8.Drava.Configuration.ControllerBootstrap? right) -> bool

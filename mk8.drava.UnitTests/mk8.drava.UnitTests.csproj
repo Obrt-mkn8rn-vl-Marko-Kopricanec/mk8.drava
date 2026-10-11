@@ -5,6 +5,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../mk8.drava.CompatibilityTests/TestPortAllocator.cs" Link="TestPortAllocator.cs" />
+    <Compile Include="../mk8.drava.Application/Recovery/ConfiguredSiteRestore.cs" Link="Recovery/ConfiguredSiteRestore.cs" />
+    <Compile Include="../mk8.drava.Application/Recovery/ConfiguredSiteRestoreRequest.cs" Link="Recovery/ConfiguredSiteRestoreRequest.cs" />
+    <Compile Include="../mk8.drava.Application/Recovery/ConfiguredSiteRestoreReceipt.cs" Link="Recovery/ConfiguredSiteRestoreReceipt.cs" />
+    <Compile Include="../mk8.drava.Application/Recovery/ConfiguredSiteRestoreResult.cs" Link="Recovery/ConfiguredSiteRestoreResult.cs" />
+    <Compile Include="../mk8.drava.Application/Recovery/RestoredFilePlacement.cs" Link="Recovery/RestoredFilePlacement.cs" />
     <ProjectReference Include="../mk8.drava.Registration/mk8.drava.Registration.csproj" />
     <ProjectReference Include="../mk8.drava.Application.INF/mk8.drava.Application.INF.csproj" />
     <ProjectReference Include="../mk8.drava.Transport/mk8.drava.Transport.csproj" />
