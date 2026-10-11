@@ -17,9 +17,7 @@ internal sealed class GatewayPlanCache : IDisposable
         _directory = directory;
         var path = Path.Combine(directory, "gateway.lock");
         RequirePath(path);
-        var options = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
-        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        _lock = new FileStream(path, options);
+        _lock = GatewayWriterLease.Acquire(path);
     }
 
     public async ValueTask<PresentationPlan?> ReadAsync(CancellationToken cancellationToken)
@@ -27,7 +25,10 @@ internal sealed class GatewayPlanCache : IDisposable
         RequirePath(PlanPath);
         if (!File.Exists(PlanPath)) return null;
         if (!OperatingSystem.IsWindows() && (File.GetUnixFileMode(PlanPath) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-            UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None) throw new InvalidDataException("Gateway material must be private.");
+            UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None)
+        {
+            throw new InvalidDataException("Gateway material must be private.");
+        }
         var input = new FileStream(PlanPath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, useAsync: true);
         await using var inputLifetime = input.ConfigureAwait(false);
         if (input.Length is < 128 or > 128 * 1024) throw new InvalidDataException("Cached presentation plan exceeds its bound.");

@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-  <PropertyGroup><RootNamespace>Mk8.Drava.Gateway</RootNamespace></PropertyGroup>
+  <PropertyGroup><RootNamespace>Mk8.Drava.Gateway</RootNamespace><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../mk8.drava.Presentation/mk8.drava.Presentation.csproj" />
     <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
