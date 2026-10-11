@@ -461,30 +461,7 @@ internal static class ResilienceTests
         var statusOperations = ProxyStatusOperationFactory.Create(new ProxyRuntimeState(TimeProvider.System), fixture.Metrics, fixture.Store, fixture.Health);
         var statusController = new ProxyStatusController(new ProxyStatusAdministrationService(statusOperations));
         var status = statusController.Get();
-        object httpsRedirect = projection.Routes[0].HttpsRedirect;
-        AssertEx.True(httpsRedirect is RuntimeHttpsRedirectProjection);
-        AssertEx.False(httpsRedirect is RuntimeHttpsRedirectPolicy);
-        object canonicalHost = projection.Routes[0].CanonicalHost;
-        AssertEx.True(canonicalHost is RuntimeCanonicalHostProjection);
-        AssertEx.False(canonicalHost is RuntimeCanonicalHostPolicy);
-        object headerPolicy = projection.Routes[0].HeaderPolicy;
-        AssertEx.True(headerPolicy is RuntimeHeaderPolicyProjection);
-        AssertEx.False(headerPolicy is RuntimeHeaderPolicy);
-        object redirect = projection.Routes[0].Redirect;
-        AssertEx.True(redirect is RuntimeRedirectProjection);
-        AssertEx.False(redirect is RuntimeRedirectPolicy);
-        object staticResponse = projection.Routes[0].StaticResponse;
-        AssertEx.True(staticResponse is RuntimeStaticResponseProjection);
-        AssertEx.False(staticResponse is RuntimeStaticResponse);
-        object pathRewrite = projection.Routes[0].PathRewrite;
-        AssertEx.True(pathRewrite is RuntimePathRewriteProjection);
-        AssertEx.False(pathRewrite is RuntimePathRewritePolicy);
-        object maintenance = projection.Routes[0].Maintenance;
-        AssertEx.True(maintenance is RuntimeMaintenanceProjection);
-        AssertEx.False(maintenance is RuntimeMaintenancePolicy);
-        object healthCheck = projection.Routes[0].HealthCheck;
-        AssertEx.True(healthCheck is RuntimeHealthCheckProjection);
-        AssertEx.False(healthCheck is RuntimeHealthCheckOptions);
+        AssertRoutePolicyProjectionTypes(projection);
         AssertEx.True(projection.Routes[0].Retry.Enabled);
         object retry = projection.Routes[0].Retry;
         object retryStatusCodes = projection.Routes[0].Retry.RetryOnStatusCodes;
@@ -514,6 +491,34 @@ internal static class ResilienceTests
         AssertEx.False(failureStatusCodes is int[]);
         AssertEx.Equal(CircuitBreakerRuntimeStateResponse.Open, status.Upstreams[0].CircuitBreaker.State);
         AssertEx.Equal(2, status.Upstreams[0].Weight);
+    }
+
+    private static void AssertRoutePolicyProjectionTypes(ProxyConfigurationProjection projection)
+    {
+        object httpsRedirect = projection.Routes[0].HttpsRedirect;
+        AssertEx.True(httpsRedirect is RuntimeHttpsRedirectProjection);
+        AssertEx.False(httpsRedirect is RuntimeHttpsRedirectPolicy);
+        object canonicalHost = projection.Routes[0].CanonicalHost;
+        AssertEx.True(canonicalHost is RuntimeCanonicalHostProjection);
+        AssertEx.False(canonicalHost is RuntimeCanonicalHostPolicy);
+        object headerPolicy = projection.Routes[0].HeaderPolicy;
+        AssertEx.True(headerPolicy is RuntimeHeaderPolicyProjection);
+        AssertEx.False(headerPolicy is RuntimeHeaderPolicy);
+        object redirect = projection.Routes[0].Redirect;
+        AssertEx.True(redirect is RuntimeRedirectProjection);
+        AssertEx.False(redirect is RuntimeRedirectPolicy);
+        object staticResponse = projection.Routes[0].StaticResponse;
+        AssertEx.True(staticResponse is RuntimeStaticResponseProjection);
+        AssertEx.False(staticResponse is RuntimeStaticResponse);
+        object pathRewrite = projection.Routes[0].PathRewrite;
+        AssertEx.True(pathRewrite is RuntimePathRewriteProjection);
+        AssertEx.False(pathRewrite is RuntimePathRewritePolicy);
+        object maintenance = projection.Routes[0].Maintenance;
+        AssertEx.True(maintenance is RuntimeMaintenanceProjection);
+        AssertEx.False(maintenance is RuntimeMaintenancePolicy);
+        object healthCheck = projection.Routes[0].HealthCheck;
+        AssertEx.True(healthCheck is RuntimeHealthCheckProjection);
+        AssertEx.False(healthCheck is RuntimeHealthCheckOptions);
     }
 
     public static void RetryPolicySuppressesConfiguredStatusOnlyWhenAllowed()

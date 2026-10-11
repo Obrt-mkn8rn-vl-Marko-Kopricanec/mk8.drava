@@ -312,13 +312,7 @@ internal static class OperatorStatusTests
         AssertEx.Equal(ProxyListenerState.Active, status.Listeners[0].State);
         AssertEx.False(status.Upstreams is ProxyUpstreamStatus[], "Status upstreams should not expose a mutable array.");
         AssertEx.False(status.Listeners is ProxyListenerStatus[], "Status listeners should not expose a mutable array.");
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyStatus(listenerLive: true, listenerName: "main", endpoint: "127.0.0.1:18080", startedAt: DateTimeOffset.UnixEpoch, stoppedAt: null, lastError: null, isShuttingDown: false, shutdownStartedAtUtc: null, shutdownDeadlineUtc: null, configVersion: 7, configLoadedAtUtc: DateTimeOffset.UnixEpoch, configuredListeners: 1, configuredRoutes: 1, metrics: new ProxyMetrics().Snapshot(), upstreams: upstreams, listeners: null!, lastListenerReload: null, http3: UnknownHttp3(), routeDiagnostics: RouteDiagnosticsStatus.Enabled, configLint: ConfigLintStatus.Empty, logPersistence: ProxyLogPersistenceStatus.Unknown, readiness: ProxyReadinessStatus.Unknown, subsystems: ProxySubsystemSummaries.Unknown, runtimePreflight: ProxyRuntimePreflightStatus.Unknown));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyStatus(listenerLive: true, listenerName: "main", endpoint: "127.0.0.1:18080", startedAt: DateTimeOffset.UnixEpoch, stoppedAt: null, lastError: null, isShuttingDown: false, shutdownStartedAtUtc: null, shutdownDeadlineUtc: null, configVersion: 7, configLoadedAtUtc: DateTimeOffset.UnixEpoch, configuredListeners: 1, configuredRoutes: 1, metrics: new ProxyMetrics().Snapshot(), upstreams: [], listeners: [], lastListenerReload: null, http3: null!, routeDiagnostics: RouteDiagnosticsStatus.Enabled, configLint: ConfigLintStatus.Empty, logPersistence: ProxyLogPersistenceStatus.Unknown, readiness: ProxyReadinessStatus.Unknown, subsystems: ProxySubsystemSummaries.Unknown, runtimePreflight: ProxyRuntimePreflightStatus.Unknown));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatus(RouteName: null!, UpstreamName: "primary", Endpoint: "https://primary.internal", Scheme: "https", TlsCertificateValidationEnabled: true, SniHost: "primary.internal", HealthCheckEnabled: true, HealthState: UpstreamHealthState.Healthy, LastHealthCheckResult: "status_200", LastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, ConsecutiveSuccesses: 2, ConsecutiveFailures: 0, SelectedRequests: 11, RequestFailures: 0));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatus(RouteName: "main", UpstreamName: null!, Endpoint: "https://primary.internal", Scheme: "https", TlsCertificateValidationEnabled: true, SniHost: "primary.internal", HealthCheckEnabled: true, HealthState: UpstreamHealthState.Healthy, LastHealthCheckResult: "status_200", LastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, ConsecutiveSuccesses: 2, ConsecutiveFailures: 0, SelectedRequests: 11, RequestFailures: 0));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatus(RouteName: "main", UpstreamName: "primary", Endpoint: "https://primary.internal", Scheme: "https", TlsCertificateValidationEnabled: true, SniHost: "primary.internal", HealthCheckEnabled: true, HealthState: UpstreamHealthState.Healthy, LastHealthCheckResult: "status_200", LastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, ConsecutiveSuccesses: 2, ConsecutiveFailures: 0, SelectedRequests: 11, RequestFailures: 0, Protocol: null!, Weight: 1, CircuitBreaker: CircuitBreakerStatus.Disabled(CircuitBreakerPolicyInput.Disabled)));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatus(RouteName: "main", UpstreamName: "primary", Endpoint: "https://primary.internal", Scheme: "https", TlsCertificateValidationEnabled: true, SniHost: "primary.internal", HealthCheckEnabled: true, HealthState: UpstreamHealthState.Healthy, LastHealthCheckResult: "status_200", LastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, ConsecutiveSuccesses: 2, ConsecutiveFailures: 0, SelectedRequests: 11, RequestFailures: 0, Protocol: RuntimeUpstreamProtocol.Http1, Weight: 1, CircuitBreaker: null!));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyUpstreamStatusResponseMapper.FromStatuses(null!));
+        AssertStatusBusinessConstructorNullGuards(upstreams);
         var response = ProxyStatusResponseMapper.FromBusinessResponse(status);
         AssertEx.Equal("primary", response.Upstreams[0].UpstreamName);
         AssertEx.Equal(RuntimeUpstreamProtocol.Http1, response.Upstreams[0].Protocol);
@@ -343,15 +337,36 @@ internal static class OperatorStatusTests
         };
         apiUpstreams.Clear();
         apiListeners.Clear();
+        AssertStatusApiConstructorNullGuards(response);
+        AssertDirectStatusApiCopies(directResponse);
+    }
+
+    private static void AssertDirectStatusApiCopies(ProxyStatusResponse directResponse)
+    {
+        AssertEx.Equal("primary", directResponse.Upstreams[0].UpstreamName);
+        AssertEx.Equal(ProxyListenerStateResponse.Active, directResponse.Listeners[0].State);
+        AssertEx.False(directResponse.Upstreams is ProxyUpstreamStatusResponse[], "Direct status API upstreams should not expose a mutable array.");
+        AssertEx.False(directResponse.Listeners is ProxyListenerStatusResponse[], "Direct status API listeners should not expose a mutable array.");
+    }
+
+    private static void AssertStatusApiConstructorNullGuards(ProxyStatusResponse response)
+    {
         AssertEx.Throws<ArgumentNullException>(() => new ProxyStatusResponse(listenerLive: true, listenerName: "main", endpoint: "127.0.0.1:18080", startedAt: DateTimeOffset.UnixEpoch, stoppedAt: null, lastError: null, isShuttingDown: false, shutdownStartedAtUtc: null, shutdownDeadlineUtc: null, configVersion: 7, configLoadedAtUtc: DateTimeOffset.UnixEpoch, configuredListeners: 1, configuredRoutes: 1, metrics: response.Metrics, upstreams: null!, listeners: [], lastListenerReload: response.LastListenerReload, http3: response.Http3, routeDiagnostics: response.RouteDiagnostics, configLint: response.ConfigLint, logPersistence: response.LogPersistence, readiness: response.Readiness, subsystems: response.Subsystems, runtimePreflight: response.RuntimePreflight));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyStatusResponse(listenerLive: true, listenerName: "main", endpoint: "127.0.0.1:18080", startedAt: DateTimeOffset.UnixEpoch, stoppedAt: null, lastError: null, isShuttingDown: false, shutdownStartedAtUtc: null, shutdownDeadlineUtc: null, configVersion: 7, configLoadedAtUtc: DateTimeOffset.UnixEpoch, configuredListeners: 1, configuredRoutes: 1, metrics: response.Metrics, upstreams: [], listeners: null!, lastListenerReload: response.LastListenerReload, http3: response.Http3, routeDiagnostics: response.RouteDiagnostics, configLint: response.ConfigLint, logPersistence: response.LogPersistence, readiness: response.Readiness, subsystems: response.Subsystems, runtimePreflight: response.RuntimePreflight));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyStatusResponse(listenerLive: true, listenerName: "main", endpoint: "127.0.0.1:18080", startedAt: DateTimeOffset.UnixEpoch, stoppedAt: null, lastError: null, isShuttingDown: false, shutdownStartedAtUtc: null, shutdownDeadlineUtc: null, configVersion: 7, configLoadedAtUtc: DateTimeOffset.UnixEpoch, configuredListeners: 1, configuredRoutes: 1, metrics: response.Metrics, upstreams: [], listeners: [], lastListenerReload: response.LastListenerReload, http3: null!, routeDiagnostics: response.RouteDiagnostics, configLint: response.ConfigLint, logPersistence: response.LogPersistence, readiness: response.Readiness, subsystems: response.Subsystems, runtimePreflight: response.RuntimePreflight));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatusResponse(routeName: "main", upstreamName: "primary", endpoint: "https://primary.internal", scheme: "https", tlsCertificateValidationEnabled: true, sniHost: "primary.internal", healthCheckEnabled: true, healthState: UpstreamHealthStateResponse.Healthy, lastHealthCheckResult: "status_200", lastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, consecutiveSuccesses: 2, consecutiveFailures: 0, selectedRequests: 11, requestFailures: 0, protocol: null!, weight: 1, circuitBreaker: CircuitBreakerStatusResponse.Disabled));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatusResponse(routeName: "main", upstreamName: "primary", endpoint: "https://primary.internal", scheme: "https", tlsCertificateValidationEnabled: true, sniHost: "primary.internal", healthCheckEnabled: true, healthState: UpstreamHealthStateResponse.Healthy, lastHealthCheckResult: "status_200", lastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, consecutiveSuccesses: 2, consecutiveFailures: 0, selectedRequests: 11, requestFailures: 0, protocol: RuntimeUpstreamProtocol.Http1, weight: 1, circuitBreaker: null!));
-        AssertEx.Equal("primary", directResponse.Upstreams[0].UpstreamName);
-        AssertEx.Equal(ProxyListenerStateResponse.Active, directResponse.Listeners[0].State);
-        AssertEx.False(directResponse.Upstreams is ProxyUpstreamStatusResponse[], "Direct status API upstreams should not expose a mutable array.");
-        AssertEx.False(directResponse.Listeners is ProxyListenerStatusResponse[], "Direct status API listeners should not expose a mutable array.");
+    }
+
+    private static void AssertStatusBusinessConstructorNullGuards(List<ProxyUpstreamStatus> upstreams)
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyStatus(listenerLive: true, listenerName: "main", endpoint: "127.0.0.1:18080", startedAt: DateTimeOffset.UnixEpoch, stoppedAt: null, lastError: null, isShuttingDown: false, shutdownStartedAtUtc: null, shutdownDeadlineUtc: null, configVersion: 7, configLoadedAtUtc: DateTimeOffset.UnixEpoch, configuredListeners: 1, configuredRoutes: 1, metrics: new ProxyMetrics().Snapshot(), upstreams: upstreams, listeners: null!, lastListenerReload: null, http3: UnknownHttp3(), routeDiagnostics: RouteDiagnosticsStatus.Enabled, configLint: ConfigLintStatus.Empty, logPersistence: ProxyLogPersistenceStatus.Unknown, readiness: ProxyReadinessStatus.Unknown, subsystems: ProxySubsystemSummaries.Unknown, runtimePreflight: ProxyRuntimePreflightStatus.Unknown));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyStatus(listenerLive: true, listenerName: "main", endpoint: "127.0.0.1:18080", startedAt: DateTimeOffset.UnixEpoch, stoppedAt: null, lastError: null, isShuttingDown: false, shutdownStartedAtUtc: null, shutdownDeadlineUtc: null, configVersion: 7, configLoadedAtUtc: DateTimeOffset.UnixEpoch, configuredListeners: 1, configuredRoutes: 1, metrics: new ProxyMetrics().Snapshot(), upstreams: [], listeners: [], lastListenerReload: null, http3: null!, routeDiagnostics: RouteDiagnosticsStatus.Enabled, configLint: ConfigLintStatus.Empty, logPersistence: ProxyLogPersistenceStatus.Unknown, readiness: ProxyReadinessStatus.Unknown, subsystems: ProxySubsystemSummaries.Unknown, runtimePreflight: ProxyRuntimePreflightStatus.Unknown));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatus(RouteName: null!, UpstreamName: "primary", Endpoint: "https://primary.internal", Scheme: "https", TlsCertificateValidationEnabled: true, SniHost: "primary.internal", HealthCheckEnabled: true, HealthState: UpstreamHealthState.Healthy, LastHealthCheckResult: "status_200", LastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, ConsecutiveSuccesses: 2, ConsecutiveFailures: 0, SelectedRequests: 11, RequestFailures: 0));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatus(RouteName: "main", UpstreamName: null!, Endpoint: "https://primary.internal", Scheme: "https", TlsCertificateValidationEnabled: true, SniHost: "primary.internal", HealthCheckEnabled: true, HealthState: UpstreamHealthState.Healthy, LastHealthCheckResult: "status_200", LastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, ConsecutiveSuccesses: 2, ConsecutiveFailures: 0, SelectedRequests: 11, RequestFailures: 0));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatus(RouteName: "main", UpstreamName: "primary", Endpoint: "https://primary.internal", Scheme: "https", TlsCertificateValidationEnabled: true, SniHost: "primary.internal", HealthCheckEnabled: true, HealthState: UpstreamHealthState.Healthy, LastHealthCheckResult: "status_200", LastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, ConsecutiveSuccesses: 2, ConsecutiveFailures: 0, SelectedRequests: 11, RequestFailures: 0, Protocol: null!, Weight: 1, CircuitBreaker: CircuitBreakerStatus.Disabled(CircuitBreakerPolicyInput.Disabled)));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyUpstreamStatus(RouteName: "main", UpstreamName: "primary", Endpoint: "https://primary.internal", Scheme: "https", TlsCertificateValidationEnabled: true, SniHost: "primary.internal", HealthCheckEnabled: true, HealthState: UpstreamHealthState.Healthy, LastHealthCheckResult: "status_200", LastHealthCheckAtUtc: DateTimeOffset.UnixEpoch, ConsecutiveSuccesses: 2, ConsecutiveFailures: 0, SelectedRequests: 11, RequestFailures: 0, Protocol: RuntimeUpstreamProtocol.Http1, Weight: 1, CircuitBreaker: null!));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyUpstreamStatusResponseMapper.FromStatuses(null!));
     }
 
     public static void StatusInputCopiesRuntimeUpstreamAndAcmeLists()
@@ -775,35 +790,37 @@ internal static class OperatorStatusTests
         AssertCircuitSummaryRejects(Open: -1);
         AssertCircuitSummaryRejects(HalfOpen: -1);
         AssertCircuitSummaryRejects(Closed: -1);
-        static void AssertListenerSummaryRejects(int Configured = 1, int Enabled = 1, int Active = 1, int Failed = 0, int Draining = 0, int Http1Enabled = 1, int Http2Enabled = 0, int Http3Enabled = 0, int QuicReady = 0)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyListenerSubsystemSummary(Configured, Enabled, Active, Failed, Draining, Http1Enabled, Http2Enabled, Http3Enabled, QuicReady));
-        }
 
-        static void AssertRouteSummaryRejects(int Sites = 1, int Routes = 1, int ProxyRoutes = 1, int GeneratedRoutes = 0, int CacheEnabledRoutes = 0)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyRouteSubsystemSummary(Sites, Routes, ProxyRoutes, GeneratedRoutes, CacheEnabledRoutes));
-        }
+    }
 
-        static void AssertUpstreamSummaryRejects(int Total = 1, int Healthy = 1, int Unhealthy = 0, int UnknownHealth = 0, int HealthChecksEnabled = 0)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyUpstreamSubsystemSummary(Total, Healthy, Unhealthy, UnknownHealth, HealthChecksEnabled));
-        }
+    private static void AssertListenerSummaryRejects(int Configured = 1, int Enabled = 1, int Active = 1, int Failed = 0, int Draining = 0, int Http1Enabled = 1, int Http2Enabled = 0, int Http3Enabled = 0, int QuicReady = 0)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyListenerSubsystemSummary(Configured, Enabled, Active, Failed, Draining, Http1Enabled, Http2Enabled, Http3Enabled, QuicReady));
+    }
 
-        static void AssertCertificateSummaryRejects(int Configured = 1, int Loaded = 1, int MissingReferences = 0, int Expired = 0, int NotYetValid = 0, int ExpiringSoon = 0)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCertificateSubsystemSummary(Configured, Loaded, MissingReferences, Expired, NotYetValid, ExpiringSoon, LastIssue: null));
-        }
+    private static void AssertRouteSummaryRejects(int Sites = 1, int Routes = 1, int ProxyRoutes = 1, int GeneratedRoutes = 0, int CacheEnabledRoutes = 0)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyRouteSubsystemSummary(Sites, Routes, ProxyRoutes, GeneratedRoutes, CacheEnabledRoutes));
+    }
 
-        static void AssertAcmeSummaryRejects(int Configured = 1, int Active = 1, int Failed = 0, int RenewalBackoff = 0)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyAcmeSubsystemSummary(Enabled: true, Configured, Active, Failed, RenewalBackoff, LastIssue: null));
-        }
+    private static void AssertUpstreamSummaryRejects(int Total = 1, int Healthy = 1, int Unhealthy = 0, int UnknownHealth = 0, int HealthChecksEnabled = 0)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyUpstreamSubsystemSummary(Total, Healthy, Unhealthy, UnknownHealth, HealthChecksEnabled));
+    }
 
-        static void AssertCircuitSummaryRejects(int Enabled = 1, int Open = 0, int HalfOpen = 0, int Closed = 1)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCircuitSubsystemSummary(Enabled, Open, HalfOpen, Closed));
-        }
+    private static void AssertCertificateSummaryRejects(int Configured = 1, int Loaded = 1, int MissingReferences = 0, int Expired = 0, int NotYetValid = 0, int ExpiringSoon = 0)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCertificateSubsystemSummary(Configured, Loaded, MissingReferences, Expired, NotYetValid, ExpiringSoon, LastIssue: null));
+    }
+
+    private static void AssertAcmeSummaryRejects(int Configured = 1, int Active = 1, int Failed = 0, int RenewalBackoff = 0)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyAcmeSubsystemSummary(Enabled: true, Configured, Active, Failed, RenewalBackoff, LastIssue: null));
+    }
+
+    private static void AssertCircuitSummaryRejects(int Enabled = 1, int Open = 0, int HalfOpen = 0, int Closed = 1)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCircuitSubsystemSummary(Enabled, Open, HalfOpen, Closed));
     }
 
     public static void StatusTextSubsystemSummariesRejectBlankOutputFacts()

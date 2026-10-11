@@ -3189,17 +3189,7 @@ internal static class ConfigurationTests
     internal static void WriteOperationalConfig(string dataDirectory, int clientRequestHeadTimeoutMs = 1000, int clientRequestBodyIdleTimeoutMs = 1000, int upstreamConnectTimeoutMs = 1000, int upstreamResponseHeadTimeoutMs = 1000, int upstreamResponseBodyIdleTimeoutMs = 1000, int downstreamWriteTimeoutMs = 1000, int tlsHandshakeTimeoutMs = 1000, int clientKeepAliveIdleTimeoutMs = 1000, int upstreamIdleConnectionLifetimeMs = 1000, int tunnelIdleTimeoutMs = 1000, int maxRequestsPerClientConnection = 100, int maxIdleUpstreamConnectionsPerUpstream = 16, int maxActiveUpgradedTunnels = 1024, bool accessLogEnabled = true, int recentDiagnosticsCapacity = 500, bool accessLogFileEnabled = true, bool adminAuditLogFileEnabled = true, long logMaxFileBytes = 1_048_576, int logMaxFiles = 8, int maxActiveClientConnections = 4096, int maxConcurrentTlsHandshakes = 128, int requestsPerMinutePerIp = 240, int upgradeRequestsPerMinutePerIp = 30, int maxRequestHeadBytes = 32768, int maxHeaderCount = 128, int maxHeaderLineBytes = 8192, long maxRequestBodyBytes = 104857600, int maxPathBytes = 8192, int shutdownGracePeriodSeconds = 15, bool forwardedHeadersEnabled = true, string[]? trustedProxies = null, string? certificateId = null, string? certificatePath = null, string? certificatePassword = null, string? certificatePasswordEnvironmentVariable = null)
     {
         var configDirectory = Directory.CreateDirectory(Path.Combine(dataDirectory, "config")).FullName;
-        var certificatesJson = certificateId is null ? "[]" : $$"""
-            [
-                {
-                  "id": "{{certificateId}}",
-                  "format": "pfx",
-                  "path": "{{certificatePath}}"
-                  {{(certificatePassword is null ? "" : $""","password": "{certificatePassword}" """)}}
-                  {{(certificatePasswordEnvironmentVariable is null ? "" : $""","passwordEnvironmentVariable": "{certificatePasswordEnvironmentVariable}" """)}}
-                }
-              ]
-            """;
+        var certificatesJson = CreateOperationalCertificatesJson(certificateId, certificatePath, certificatePassword, certificatePasswordEnvironmentVariable);
         var trustedProxiesJson = trustedProxies is null ? "[]" : "[" + string.Join(", ", trustedProxies.Select(static proxy => $@" ""{proxy}""")) + "]";
         File.WriteAllText(Path.Combine(configDirectory, "proxy.json"), $$"""
             {
@@ -3249,6 +3239,21 @@ internal static class ConfigurationTests
               "certificates": {{certificatesJson}}
             }
             """);
+    }
+
+    private static string CreateOperationalCertificatesJson(string? certificateId, string? certificatePath, string? certificatePassword, string? certificatePasswordEnvironmentVariable)
+    {
+        return certificateId is null ? "[]" : $$"""
+            [
+                {
+                  "id": "{{certificateId}}",
+                  "format": "pfx",
+                  "path": "{{certificatePath}}"
+                  {{(certificatePassword is null ? "" : $""","password": "{certificatePassword}" """)}}
+                  {{(certificatePasswordEnvironmentVariable is null ? "" : $""","passwordEnvironmentVariable": "{certificatePasswordEnvironmentVariable}" """)}}
+                }
+              ]
+            """;
     }
 
     private static ProxyConfigurationLoader CreateLoader(string dataDirectory, TimeProvider? timeProvider = null)

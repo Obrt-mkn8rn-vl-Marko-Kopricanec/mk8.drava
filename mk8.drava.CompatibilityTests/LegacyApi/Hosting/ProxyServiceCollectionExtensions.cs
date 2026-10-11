@@ -221,10 +221,7 @@ internal static partial class ProxyServiceCollectionExtensions
 
     private static void AddProxyAdministrationServices(this IServiceCollection services)
     {
-        services.AddSingleton<IProxyBackupFileSystem, ProxyBackupFileSystem>();
-        services.AddSingleton<ProxyBackupService>();
-        services.AddSingleton<IProxyBackupOperations>(static services => services.GetRequiredService<ProxyBackupService>());
-        services.AddSingleton<ProxyBackupAdministrationService>();
+        AddProxyBackupAdministrationServices(services);
         services.AddSingleton<IProxyConfigLintActiveConfigurationSource, ProxyConfigLintActiveConfigurationSource>();
         services.AddSingleton<IProxyConfigLintSubmittedConfigurationSource, ProxyConfigLintSubmittedConfigurationSource>();
         services.AddSingleton<IProxyConfigLintRuntimeStateSource, ProxyConfigLintRuntimeStateSource>();
@@ -262,6 +259,14 @@ internal static partial class ProxyServiceCollectionExtensions
         services.AddSingleton<IProxyAdminSecurityOptionsReader, ProxyAdminSecurityOptionsReader>();
         services.AddSingleton<IProxyAdminAuthenticationEventSink, AdminAuthenticationLogger>();
         services.AddSingleton<ProxyAdminAuthenticationService>();
+    }
+
+    private static void AddProxyBackupAdministrationServices(IServiceCollection services)
+    {
+        services.AddSingleton<IProxyBackupFileSystem, ProxyBackupFileSystem>();
+        services.AddSingleton<ProxyBackupService>();
+        services.AddSingleton<IProxyBackupOperations>(static services => services.GetRequiredService<ProxyBackupService>());
+        services.AddSingleton<ProxyBackupAdministrationService>();
     }
 
     private static void AddProxyMetricsAndLoggingServices(this IServiceCollection services)
