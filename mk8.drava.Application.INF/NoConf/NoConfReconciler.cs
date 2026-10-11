@@ -157,19 +157,40 @@ public sealed partial class NoConfReconciler : BackgroundService
         _compilationGate.Dispose();
     }
 
-    private void InvalidateChangedProofs(CompiledNoConfSnapshot applied, RegistryState state)
+    private void InvalidateChangedProofs(CompiledNoConfSnapshot applied, RegistryState state, bool retainUnchangedPublication = false)
     {
         var previous = Compiled;
         var oldTransports = new Dictionary<string, string>(StringComparer.Ordinal);
         if (previous is not null)
+        {
             foreach (var service in previous.Services.Values)
+            {
                 foreach (var upstream in service.Route.Upstreams)
                     if (upstream.Membership is { } identity) oldTransports.Add(identity.Partition, upstream.Identity);
+            }
+        }
+        var retained = new HashSet<string>(StringComparer.Ordinal);
         foreach (var service in applied.Services.Values)
+        {
+            var address = new PublishedServiceAddress(service.Route.Host, service.Route.PathPrefix);
             foreach (var upstream in service.Route.Upstreams)
-                if (upstream.Membership is { } identity && oldTransports.TryGetValue(identity.Partition, out var old) && !string.Equals(old, upstream.Identity, StringComparison.Ordinal))
+            {
+                if (upstream.Membership is not { } identity || !oldTransports.TryGetValue(identity.Partition, out var old)) continue;
+                if (!string.Equals(old, upstream.Identity, StringComparison.Ordinal))
+                {
                     _availability.InvalidateReadiness(identity);
-        foreach (var intent in state.Instances.Values) _availability.ClearPublication(intent.Identity);
+                }
+                else if (retainUnchangedPublication)
+                {
+                    var status = _availability.Status(identity);
+                    if (status.PublicationValid && status.Publication?.Address == address) retained.Add(identity.Partition);
+                }
+            }
+        }
+        // Membership churn does not change a retained destination's acknowledged address.
+        // Keep its original bounded proof without resetting either expiry clock.
+        foreach (var intent in state.Instances.Values)
+            if (!retained.Contains(intent.Identity.Partition)) _availability.ClearPublication(intent.Identity);
     }
 
     private async ValueTask ProbeAndPublishAsync(CancellationToken cancellationToken)
@@ -180,7 +201,9 @@ public sealed partial class NoConfReconciler : BackgroundService
         var work = new List<ProbeWork>();
         var retained = new HashSet<string>(StringComparer.Ordinal);
         foreach (var service in compiled.Services.Values)
+        {
             foreach (var upstream in service.Route.Upstreams)
+            {
                 if (upstream.Membership is { } identity && state.Instances.TryGetValue(identity.InstanceId, out var intent) && intent.Identity == identity)
                 {
                     var status = _availability.Status(identity);
@@ -188,6 +211,8 @@ public sealed partial class NoConfReconciler : BackgroundService
                     retained.Add(key);
                     if (status.LeaseValid && !intent.Draining) work.Add(new ProbeWork(intent, upstream, status.ReadinessGeneration, key));
                 }
+            }
+        }
         foreach (var key in _trackers.Keys)
             if (!retained.Contains(key)) _trackers.TryRemove(key, out _);
         await Parallel.ForEachAsync(work, new ParallelOptions { MaxDegreeOfParallelism = _runtimePolicy.MaximumConcurrentProbes, CancellationToken = cancellationToken },
@@ -207,7 +232,7 @@ public sealed partial class NoConfReconciler : BackgroundService
         var gateway = _gateway.ReadPublicationProof();
         if (gateway is null)
         {
-            PublishCurrent(work, compiled, new DestinationPublication(compiled.DesiredRevision, 0, false, false, _clock.GetUtcNow().AddSeconds(1)) { Address = address });
+            PublishCurrent(work, compiled, new DestinationPublication(compiled.DesiredRevision, 0, DnsVerified: false, CertificateVerified: false, _clock.GetUtcNow().AddSeconds(1)) { Address = address });
             return;
         }
         var dns = await _dns.VerifyAsync(address.Host, cancellationToken).ConfigureAwait(false);

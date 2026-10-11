@@ -11,7 +11,9 @@ internal sealed class DevelopmentSiteClient : IDisposable
     private readonly SocketsHttpHandler _handler;
     private readonly X509Certificate2? _enrollment;
     private int _observedNoDelay = -1;
+    private int _connectedSockets;
     public bool? ObservedTcpNoDelay => Volatile.Read(ref _observedNoDelay) switch { 0 => false, 1 => true, _ => null };
+    public int ConnectedSockets => Volatile.Read(ref _connectedSockets);
     public HttpClient Client { get; }
 
     public DevelopmentSiteClient(string rootPath, int port, string host, string? enrollmentPath = null, bool? tcpNoDelay = null)
@@ -30,13 +32,14 @@ internal sealed class DevelopmentSiteClient : IDisposable
                     if (tcpNoDelay is { } noDelay) socket.NoDelay = noDelay;
                     Volatile.Write(ref _observedNoDelay, socket.NoDelay ? 1 : 0);
                     await socket.ConnectAsync(new IPEndPoint(IPAddress.Loopback, port), token).ConfigureAwait(false);
+                    Interlocked.Increment(ref _connectedSockets);
                     return new NetworkStream(socket, ownsSocket: true);
                 }
                 catch { socket.Dispose(); throw; }
             },
         };
-        if (_enrollment is not null) _handler.SslOptions.ClientCertificates = new X509CertificateCollection { _enrollment };
-        Client = new HttpClient(_handler, disposeHandler: false) { BaseAddress = new Uri($"https://{host}:{port}"), Timeout = TimeSpan.FromSeconds(10), DefaultRequestVersion = HttpVersion.Version20, DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact };
+        if (_enrollment is not null) _handler.SslOptions.ClientCertificates = [_enrollment];
+        Client = new HttpClient(_handler, disposeHandler: false) { BaseAddress = new UriBuilder("https", host, port).Uri, Timeout = TimeSpan.FromSeconds(10), DefaultRequestVersion = HttpVersion.Version20, DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact };
     }
 
     internal bool ValidateServer(object sender, X509Certificate? certificate, X509Chain? existingChain, SslPolicyErrors errors)

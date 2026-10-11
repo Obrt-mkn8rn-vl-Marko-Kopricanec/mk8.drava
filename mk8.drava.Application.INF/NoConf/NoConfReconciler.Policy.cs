@@ -124,7 +124,7 @@ public sealed partial class NoConfReconciler
             }
             var snapshot = candidate.Snapshot.WithVersion(checked(_version + 1));
             var applied = new CompiledNoConfSnapshot(candidate.DesiredRevision, snapshot, candidate.Services);
-            InvalidateChangedProofs(applied, state);
+            InvalidateChangedProofs(applied, state, retainUnchangedPublication: string.Equals(_policyHash, policy.Digest, StringComparison.Ordinal));
             _store.Replace(snapshot);
             _version = snapshot.Version;
             _policyHash = policy.Digest;
