@@ -8,6 +8,7 @@ namespace Mk8.Drava.Application.DAL.Storage;
 public static partial class PrivateOwnerFile
 {
     public static FileStream AcquireLease(string path) => Open(path, lease: true);
+    public static FileStream OpenRead(string path) => Open(path, lease: false);
 
     public static byte[] Read(string path, int minimumBytes, int maximumBytes)
     {
@@ -24,8 +25,10 @@ public static partial class PrivateOwnerFile
     {
         PrivateCertificateFile.ValidatePath(path);
         if (OperatingSystem.IsWindows())
+        {
             return new FileStream(path, lease ? FileMode.OpenOrCreate : FileMode.Open, lease ? FileAccess.ReadWrite : FileAccess.Read,
                 lease ? FileShare.None : FileShare.Read);
+        }
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Private owner files require the qualified Windows or Linux profile.");
         return OpenLinux(path, lease);
     }
@@ -53,7 +56,9 @@ public static partial class PrivateOwnerFile
         if (ReadStatus(handle, "", 0x1000, mask, out var status) != 0 || (status.Mask & mask) != mask ||
             (status.Mode & 0xF000) != 0x8000 || status.Owner != GetEffectiveUserId() ||
             (lease ? (status.Mode & 0xFFF) != 0x180 : (status.Mode & 0xFFF) is not (0x100 or 0x180)))
+        {
             throw new InvalidDataException("Private file must be a regular file owned by the consuming identity with mode0400/0600; writers require0600.");
+        }
     }
 
     private static IOException NativeFailure(string message) => new(message, new Win32Exception(Marshal.GetLastPInvokeError()));

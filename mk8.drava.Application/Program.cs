@@ -21,6 +21,11 @@ internal static class Program
 {
     public static async Task Main(string[] args)
     {
+        if (Recovery.RegistryRecoveryCommand.Recognizes(args))
+        {
+            await Recovery.RegistryRecoveryCommand.RunAsync(args, CancellationToken.None).ConfigureAwait(false);
+            return;
+        }
         if (args.Length == 2 && string.Equals(args[0], "--initialize-site", StringComparison.Ordinal) && Path.IsPathFullyQualified(args[1]))
         {
             var fingerprint = await Installation.SiteInitializer.InitializeAsync(args[1], CancellationToken.None).ConfigureAwait(false);
@@ -41,9 +46,14 @@ internal static class Program
         }
         if (args.Length != 2 || !string.Equals(args[0], "--bootstrap", StringComparison.Ordinal) || !Path.IsPathFullyQualified(args[1]))
             throw new ArgumentException("Use --bootstrap with an absolute Application bootstrap file.", nameof(args));
+        await RunApplicationAsync(args[1]).ConfigureAwait(false);
+    }
+
+    private static async Task RunApplicationAsync(string bootstrapPath)
+    {
         using var startup = new ApplicationStartupProgress();
         startup.Enter(ApplicationStartupPhase.BootstrapRead);
-        var bootstrap = await BootstrapFile.LoadAsync<ApplicationBootstrap>(args[1], CancellationToken.None).ConfigureAwait(false);
+        var bootstrap = await BootstrapFile.LoadAsync<ApplicationBootstrap>(bootstrapPath, CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
         startup.Enter(ApplicationStartupPhase.PrivateStateOpen);
         var privateState = await PrivateApplicationState.OpenAsync(bootstrap, CancellationToken.None).ConfigureAwait(false);
