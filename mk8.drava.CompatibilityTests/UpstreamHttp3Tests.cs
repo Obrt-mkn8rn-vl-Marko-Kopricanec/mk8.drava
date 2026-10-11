@@ -535,118 +535,24 @@ internal static class UpstreamHttp3Tests
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var requests = new ConcurrentQueue<Http3UpstreamObservation>();
         var connectionTasks = new ConcurrentBag<Task>();
+        var state = new ReusableHttp3FixtureState();
+        return await CoordinateReusableHttp3RequestsAsync(listener, stop, requests, connectionTasks, state, requestCount, responseHeaders, responseBody, holdResponsesUntilAllRequestsRead, sendGoAwayAfterFirstRequest, responseDelay, resetFirstStreamBeforeResponse, closeConnectionAfterFirstRequest, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<ReusableHttp3UpstreamObservation> CoordinateReusableHttp3RequestsAsync(DevelopmentOwnedQuicListener listener, CancellationTokenSource stop, ConcurrentQueue<Http3UpstreamObservation> requests, ConcurrentBag<Task> connectionTasks, ReusableHttp3FixtureState state, int requestCount, IReadOnlyList<(string Name, string Value)> responseHeaders, byte[] responseBody, bool holdResponsesUntilAllRequestsRead, bool sendGoAwayAfterFirstRequest, TimeSpan? responseDelay, bool resetFirstStreamBeforeResponse, bool closeConnectionAfterFirstRequest, CancellationToken cancellationToken)
+    {
         Task<QuicConnection>? pendingAccept = null;
-        var completed = 0;
-        var read = 0;
-        var connections = 0;
         var allCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var allRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resetCanRun = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var goAwaySent = 0;
-        var resetSent = 0;
-        var closeSent = 0;
-        async Task HandleStreamAsync(QuicConnection connection, QuicStream stream, CancellationToken streamStop, ConcurrentBag<QuicStream> controls)
-        {
-            await using var ownedStream = stream.ConfigureAwait(false);
-            var observation = await ReadRequestAsync(stream, streamStop).ConfigureAwait(false);
-            requests.Enqueue(observation);
-            var resetThisStream = resetFirstStreamBeforeResponse && Interlocked.Exchange(ref resetSent, 1) == 0;
-            if (sendGoAwayAfterFirstRequest && Interlocked.Exchange(ref goAwaySent, 1) == 0)
-            {
-                controls.Add(await SendGoAwayAsync(connection, streamStop).ConfigureAwait(false));
-            }
+        Task HandleStreamAsync(QuicConnection connection, QuicStream stream, CancellationToken streamStop, ConcurrentBag<QuicStream> controls) =>
+            HandleReusableHttp3StreamAsync(connection, stream, controls, requests, state, requestCount, responseHeaders, responseBody, holdResponsesUntilAllRequestsRead, sendGoAwayAfterFirstRequest, responseDelay, resetFirstStreamBeforeResponse, closeConnectionAfterFirstRequest, allCompleted, allRead, resetCanRun, streamStop);
 
-            if (Interlocked.Increment(ref read) >= requestCount)
-            {
-                allRead.TrySetResult();
-            }
 
-            if (holdResponsesUntilAllRequestsRead)
-            {
-                await allRead.Task.WaitAsync(streamStop).ConfigureAwait(false);
-            }
-
-            if (resetThisStream)
-            {
-                if (requestCount > 1)
-                {
-                    await resetCanRun.Task.WaitAsync(streamStop).ConfigureAwait(false);
-                }
-
-                stream.Abort(QuicAbortDirection.Write, 0x100);
-                if (Interlocked.Increment(ref completed) >= requestCount)
-                {
-                    allCompleted.TrySetResult();
-                }
-
-                return;
-            }
-
-            if (closeConnectionAfterFirstRequest && Interlocked.Exchange(ref closeSent, 1) == 0)
-            {
-                await connection.CloseAsync(0x100, streamStop).ConfigureAwait(false);
-                if (Interlocked.Increment(ref completed) >= requestCount)
-                {
-                    allCompleted.TrySetResult();
-                }
-
-                return;
-            }
-
-            if (responseDelay.HasValue)
-            {
-                await Task.Delay(responseDelay.Value, streamStop).ConfigureAwait(false);
-            }
-
-            await WriteResponseAsync(stream, 200, responseHeaders, responseBody, malformedResponseHeaders: false, closeAfterHeaders: false, cancellationToken: streamStop).ConfigureAwait(false);
-            resetCanRun.TrySetResult();
-            if (Interlocked.Increment(ref completed) >= requestCount)
-            {
-                allCompleted.TrySetResult();
-            }
-        }
-
-        async Task HandleConnectionAsync(QuicConnection connection)
-        {
-            await using var ownedConnection = connection.ConfigureAwait(false);
-            using var connectionStop = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
-            List<Task> children = [];
-            var controls = new ConcurrentBag<QuicStream>();
-            try
-            {
-                while (!connectionStop.IsCancellationRequested)
-                {
-                    var stream = await connection.AcceptInboundStreamAsync(connectionStop.Token).ConfigureAwait(false);
-                    children.Add(ObserveAsync(async () =>
-                    {
-                        if (stream.Type == QuicStreamType.Bidirectional)
-                        {
-                            await HandleStreamAsync(connection, stream, connectionStop.Token, controls).ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            await DrainAsync(stream, connectionStop.Token).ConfigureAwait(false);
-                        }
-                    }));
-                }
-            }
-            finally
-            {
-                await connectionStop.CancelAsync().ConfigureAwait(false);
-                try
-                {
-                    await Task.WhenAll(children).ConfigureAwait(false);
-                }
-                finally
-                {
-                    foreach (var control in controls) await control.DisposeAsync().ConfigureAwait(false);
-                }
-            }
-        }
 
         try
         {
-            while (Volatile.Read(ref completed) < requestCount)
+            while (Volatile.Read(ref state.Completed) < requestCount)
             {
                 pendingAccept = listener.AcceptConnectionAsync(stop.Token).AsTask();
                 var completedTask = await Task.WhenAny(pendingAccept, allCompleted.Task).ConfigureAwait(false);
@@ -657,8 +563,8 @@ internal static class UpstreamHttp3Tests
 
                 var connection = await pendingAccept.ConfigureAwait(false);
                 pendingAccept = null;
-                Interlocked.Increment(ref connections);
-                var task = ObserveAsync(() => HandleConnectionAsync(connection));
+                Interlocked.Increment(ref state.Connections);
+                var task = ObserveAsync(async () => await HandleReusableHttp3ConnectionAsync(connection, stop, HandleStreamAsync).ConfigureAwait(false));
                 connectionTasks.Add(task);
             }
 
@@ -689,7 +595,116 @@ internal static class UpstreamHttp3Tests
             }
         }
 
-        return new ReusableHttp3UpstreamObservation(connections, requests.ToArray());
+        return new ReusableHttp3UpstreamObservation(state.Connections, requests.ToArray());
+    }
+
+    private static async Task HandleReusableHttp3StreamAsync(QuicConnection connection, QuicStream stream, ConcurrentBag<QuicStream> controls, ConcurrentQueue<Http3UpstreamObservation> requests, ReusableHttp3FixtureState state, int requestCount, IReadOnlyList<(string Name, string Value)> responseHeaders, byte[] responseBody, bool holdResponsesUntilAllRequestsRead, bool sendGoAwayAfterFirstRequest, TimeSpan? responseDelay, bool resetFirstStreamBeforeResponse, bool closeConnectionAfterFirstRequest, TaskCompletionSource allCompleted, TaskCompletionSource allRead, TaskCompletionSource resetCanRun, CancellationToken streamStop)
+    {
+        await using var ownedStream = stream.ConfigureAwait(false);
+        var observation = await ReadRequestAsync(stream, streamStop).ConfigureAwait(false);
+        requests.Enqueue(observation);
+        var resetThisStream = resetFirstStreamBeforeResponse && Interlocked.Exchange(ref state.ResetSent, 1) == 0;
+        if (sendGoAwayAfterFirstRequest && Interlocked.Exchange(ref state.GoAwaySent, 1) == 0)
+        {
+            controls.Add(await SendGoAwayAsync(connection, streamStop).ConfigureAwait(false));
+        }
+
+        if (Interlocked.Increment(ref state.Read) >= requestCount)
+        {
+            allRead.TrySetResult();
+        }
+
+        if (holdResponsesUntilAllRequestsRead)
+        {
+            await allRead.Task.WaitAsync(streamStop).ConfigureAwait(false);
+        }
+
+        if (resetThisStream)
+        {
+            if (requestCount > 1)
+            {
+                await resetCanRun.Task.WaitAsync(streamStop).ConfigureAwait(false);
+            }
+
+            stream.Abort(QuicAbortDirection.Write, 0x100);
+            if (Interlocked.Increment(ref state.Completed) >= requestCount)
+            {
+                allCompleted.TrySetResult();
+            }
+
+            return;
+        }
+
+        if (closeConnectionAfterFirstRequest && Interlocked.Exchange(ref state.CloseSent, 1) == 0)
+        {
+            await connection.CloseAsync(0x100, streamStop).ConfigureAwait(false);
+            if (Interlocked.Increment(ref state.Completed) >= requestCount)
+            {
+                allCompleted.TrySetResult();
+            }
+
+            return;
+        }
+
+        if (responseDelay.HasValue)
+        {
+            await Task.Delay(responseDelay.Value, streamStop).ConfigureAwait(false);
+        }
+
+        await WriteResponseAsync(stream, 200, responseHeaders, responseBody, malformedResponseHeaders: false, closeAfterHeaders: false, cancellationToken: streamStop).ConfigureAwait(false);
+        resetCanRun.TrySetResult();
+        if (Interlocked.Increment(ref state.Completed) >= requestCount)
+        {
+            allCompleted.TrySetResult();
+        }
+    }
+
+    private static async Task HandleReusableHttp3ConnectionAsync(QuicConnection connection, CancellationTokenSource stop, Func<QuicConnection, QuicStream, CancellationToken, ConcurrentBag<QuicStream>, Task> handleStream)
+    {
+        await using var ownedConnection = connection.ConfigureAwait(false);
+        using var connectionStop = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+        List<Task> children = [];
+        var controls = new ConcurrentBag<QuicStream>();
+        try
+        {
+            while (!connectionStop.IsCancellationRequested)
+            {
+                var stream = await connection.AcceptInboundStreamAsync(connectionStop.Token).ConfigureAwait(false);
+                children.Add(ObserveAsync(async () =>
+                {
+                    if (stream.Type == QuicStreamType.Bidirectional)
+                    {
+                        await handleStream(connection, stream, connectionStop.Token, controls).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await DrainAsync(stream, connectionStop.Token).ConfigureAwait(false);
+                    }
+                }));
+            }
+        }
+        finally
+        {
+            await connectionStop.CancelAsync().ConfigureAwait(false);
+            try
+            {
+                await Task.WhenAll(children).ConfigureAwait(false);
+            }
+            finally
+            {
+                foreach (var control in controls) await control.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    private sealed class ReusableHttp3FixtureState
+    {
+        public int Completed;
+        public int Read;
+        public int Connections;
+        public int GoAwaySent;
+        public int ResetSent;
+        public int CloseSent;
     }
 
     private static async Task ObserveAsync(Func<Task> operation)
