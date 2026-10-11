@@ -35,7 +35,11 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
     public Task PlainFrontendToVerifiedTlsOriginIsolatesIncomingTlsAsync() =>
         RunVerifiedUploadAsync(expectContinue: false, tcpNoDelay: null, frontTls: false);
 
-    private async Task RunVerifiedUploadAsync(bool expectContinue, bool? tcpNoDelay, bool frontTls = true)
+    [Fact]
+    public Task TlsFrontendToPlainOriginIsolatesOutgoingTlsAsync() =>
+        RunVerifiedUploadAsync(expectContinue: false, tcpNoDelay: true, originTls: false);
+
+    private async Task RunVerifiedUploadAsync(bool expectContinue, bool? tcpNoDelay, bool frontTls = true, bool originTls = true)
     {
         const long bodyBytes = 30L * 1024 * 1024;
         const string rawTarget = "/container/mail/a%2Fb.bin?sig=a%2Bb%2Fc%3D&spr=https";
@@ -49,11 +53,11 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         var upstream = await DevelopmentHttpUpstream.StartAsync(async context =>
         {
             await ValidateUploadAsync(context, bodyBytes, rawTarget, count => Interlocked.Exchange(ref receivedBytes, count),
-                () => Volatile.Write(ref headersValidated, 1)).ConfigureAwait(false);
+                () => Volatile.Write(ref headersValidated, 1), requireHttps: originTls).ConfigureAwait(false);
             Interlocked.Increment(ref completed);
-        }, certificates.Leaf, names.Enqueue).ConfigureAwait(true);
+        }, originTls ? certificates.Leaf : null, names.Enqueue).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
-        var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true, verifiedUpstreamTls: tls).ConfigureAwait(true);
+        var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true, verifiedUpstreamTls: originTls ? tls : null).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         using var client = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.TlsPort, "svc.site.test", tcpNoDelay: tcpNoDelay);
         using var content = new DevelopmentRepeatedBodyContent(bodyBytes);
@@ -72,14 +76,15 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
             Assert.Equal("\"development-etag\"", response.Headers.ETag?.Tag);
             Assert.Equal(1, Volatile.Read(ref completed));
-            Assert.Contains("backend.drava.invalid", names, StringComparer.Ordinal);
+            if (originTls) Assert.Contains("backend.drava.invalid", names, StringComparer.Ordinal);
+            else Assert.Empty(names);
         }
         finally
         {
             // This is a bounded counter snapshot before fixture teardown, not a settled-origin completion claim.
-            _output.WriteLine("expect_continue={0}; expected_bytes={1}; client_written_bytes={2}; origin_read_bytes={3}; origin_headers_validated={4}; origin_completed={5}; sni_observations={6}; send_elapsed_ms={7}; actual_tcp_no_delay={8}; front_tls={9}",
+            _output.WriteLine("expect_continue={0}; expected_bytes={1}; client_written_bytes={2}; origin_read_bytes={3}; origin_headers_validated={4}; origin_completed={5}; sni_observations={6}; send_elapsed_ms={7}; actual_tcp_no_delay={8}; front_tls={9}; origin_tls={10}",
                 expectContinue, bodyBytes, content.SerializedBytes, Interlocked.Read(ref receivedBytes), Volatile.Read(ref headersValidated),
-                Volatile.Read(ref completed), names.Count, watch.Elapsed.TotalMilliseconds, client.ObservedTcpNoDelay, frontTls);
+                Volatile.Read(ref completed), names.Count, watch.Elapsed.TotalMilliseconds, client.ObservedTcpNoDelay, frontTls, originTls);
         }
     }
 
@@ -168,9 +173,9 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static async Task ValidateUploadAsync(HttpContext context, long bodyBytes, string rawTarget, Action<long> observeBodyBytes, Action observeHeaders)
+    private static async Task ValidateUploadAsync(HttpContext context, long bodyBytes, string rawTarget, Action<long> observeBodyBytes, Action observeHeaders, bool requireHttps = true)
     {
-        Assert.True(context.Request.IsHttps);
+        Assert.Equal(requireHttps, context.Request.IsHttps);
         Assert.Equal("PUT", context.Request.Method);
         Assert.Equal("svc.site.test", context.Request.Host.Value);
         Assert.Equal(rawTarget, context.Features.Get<IHttpRequestFeature>()?.RawTarget);
