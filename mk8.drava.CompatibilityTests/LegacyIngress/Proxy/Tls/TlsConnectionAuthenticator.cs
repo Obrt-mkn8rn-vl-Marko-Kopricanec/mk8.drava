@@ -93,6 +93,7 @@ internal sealed partial class TlsConnectionAuthenticator
             await sslStream.DisposeAsync().ConfigureAwait(false);
             return null;
         }
+        #pragma warning disable CA1031 // Reject an unexpected handshake fault, record failure, dispose the rejected TLS stream, and retain connection isolation.
         catch (Exception exception)
         {
             _metrics.TlsHandshakeFailed();
@@ -103,6 +104,7 @@ internal sealed partial class TlsConnectionAuthenticator
             await sslStream.DisposeAsync().ConfigureAwait(false);
             return null;
         }
+        #pragma warning restore CA1031
     }
 
     private System.Security.Cryptography.X509Certificates.X509Certificate2? SelectCertificateForHandshake(ProxyConfigurationSnapshot snapshot, RuntimeListener listener, string? hostName)

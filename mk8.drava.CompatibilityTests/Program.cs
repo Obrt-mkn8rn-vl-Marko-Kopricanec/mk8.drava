@@ -48,7 +48,9 @@ if (options.CheckMetadata)
         return;
     }
 
+    #pragma warning disable CA1303 // Fixed machine-readable metadata CLI banner; localization would change the retained command output contract.
     Console.WriteLine("Test metadata integrity check passed.");
+    #pragma warning restore CA1303
     foreach (var category in TestTaxonomy.Categories)
     {
         var count = tests.Count(test => test.Categories.Contains(category));
@@ -80,6 +82,7 @@ foreach (var test in selectedTests)
         await test.Run().ConfigureAwait(false);
         Console.WriteLine($"PASS {test.Name}");
     }
+    #pragma warning disable CA1031 // Record every case exception and raw stack, continue remaining cases, and return failing runner status.
     catch (Exception exception)
     {
         failures++;
@@ -87,6 +90,7 @@ foreach (var test in selectedTests)
         await Console.Error.WriteLineAsync($"FAIL {test.Name}").ConfigureAwait(false);
         await Console.Error.WriteLineAsync(exception.ToString()).ConfigureAwait(false);
     }
+    #pragma warning restore CA1031
 }
 
 WriteCorrectnessSummary(options, tests.Length, selectedTests.Length, failures, failureNames);

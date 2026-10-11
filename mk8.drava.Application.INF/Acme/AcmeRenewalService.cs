@@ -31,6 +31,7 @@ public sealed partial class AcmeRenewalService : BackgroundService
             {
                 return;
             }
+            #pragma warning disable CA1031 // Observe unexpected check failure through the warning logger while retaining the configured periodic retry and independent host lifetime.
             catch (Exception exception)
             {
                 if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
@@ -38,6 +39,7 @@ public sealed partial class AcmeRenewalService : BackgroundService
                     LogACMERenewalCheckFailedUnexpectedly10003(_logger, exception);
                 }
             }
+            #pragma warning restore CA1031
 
             var delay = ResolveDelay();
             try

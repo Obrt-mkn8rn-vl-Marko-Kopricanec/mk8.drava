@@ -94,6 +94,7 @@ internal static class PerformanceSmokeRunner
                     failureDomains.Add(result.Domain);
                 }
             }
+            #pragma warning disable CA1031 // Record every domain exception as correctness failure and continue the requested domain inventory.
             catch (Exception exception)
             {
                 failures++;
@@ -101,6 +102,7 @@ internal static class PerformanceSmokeRunner
                 await Console.Error.WriteLineAsync($"FAIL Performance {domain}: correctness failure before threshold evaluation.").ConfigureAwait(false);
                 await Console.Error.WriteLineAsync(exception.ToString()).ConfigureAwait(false);
             }
+            #pragma warning restore CA1031
         }
 
         return failures;
