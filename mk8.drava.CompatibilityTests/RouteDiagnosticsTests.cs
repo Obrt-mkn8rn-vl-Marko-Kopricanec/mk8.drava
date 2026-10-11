@@ -1019,17 +1019,22 @@ internal static class RouteDiagnosticsTests
         AssertEx.Equal("tls", request.ListenerName);
         AssertEx.Equal("HTTP3", request.Protocol);
         AssertEx.False(request.Headers is Dictionary<string, string?>, "Route diagnostics dry-run request headers should not expose a mutable dictionary.");
+        AssertRouteDiagnosticsRequestConstructorGuards(accepted.Input.RequestHead);
+    }
+
+    private static void AssertRouteDiagnosticsRequestConstructorGuards(ProxyRouteDiagnosticsRequestHead requestHead)
+    {
         AssertEx.Throws<ArgumentNullException>(() => new RouteMatchDryRunRequest(null!, "diag.test", null, "GET", "/", "", NoHeaders(), null, null));
         AssertEx.Throws<ArgumentNullException>(() => new RouteMatchDryRunRequest("http", null!, null, "GET", "/", "", NoHeaders(), null, null));
         AssertEx.Throws<ArgumentNullException>(() => new RouteMatchDryRunRequest("http", "diag.test", null, null!, "/", "", NoHeaders(), null, null));
         AssertEx.Throws<ArgumentNullException>(() => new RouteMatchDryRunRequest("http", "diag.test", null, "GET", null!, "", NoHeaders(), null, null));
         AssertEx.Throws<ArgumentNullException>(() => new RouteMatchDryRunRequest("http", "diag.test", null, "GET", "/", "", null!, null, null));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput(null!, null, null, null, "/", "/", accepted.Input.RequestHead, false, []));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, null!, "/", accepted.Input.RequestHead, false, []));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, "/", null!, accepted.Input.RequestHead, false, []));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput(null!, null, null, null, "/", "/", requestHead, false, []));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, null!, "/", requestHead, false, []));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, "/", null!, requestHead, false, []));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, "/", "/", null!, false, []));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, "/", "/", accepted.Input.RequestHead, false, null!));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, "/", "/", accepted.Input.RequestHead, false, [null!]));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, "/", "/", requestHead, false, null!));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestInput("http", null, null, null, "/", "/", requestHead, false, [null!]));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestHead(null!, "/", "/", "HTTP/1.1", "diag.test", ProxyRouteDiagnosticsRequestFraming.None, []));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestHead("GET", null!, "/", "HTTP/1.1", "diag.test", ProxyRouteDiagnosticsRequestFraming.None, []));
         AssertEx.Throws<ArgumentNullException>(() => new ProxyRouteDiagnosticsRequestHead("GET", "/", null!, "HTTP/1.1", "diag.test", ProxyRouteDiagnosticsRequestFraming.None, []));

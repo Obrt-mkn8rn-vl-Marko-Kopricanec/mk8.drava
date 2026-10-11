@@ -281,77 +281,14 @@ internal static class UpstreamHttp2Tests
 
             var requestHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             using var requestBody = new MemoryStream();
-            var streamId = 1;
-            await WriteFrameAsync(stream, Http2TestFrameType.Settings, 0, 0, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
-            while (true)
-            {
-                var frame = await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false);
-                if (frame.Type == Http2TestFrameType.Settings)
-                {
-                    if ((frame.Flags & Http2TestFlags.Ack) == 0)
-                    {
-                        await WriteFrameAsync(stream, Http2TestFrameType.Settings, Http2TestFlags.Ack, 0, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    continue;
-                }
-
-                if (frame.Type == Http2TestFrameType.Headers)
-                {
-                    streamId = frame.StreamId;
-                    foreach (ref var header in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(DecodeHeaders(frame.Payload.ToArray())))
-                    {
-                        requestHeaders[header.Name] = header.Value;
-                    }
-
-                    if ((frame.Flags & Http2TestFlags.EndStream) != 0)
-                    {
-                        break;
-                    }
-
-                    continue;
-                }
-
-                if (frame.Type == Http2TestFrameType.Data)
-                {
-                    requestBody.Write(frame.Payload.Span);
-                    if ((frame.Flags & Http2TestFlags.EndStream) != 0)
-                    {
-                        break;
-                    }
-                }
-            }
-
+            var streamId = await ReadHttp2RequestFramesAsync(stream, requestHeaders, requestBody, cancellationToken).ConfigureAwait(false);
             var observation = new Http2UpstreamObservation(stream.NegotiatedApplicationProtocol, requestHeaders, requestBody.ToArray(), null);
             if (closeBeforeResponseHeaders)
             {
                 return observation;
             }
 
-            var block = EncodeResponseHeaders(statusCode, responseHeaders);
-            await WriteFrameAsync(stream, Http2TestFrameType.Headers, responseBody.Length == 0 ? (byte)(Http2TestFlags.EndHeaders | Http2TestFlags.EndStream) : Http2TestFlags.EndHeaders, streamId, block, cancellationToken).ConfigureAwait(false);
-            if (closeAfterResponseHeaders)
-            {
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                return observation;
-            }
-
-            if (responseBody.Length > 0)
-            {
-                await WriteFrameAsync(stream, Http2TestFrameType.Data, Http2TestFlags.EndStream, streamId, responseBody, cancellationToken).ConfigureAwait(false);
-            }
-
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            var closeBuffer = new byte[1];
-            try
-            {
-                _ = await stream.ReadAsync(closeBuffer, cancellationToken).ConfigureAwait(false);
-            }
-            catch (IOException)
-            {
-            }
-
-            return observation;
+            return await SendHttp2FixtureResponseAsync(stream, streamId, statusCode, responseHeaders, responseBody, observation, closeAfterResponseHeaders, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)when (exception is AuthenticationException or IOException)
         {
@@ -361,6 +298,80 @@ internal static class UpstreamHttp2Tests
         {
             listener.Stop();
         }
+    }
+
+    private static async Task<Http2UpstreamObservation> SendHttp2FixtureResponseAsync(SslStream stream, int streamId, int statusCode, IReadOnlyList<(string Name, string Value)> responseHeaders, byte[] responseBody, Http2UpstreamObservation observation, bool closeAfterResponseHeaders, CancellationToken cancellationToken)
+    {
+        var block = EncodeResponseHeaders(statusCode, responseHeaders);
+        await WriteFrameAsync(stream, Http2TestFrameType.Headers, responseBody.Length == 0 ? (byte)(Http2TestFlags.EndHeaders | Http2TestFlags.EndStream) : Http2TestFlags.EndHeaders, streamId, block, cancellationToken).ConfigureAwait(false);
+        if (closeAfterResponseHeaders)
+        {
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return observation;
+        }
+
+        if (responseBody.Length > 0)
+        {
+            await WriteFrameAsync(stream, Http2TestFrameType.Data, Http2TestFlags.EndStream, streamId, responseBody, cancellationToken).ConfigureAwait(false);
+        }
+
+        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        var closeBuffer = new byte[1];
+        try
+        {
+            _ = await stream.ReadAsync(closeBuffer, cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+        }
+
+        return observation;
+    }
+
+    private static async Task<int> ReadHttp2RequestFramesAsync(SslStream stream, Dictionary<string, string> requestHeaders, MemoryStream requestBody, CancellationToken cancellationToken)
+    {
+        var streamId = 1;
+        await WriteFrameAsync(stream, Http2TestFrameType.Settings, 0, 0, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
+        while (true)
+        {
+            var frame = await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false);
+            if (frame.Type == Http2TestFrameType.Settings)
+            {
+                if ((frame.Flags & Http2TestFlags.Ack) == 0)
+                {
+                    await WriteFrameAsync(stream, Http2TestFrameType.Settings, Http2TestFlags.Ack, 0, ReadOnlyMemory<byte>.Empty, cancellationToken).ConfigureAwait(false);
+                }
+
+                continue;
+            }
+
+            if (frame.Type == Http2TestFrameType.Headers)
+            {
+                streamId = frame.StreamId;
+                foreach (ref var header in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(DecodeHeaders(frame.Payload.ToArray())))
+                {
+                    requestHeaders[header.Name] = header.Value;
+                }
+
+                if ((frame.Flags & Http2TestFlags.EndStream) != 0)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            if (frame.Type == Http2TestFrameType.Data)
+            {
+                requestBody.Write(frame.Payload.Span);
+                if ((frame.Flags & Http2TestFlags.EndStream) != 0)
+                {
+                    break;
+                }
+            }
+        }
+
+        return streamId;
     }
 
     private static RuntimeRoute Route(IReadOnlyList<RuntimeUpstream> upstreams)
