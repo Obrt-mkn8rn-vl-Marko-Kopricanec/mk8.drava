@@ -18,22 +18,26 @@ internal sealed class DevelopmentHttpUpstream : IAsyncDisposable
     private DevelopmentHttpUpstream(WebApplication application, int port) { _application = application; Port = port; }
 
     public static async Task<DevelopmentHttpUpstream> StartAsync(RequestDelegate handler, X509Certificate2? certificate = null, Action<string?>? onSni = null, DravaRegistrationOptions? registration = null, bool http2 = false, bool websockets = false,
-        Action<Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions>? configureListener = null)
+        Action<Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions>? configureListener = null, long? maximumRequestBufferBytes = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
-        builder.WebHost.ConfigureKestrel(options => options.Listen(System.Net.IPAddress.Loopback, 0, listener =>
+        builder.WebHost.ConfigureKestrel(options =>
         {
-            if (http2) listener.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
-            if (certificate is not null) listener.UseHttps(https => https.ServerCertificateSelector = (_, name) => { onSni?.Invoke(name); return certificate; });
-            configureListener?.Invoke(listener);
-        }));
+            if (maximumRequestBufferBytes is { } maximum) options.Limits.MaxRequestBufferSize = maximum;
+            options.Listen(System.Net.IPAddress.Loopback, 0, listener =>
+            {
+                if (http2) listener.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
+                if (certificate is not null) listener.UseHttps(https => https.ServerCertificateSelector = (_, name) => { onSni?.Invoke(name); return certificate; });
+                configureListener?.Invoke(listener);
+            });
+        });
         if (registration is not null) builder.Services.AddDravaRegistration(registration);
         var application = builder.Build();
         try
         {
             if (websockets) application.UseWebSockets();
             application.Run(handler);
-            await application.StartAsync().ConfigureAwait(false);
+            await application.StartAsync(CancellationToken.None).ConfigureAwait(false);
             var addresses = application.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()
                 ?? throw new InvalidOperationException("Development upstream has no bound addresses.");
             var address = addresses.Addresses.First();
@@ -44,9 +48,9 @@ internal sealed class DevelopmentHttpUpstream : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await _application.StopAsync().ConfigureAwait(false);
+        await _application.StopAsync(CancellationToken.None).ConfigureAwait(false);
         await _application.DisposeAsync().ConfigureAwait(false);
     }
 
-    public Task StopAsync() => _application.StopAsync();
+    public Task StopAsync() => _application.StopAsync(CancellationToken.None);
 }

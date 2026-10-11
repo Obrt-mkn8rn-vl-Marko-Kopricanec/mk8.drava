@@ -143,6 +143,53 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FrameworkTlsClientDirectOriginIsolatesGatewayInputAsync(bool gatewaySizedBuffer)
+    {
+        // Synthetic direct Kestrel control; the 64KiB row matches Gateway's existing buffer.
+        const long bodyBytes = 30L * 1024 * 1024;
+        const string rawTarget = "/container/mail/a%2Fb.bin?sig=a%2Bb%2Fc%3D&spr=https";
+        using var directory = new RegistryStateDirectory();
+        using var certificates = DevelopmentUpstreamTrustCertificates.Create(host: "svc.site.test");
+        var root = Path.Combine(directory.Path, "direct-root.cer");
+        await File.WriteAllBytesAsync(root, certificates.Root.RawData, CancellationToken.None).ConfigureAwait(true);
+        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        var names = new ConcurrentQueue<string?>();
+        long received = 0;
+        var completed = 0;
+        var upstream = await DevelopmentHttpUpstream.StartAsync(async context =>
+        {
+            await ValidateUploadAsync(context, bodyBytes, rawTarget, count => Interlocked.Exchange(ref received, count), static () => { }).ConfigureAwait(false);
+            Interlocked.Increment(ref completed);
+        }, certificates.Leaf, names.Enqueue, maximumRequestBufferBytes: gatewaySizedBuffer ? 64 * 1024 : null).ConfigureAwait(true);
+        await using var lifetime = upstream.ConfigureAwait(true);
+        using var client = new DevelopmentSiteClient(root, upstream.Port, "svc.site.test", tcpNoDelay: true);
+        using var content = new DevelopmentRepeatedBodyContent(bodyBytes);
+        using var request = new HttpRequestMessage(HttpMethod.Put, new Uri(rawTarget, UriKind.Relative)) { Content = content };
+        request.Headers.Host = "svc.site.test";
+        request.Headers.ExpectContinue = false;
+        request.Headers.Add("Authorization", "SharedKey synthetic:development-signature");
+        request.Headers.Add("x-ms-version", "2026-06-06");
+        request.Headers.IfNoneMatch.ParseAdd("*");
+        var watch = Stopwatch.StartNew();
+        try
+        {
+            using var response = await client.Client.SendAsync(request).ConfigureAwait(true);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            Assert.Equal("\"development-etag\"", response.Headers.ETag?.Tag);
+            Assert.Equal(bodyBytes, Interlocked.Read(ref received));
+            Assert.Equal(1, Volatile.Read(ref completed));
+            Assert.Contains("svc.site.test", names, StringComparer.Ordinal);
+        }
+        finally
+        {
+            _output.WriteLine("framework_direct_tls=true; gateway_sized_buffer={0}; expected_bytes={1}; client_written_bytes={2}; origin_read_bytes={3}; origin_completed={4}; elapsed_ms={5}",
+                gatewaySizedBuffer, bodyBytes, content.SerializedBytes, Interlocked.Read(ref received), Volatile.Read(ref completed), watch.Elapsed.TotalMilliseconds);
+        }
+    }
+
     [Fact]
     public async Task AHostnameMismatchNeverReachesTheBusinessHandlerAcrossBothProcessesAsync()
     {
