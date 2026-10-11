@@ -1,6 +1,8 @@
 using Grpc.Core;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Transport.Clients;
 using Mk8.Drava.Transport.Protocol.V1;
@@ -13,11 +15,17 @@ public sealed class GatewayProxy : IDisposable
     private readonly ApplicationChannel _channel;
     private readonly GatewayBootstrap _bootstrap;
     private readonly SemaphoreSlim _admission;
+    private readonly ILogger<GatewayUpload> _uploadLogger;
 
     public GatewayProxy(ApplicationChannel channel, GatewayBootstrap bootstrap)
+        : this(channel, bootstrap, NullLogger<GatewayUpload>.Instance) { }
+
+    public GatewayProxy(ApplicationChannel channel, GatewayBootstrap bootstrap, ILogger<GatewayUpload> uploadLogger)
     {
         ArgumentNullException.ThrowIfNull(channel);
         ArgumentNullException.ThrowIfNull(bootstrap);
+        ArgumentNullException.ThrowIfNull(uploadLogger);
+        _uploadLogger = uploadLogger;
         _channel = channel;
         _bootstrap = bootstrap;
         _admission = new SemaphoreSlim(bootstrap.MaxConcurrentExchanges, bootstrap.MaxConcurrentExchanges);
@@ -55,7 +63,7 @@ public sealed class GatewayProxy : IDisposable
         using var call = client.Exchange(_channel.Credentials, cancellationToken: context.RequestAborted);
         using var writer = new ExchangeClientWriter(call.RequestStream, _bootstrap.StreamWindowFrames, context.RequestAborted);
         await writer.WriteAsync(new ExchangeFrame { Request = head }, context.RequestAborted).ConfigureAwait(false);
-        using var upload = new GatewayUpload(context, writer, maximumBodyBytes, _bootstrap.FrameBytes) { Upgrade = upgrade };
+        using var upload = new GatewayUpload(context, writer, maximumBodyBytes, _bootstrap.FrameBytes, _uploadLogger) { Upgrade = upgrade };
         var send = upload.SendAsync(head.HasBody);
         var receive = new GatewayResponse(context, call.ResponseStream, writer, upload, () => upload.StopAsync(send)) { Upgrade = upgrade }.ReceiveAsync();
         try

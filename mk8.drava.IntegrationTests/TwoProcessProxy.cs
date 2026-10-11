@@ -83,17 +83,19 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         Ipc = ipc;
         _application = application;
         _gateway = gateway;
-        Client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}/"), Timeout = TimeSpan.FromSeconds(15) };
+        Client = new HttpClient { BaseAddress = new UriBuilder("http", IPAddress.Loopback.ToString(), port).Uri, Timeout = TimeSpan.FromSeconds(15) };
         Client.DefaultRequestHeaders.Host = "app.test";
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null, DevelopmentFlowTimeoutSettings? flowTimeouts = null)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null, DevelopmentFlowTimeoutSettings? flowTimeouts = null, bool observeUploadTiming = false)
     {
         if (upstreamHttp2 && upstreamHttp3) throw new ArgumentException("Development upstream protocol must be unambiguous.", nameof(upstreamHttp3));
         if (flowTimeouts is not null && (!manualRoute || upstreamHttp2 || upstreamHttp3 || verifiedUpstreamTls is not null ||
             manualCache || routeBodyLimit is not null || responseHeadTimeoutMs is not null))
+        {
             throw new ArgumentException("Development flow settings own two HTTP/1 manual routes and cannot replace overlapping configurations.", nameof(flowTimeouts));
+        }
         var directory = Path.Combine(Path.GetTempPath(), "drava_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var state = Directory.CreateDirectory(Path.Combine(directory, "app")).FullName;
@@ -115,9 +117,10 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         DevelopmentProcess? gateway = null;
         try
         {
-            gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), gatewayPath);
+            gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), gatewayPath, environment: observeUploadTiming
+                ? new Dictionary<string, string>(StringComparer.Ordinal) { ["Logging__LogLevel__Mk8.Drava.Presentation.Proxy.GatewayUpload"] = "Debug" } : null);
             var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { TlsPort = tlsPort, RegistrationPort = registrationPort, ManagementPort = managementPort,
-                EnrolledNodeId = relayNode ? "remote" : "local", NodeRelayAddress = relayAddress ?? "127.0.0.1" };
+                EnrolledNodeId = relayNode ? "remote" : "local", NodeRelayAddress = relayAddress ?? "127.0.0.1", };
             try { await result.WaitUntilBoundAsync().ConfigureAwait(false); return result; }
             catch { result.Client.Dispose(); throw; }
         }
@@ -161,16 +164,19 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var applicationBootstrap = new ApplicationBootstrap { SiteId = "development", NodeId = "local", StateDirectory = state, Listen = ipc, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, AdministratorTokenPath = administratorPath, Controller = controller };
         var gatewayBootstrap = new GatewayBootstrap { SiteId = "development", StateDirectory = gatewayState, Application = ipc, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, RegistrationPort = registrationPort, DiscoveryEnabled = discovery, Plan = lifecycleSettings.Gateway, EnrollmentRootFingerprint = controller?.EnrollmentRootFingerprint ?? "", RequestBodyLimits = requestBodyLimits ?? [] };
         var sites = Directory.CreateDirectory(Path.Combine(state, "config", "sites")).FullName;
-        if (manualRoute) await File.WriteAllTextAsync(Path.Combine(sites, "service.json"), JsonSerializer.Serialize(new
+        if (manualRoute)
         {
-            name = "test", host, listeners = new[] { new { name = "http", address = "127.0.0.1", port } },
-            pathPrefix = "/", upstreams = new[] { new { name = "test", address = "127.0.0.1", port = upstreamPort,
-                scheme = upstreamHttp2 || upstreamHttp3 || verifiedUpstreamTls is not null ? "https" : "http", protocol = upstreamHttp2 ? "http2" : upstreamHttp3 ? "http3" : "http1",
-                upstreamTls = new { validateCertificate = verifiedUpstreamTls?.ValidateCertificate ?? (!upstreamHttp2 && !upstreamHttp3),
-                    sniHost = verifiedUpstreamTls?.SniHost ?? (upstreamHttp2 || upstreamHttp3 ? "upstream.test" : ""), trustedRoot = verifiedUpstreamTls?.TrustedRoot } } },
-            overrides = new { maxRequestBodyBytes = routeBodyLimit, upstreamResponseHeadTimeoutMs = responseHeadTimeoutMs },
-            cache = new { enabled = manualCache, maxEntryBytes = 4096, maxTotalBytes = 8192, defaultTtlSeconds = 60, respectOriginCacheControl = true },
-        })).ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Combine(sites, "service.json"), JsonSerializer.Serialize(new
+            {
+                name = "test", host, listeners = new[] { new { name = "http", address = "127.0.0.1", port } },
+                pathPrefix = "/", upstreams = new[] { new { name = "test", address = "127.0.0.1", port = upstreamPort,
+                    scheme = upstreamHttp2 || upstreamHttp3 || verifiedUpstreamTls is not null ? "https" : "http", protocol = upstreamHttp2 ? "http2" : upstreamHttp3 ? "http3" : "http1",
+                    upstreamTls = new { validateCertificate = verifiedUpstreamTls?.ValidateCertificate ?? (!upstreamHttp2 && !upstreamHttp3),
+                        sniHost = verifiedUpstreamTls?.SniHost ?? (upstreamHttp2 || upstreamHttp3 ? "upstream.test" : ""), trustedRoot = verifiedUpstreamTls?.TrustedRoot, }, }, },
+                overrides = new { maxRequestBodyBytes = routeBodyLimit, upstreamResponseHeadTimeoutMs = responseHeadTimeoutMs },
+                cache = new { enabled = manualCache, maxEntryBytes = 4096, maxTotalBytes = 8192, defaultTtlSeconds = 60, respectOriginCacheControl = true },
+            })).ConfigureAwait(false);
+        }
         if (flowTimeouts is not null)
             await WriteFlowSettingsAsync(state, sites, host, port, upstreamPort, flowTimeouts).ConfigureAwait(false);
         var applicationPath = Path.Combine(directory, "application.json");
@@ -212,9 +218,15 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     private static string LocalRelayAddress()
     {
         foreach (var network in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+        {
             if (network.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
+            {
                 foreach (var unicast in network.GetIPProperties().UnicastAddresses)
+                {
                     if (unicast.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(unicast.Address) && !unicast.Address.Equals(IPAddress.Any)) return unicast.Address.ToString();
+                }
+            }
+        }
         throw new InvalidOperationException("Logical remote-node validation requires an active local IPv4 LAN interface.");
     }
 

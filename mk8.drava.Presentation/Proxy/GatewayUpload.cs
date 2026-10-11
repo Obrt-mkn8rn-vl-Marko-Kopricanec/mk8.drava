@@ -2,12 +2,15 @@ using Google.Protobuf;
 using Grpc.Core;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics;
 using Mk8.Drava.Transport.Protocol;
 using Mk8.Drava.Transport.Protocol.V1;
 
 namespace Mk8.Drava.Presentation.Proxy;
 
-public sealed class GatewayUpload : IDisposable
+public sealed partial class GatewayUpload : IDisposable
 {
     private readonly HttpContext _context;
     private readonly IClientStreamWriter<ExchangeFrame> _writer;
@@ -16,11 +19,17 @@ public sealed class GatewayUpload : IDisposable
     private readonly TaskCompletionSource _allowed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _stop;
     private readonly BodyDigest _digest = new();
+    private readonly ILogger<GatewayUpload> _logger;
 
     public GatewayUpload(HttpContext context, IClientStreamWriter<ExchangeFrame> writer, long maximumBytes, int frameBytes)
+        : this(context, writer, maximumBytes, frameBytes, NullLogger<GatewayUpload>.Instance) { }
+
+    public GatewayUpload(HttpContext context, IClientStreamWriter<ExchangeFrame> writer, long maximumBytes, int frameBytes, ILogger<GatewayUpload> logger)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
         _context = context;
         _writer = writer;
         _maximumBytes = maximumBytes;
@@ -62,13 +71,39 @@ public sealed class GatewayUpload : IDisposable
     private async Task SendBytesAsync(Stream source, bool boundedBody, CancellationToken cancellationToken)
     {
         var buffer = new byte[_frameBytes];
-        while (true)
+        var observe = _logger.IsEnabled(LogLevel.Debug);
+        long readTicks = 0, writeTicks = 0, frames = 0, smallFrames = 0;
+        var maximumFrame = 0;
+        var endOfStream = false;
+        try
         {
-            var count = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            if (count == 0) return;
-            _digest.Append(buffer.AsSpan(0, count));
-            if (boundedBody && _digest.Bytes > (ulong)_maximumBytes) throw new BadHttpRequestException("Gateway request body limit exceeded.", StatusCodes.Status413PayloadTooLarge);
-            await _writer.WriteAsync(new ExchangeFrame { Data = new DataFrame { Payload = ByteString.CopyFrom(buffer, 0, count) } }, cancellationToken).ConfigureAwait(false);
+            while (true)
+            {
+                var started = observe ? Stopwatch.GetTimestamp() : 0;
+                int count;
+                try { count = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false); }
+                finally { if (observe) readTicks += Stopwatch.GetTimestamp() - started; }
+                if (count == 0) { endOfStream = true; return; }
+                _digest.Append(buffer.AsSpan(0, count));
+                if (boundedBody && _digest.Bytes > (ulong)_maximumBytes) throw new BadHttpRequestException("Gateway request body limit exceeded.", StatusCodes.Status413PayloadTooLarge);
+                started = observe ? Stopwatch.GetTimestamp() : 0;
+                try { await _writer.WriteAsync(new ExchangeFrame { Data = new DataFrame { Payload = ByteString.CopyFrom(buffer, 0, count) } }, cancellationToken).ConfigureAwait(false); }
+                finally { if (observe) writeTicks += Stopwatch.GetTimestamp() - started; }
+                if (observe)
+                {
+                    frames++;
+                    if (count < 16 * 1024) smallFrames++;
+                    maximumFrame = Math.Max(maximumFrame, count);
+                }
+            }
+        }
+        finally
+        {
+            if (observe)
+            {
+                LogUploadCounters(_logger, _context.Request.IsHttps, _digest.Bytes, frames, smallFrames, maximumFrame, endOfStream);
+                LogUploadTiming(_logger, 1000d * readTicks / Stopwatch.Frequency, 1000d * writeTicks / Stopwatch.Frequency);
+            }
         }
     }
 
