@@ -1,3 +1,4 @@
+using Mk8.Drava.Application.BLL.ControlPlane.Observability;
 using Mk8.Drava.Application.BLL.Http;
 using Mk8.Drava.Application.BLL.ControlPlane.Headers;
 using Mk8.Drava.Application.BLL.ControlPlane.Forwarding;
@@ -24,26 +25,18 @@ using Mk8.Drava.Application.DAL.Observability;
 using Mk8.Drava.Application.INF.Observability;
 
 namespace Mk8.Drava.Application.INF.Proxy.Forwarding;
-public sealed partial class ProxyForwarder
+public sealed partial class ProxyForwarder(UpstreamConnectionPool upstreamConnections, Http3UpstreamConnectionPool http3UpstreamConnections, ProxyMetrics metrics, HopByHopHeaderPolicy headerPolicy, ResponseCacheStore cacheStore, Http3AltSvcPolicy altSvcPolicy, ILogger<ProxyForwarder> logger)
 {
-    private readonly UpstreamConnectionPool _upstreamConnections;
-    private readonly Http3UpstreamConnectionPool _http3UpstreamConnections;
-    private readonly ProxyMetrics _metrics;
-    private readonly HopByHopHeaderPolicy _headerPolicy;
-    private readonly ResponseCacheStore _cacheStore;
-    private readonly Http3AltSvcPolicy _altSvcPolicy;
-    private readonly ILogger<ProxyForwarder> _logger;
-    public ProxyForwarder(UpstreamConnectionPool upstreamConnections, Http3UpstreamConnectionPool http3UpstreamConnections, ProxyMetrics metrics, HopByHopHeaderPolicy headerPolicy, ResponseCacheStore cacheStore, Http3AltSvcPolicy altSvcPolicy, ILogger<ProxyForwarder> logger)
-    {
-        _upstreamConnections = upstreamConnections;
-        _http3UpstreamConnections = http3UpstreamConnections;
-        _metrics = metrics;
-        _headerPolicy = headerPolicy;
-        _cacheStore = cacheStore;
-        _altSvcPolicy = altSvcPolicy;
-        _logger = logger;
-    }
+    private readonly UpstreamConnectionPool _upstreamConnections = upstreamConnections;
+    private readonly Http3UpstreamConnectionPool _http3UpstreamConnections = http3UpstreamConnections;
+    private readonly ProxyMetrics _metrics = metrics;
+    private readonly HopByHopHeaderPolicy _headerPolicy = headerPolicy;
+    private readonly ResponseCacheStore _cacheStore = cacheStore;
+    private readonly Http3AltSvcPolicy _altSvcPolicy = altSvcPolicy;
+    private readonly ILogger<ProxyForwarder> _logger = logger;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060", Justification = "The copied public forwarding signature and named limits argument are retained for source/binary compatibility; MdravaProxyExchangeExecutor supplies context.Limits after pipeline admission.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "RCS1163", Justification = "Duplicate unused-parameter suggestion: removing the copied public limits parameter would change the forwarding contract and existing caller shape.")]
     public async ValueTask<ForwardingResult> ForwardAsync(Stream clientStream, Http1HeadReadResult requestHeadRead, Http1RequestHead requestHead, RuntimeRoute route, RuntimeUpstream upstream, RuntimeListener listener, RuntimeTimeouts timeouts, RuntimeConnectionLimits connectionLimits, RuntimeLimits limits, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, bool preferClientKeepAlive, string requestId, CancellationToken cancellationToken, bool suppressGeneratedFailureResponse = false)
     {
         ArgumentNullException.ThrowIfNull(upstream);
@@ -127,7 +120,8 @@ public sealed partial class ProxyForwarder
         _metrics.UpstreamSucceeded();
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
         {
-            LogProxiedToUpstream10013(_logger, requestHead.Method, requestHead.Target, upstream.Name, null);
+            var targetPath = RequestDiagnosticTarget.PathOnly(requestHead.Target);
+            LogProxiedToUpstream10013(_logger, requestHead.Method, targetPath, upstream.Name, exception: null);
         }
         return ForwardingResult.Success(responseStarted, responseResult.KeepClientConnectionOpen, responseResult.StatusCode);
     }
@@ -210,14 +204,14 @@ public sealed partial class ProxyForwarder
         Task UploadAsync(CancellationToken token) => endRequestStream ? Task.CompletedTask
             : RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts,
                 route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp2.SendDataAsync,
-                (fields, readTimeouts, cancellation) => upstreamHttp2.SendHeadersAsync(fields, true, readTimeouts, cancellation), token).AsTask();
+                (fields, readTimeouts, cancellation) => upstreamHttp2.SendHeadersAsync(fields, endStream: true, readTimeouts, cancellation), token).AsTask();
         Task<ResponseForwardingResult> ResponseAsync(CancellationToken token, Action<int>? finalHead) =>
             ForwardHttp2ResponseAsync(upstreamHttp2, clientStream, requestHead, route, listener, timeouts, upstreamTarget,
                 preferClientKeepAlive, requestId, suppressRetryableStatusResponse, markResponseStarted, finalHead, token).AsTask();
         if (clientStream is ExchangeClientStream duplex)
             return await ForwardFramedDuplexAsync(duplex, requestHead.Method, UploadAsync, ResponseAsync, cancellationToken).ConfigureAwait(false);
         await UploadAsync(cancellationToken).ConfigureAwait(false);
-        return await ResponseAsync(cancellationToken, null).ConfigureAwait(false);
+        return await ResponseAsync(cancellationToken, finalHead: null).ConfigureAwait(false);
     }
 
     private async ValueTask<ResponseForwardingResult> ForwardHttp3Async(Stream clientStream, Http1HeadReadResult requestHeadRead, Http1RequestHead requestHead, RuntimeRoute route, RuntimeUpstream upstream, RuntimeListener listener, RuntimeTimeouts timeouts, RuntimeConnectionLimits connectionLimits, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, bool preferClientKeepAlive, string requestId, bool suppressRetryableStatusResponse, Http1BodyReader? preReadRequestBodyReader, byte[]? preReadChunkLine, Action markResponseStarted, CancellationToken cancellationToken)
@@ -232,14 +226,14 @@ public sealed partial class ProxyForwarder
         Task UploadAsync(CancellationToken token) => endRequestStream ? Task.CompletedTask
             : RelayFramedUpstreamRequestBodyAsync(clientStream, requestHeadRead.InitialBodyBytes, requestHead, listener, timeouts,
                 route.ResolvedOptions.MaxRequestBodyBytes, preReadRequestBodyReader, preReadChunkLine, upstreamHttp3.SendDataAsync,
-                (fields, readTimeouts, cancellation) => upstreamHttp3.SendHeadersAsync(fields, true, readTimeouts, cancellation), token).AsTask();
+                (fields, readTimeouts, cancellation) => upstreamHttp3.SendHeadersAsync(fields, endStream: true, readTimeouts, cancellation), token).AsTask();
         Task<ResponseForwardingResult> ResponseAsync(CancellationToken token, Action<int>? finalHead) =>
             ForwardHttp3ResponseAsync(upstreamHttp3, clientStream, requestHead, route, listener, timeouts, upstreamTarget,
                 preferClientKeepAlive, requestId, suppressRetryableStatusResponse, markResponseStarted, finalHead, token).AsTask();
         if (clientStream is ExchangeClientStream duplex)
             return await ForwardFramedDuplexAsync(duplex, requestHead.Method, UploadAsync, ResponseAsync, cancellationToken).ConfigureAwait(false);
         await UploadAsync(cancellationToken).ConfigureAwait(false);
-        return await ResponseAsync(cancellationToken, null).ConfigureAwait(false);
+        return await ResponseAsync(cancellationToken, finalHead: null).ConfigureAwait(false);
     }
 
 
@@ -402,11 +396,12 @@ public sealed partial class ProxyForwarder
         var length = new FramedUpstreamBodyLength(responseHead.Framing);
         if (endStream)
         {
-            length.Observe(0, true);
-            return new BufferedFramedBody([], null);
+            length.Observe(0, endStream: true);
+            return new BufferedFramedBody([], Trailers: null);
         }
 
-        using var body = new MemoryStream();
+        var body = new MemoryStream();
+        await using var bodyLifetime = body.ConfigureAwait(false);
         while (true)
         {
             var chunk = await readDataAsync(timeouts, cancellationToken).ConfigureAwait(false);
@@ -449,7 +444,7 @@ public sealed partial class ProxyForwarder
         var length = new FramedUpstreamBodyLength(responseHead.Framing);
         if (endStream)
         {
-            length.Observe(0, true);
+            length.Observe(0, endStream: true);
             return;
         }
 
@@ -547,11 +542,15 @@ public sealed partial class ProxyForwarder
             else if (requestHead.Framing.Kind == Http1BodyKind.Chunked)
             {
                 if (Http1UpstreamContentLength(requestHead) is not null)
+                {
                     await RelayChunkedBodyToFramedUpstreamAsync(reader,
-                        (data, _, policy, token) => WriteHttp1PayloadAsync(upstreamStream, data, policy, token),
-                        listener, timeouts, preReadChunkLine, maxRequestBodyBytes, RejectFixedHttp1TrailersAsync, cancellationToken).ConfigureAwait(false);
+                                        (data, _, policy, token) => WriteHttp1PayloadAsync(upstreamStream, data, policy, token),
+                                        listener, timeouts, preReadChunkLine, maxRequestBodyBytes, RejectFixedHttp1TrailersAsync, cancellationToken).ConfigureAwait(false);
+                }
                 else
+                {
                     await RelayChunkedBodyAsync(reader, upstreamStream, listener, timeouts.DownstreamWriteTimeout, preReadChunkLine, maxRequestBodyBytes, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
         catch
@@ -682,7 +681,7 @@ public sealed partial class ProxyForwarder
 
     private static ResponseForwardingResult CreateRetrySuppressedResult(int statusCode)
     {
-        return new ResponseForwardingResult(false, false, false, statusCode, SuppressedForRetry: true);
+        return new ResponseForwardingResult(ResponseStarted: false, KeepClientConnectionOpen: false, CanReuseUpstreamConnection: false, statusCode, SuppressedForRetry: true);
     }
 
     private void RecordUncacheableFraming(RuntimeCachePolicy policy, Http1ResponseHead responseHead)
@@ -702,7 +701,8 @@ public sealed partial class ProxyForwarder
         }
 
         var contentLength = responseHead.Framing.ContentLength.GetValueOrDefault();
-        using var body = new MemoryStream((int)Math.Min(contentLength, int.MaxValue));
+        var body = new MemoryStream((int)Math.Min(contentLength, int.MaxValue));
+        await using var bodyLifetime = body.ConfigureAwait(false);
         var remaining = contentLength;
         var buffer = ArrayPool<byte>.Shared.Rent(listener.ForwardingBufferBytes);
         try
@@ -738,7 +738,7 @@ public sealed partial class ProxyForwarder
             }
             else if (responseHead.Framing.Kind == Http1BodyKind.Chunked)
             {
-                await RelayChunkedBodyAsync(reader, clientStream, listener, timeouts.DownstreamWriteTimeout, null, null, cancellationToken).ConfigureAwait(false);
+                await RelayChunkedBodyAsync(reader, clientStream, listener, timeouts.DownstreamWriteTimeout, initialChunkLine: null, maxPayloadBytes: null, cancellationToken).ConfigureAwait(false);
             }
             else if (responseHead.Framing.Kind == Http1BodyKind.CloseDelimited)
             {

@@ -1,17 +1,18 @@
+using Mk8.Drava.Application.BLL.ControlPlane.Observability;
+
 namespace Mk8.Drava.Application.BLL.ControlPlane.RequestDiagnostics;
-public sealed class RecentRequestDiagnosticsStore : IProxyRequestDiagnosticsSource
+public sealed class RecentRequestDiagnosticsStore(IProxyRequestDiagnosticsMetricsSink metrics) : IProxyRequestDiagnosticsSource
 {
     public const int MaximumReadLimit = 500;
-    private readonly IProxyRequestDiagnosticsMetricsSink _metrics;
+    private readonly IProxyRequestDiagnosticsMetricsSink _metrics = metrics;
     private readonly Lock _gate = new();
     private readonly LinkedList<ProxyRecentRequestDiagnosticEvent> _events = new();
-    public RecentRequestDiagnosticsStore(IProxyRequestDiagnosticsMetricsSink metrics)
-    {
-        _metrics = metrics;
-    }
 
     public void Add(ProxyRecentRequestDiagnosticEvent diagnostic, int capacity)
     {
+        ArgumentNullException.ThrowIfNull(diagnostic);
+        var path = RequestDiagnosticTarget.PathOnly(diagnostic.Target);
+        if (!ReferenceEquals(path, diagnostic.Target)) diagnostic = diagnostic with { Target = path };
         lock (_gate)
         {
             var boundedCapacity = Math.Max(1, capacity);

@@ -13,6 +13,30 @@ internal sealed class DevelopmentHttp1Peer : IDisposable
 
     public DevelopmentHttp1Peer() => _listener.Start();
 
+    public async Task<string> RespondOnceAndCaptureHeadAsync(string response, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        using var client = await _listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
+        Interlocked.Increment(ref _connections);
+        var stream = client.GetStream();
+        var head = new MemoryStream();
+        await using var headLifetime = head.ConfigureAwait(false);
+        var one = new byte[1];
+        var ending = 0u;
+        while (head.Length < 32768)
+        {
+            if (await stream.ReadAsync(one, cancellationToken).ConfigureAwait(false) == 0)
+                throw new EndOfStreamException("Development origin request head is incomplete.");
+            head.WriteByte(one[0]);
+            ending = (ending << 8) | one[0];
+            if (ending != 0x0d0a0d0a) continue;
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(response), cancellationToken).ConfigureAwait(false);
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return Encoding.ASCII.GetString(head.GetBuffer(), 0, checked((int)head.Length));
+        }
+        throw new InvalidDataException("Development origin request head is oversized.");
+    }
+
     public async Task RespondTwiceAsync(string firstResponse, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(firstResponse);

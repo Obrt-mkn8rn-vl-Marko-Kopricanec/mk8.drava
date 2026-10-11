@@ -47,14 +47,17 @@ internal static class Program
         await using var lifetime = app.ConfigureAwait(false);
         MapPresentation(app, bootstrap, enrolled);
         startup.Enter(GatewayStartupPhase.ListenerStart);
-        await app.StartAsync().ConfigureAwait(false);
+        await app.StartAsync(CancellationToken.None).ConfigureAwait(false);
         startup.Complete();
         var advertisement = enrolled && bootstrap.DiscoveryEnabled ? TryAdvertise(bootstrap, app.Logger) : null;
-        if (advertisement is null) await app.WaitForShutdownAsync().ConfigureAwait(false);
+        if (advertisement is null)
+        {
+            await app.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
+        }
         else
         {
             await using var discoveryLifetime = advertisement.ConfigureAwait(false);
-            await app.WaitForShutdownAsync().ConfigureAwait(false);
+            await app.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -62,6 +65,9 @@ internal static class Program
         GatewayMaterialState material, bool enrolled)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+        // Structured proxy access events provide the safe path. Framework request
+        // start/finish events also print QueryString and must not duplicate them.
+        builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
         builder.Services.AddSingleton(bootstrap);
         builder.Services.AddSingleton(channel);
         builder.Services.AddSingleton<GatewayProxy>();
@@ -79,6 +85,7 @@ internal static class Program
         return builder;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "ASP0018", Justification = "The catch-all selects all public paths including filenames; GatewayProxy consumes the raw target from HttpContext rather than binding the route capture. The default nonfile fallback would break Blob object paths.")]
     private static void MapPresentation(WebApplication app, GatewayBootstrap bootstrap, bool enrolled)
     {
         app.Use((context, next) =>
@@ -133,30 +140,38 @@ internal static class Program
             options.Limits.MaxRequestBufferSize = 64 * 1024;
             options.Limits.MaxResponseBufferSize = 64 * 1024;
             if (bootstrap.HttpPort > 0)
+            {
                 options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.HttpPort, listener =>
                 {
                     listener.Protocols = HttpProtocols.Http1;
                     GatewayInformationalResponses.Configure(listener);
                 });
+            }
+
             if (bootstrap.EnrollmentRootFingerprint.Length == 0) return;
             if (bootstrap.HttpsPort > 0)
+            {
                 options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.HttpsPort, listener =>
                 {
                     listener.Protocols = HttpProtocols.Http1AndHttp2;
                     ConfigureTls(listener, material, bootstrap.Plan, clientCertificate: false);
                     GatewayInformationalResponses.Configure(listener);
                 });
+            }
+
             options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.RegistrationPort, listener =>
             {
                 listener.Protocols = HttpProtocols.Http2;
                 ConfigureTls(listener, material, bootstrap.Plan, clientCertificate: true);
             });
             if (bootstrap.ManagementPort > 0)
+            {
                 options.Listen(IPAddress.Parse(bootstrap.BindAddress), bootstrap.ManagementPort, listener =>
                 {
                     listener.Protocols = HttpProtocols.Http1AndHttp2;
                     ConfigureTls(listener, material, bootstrap.Plan, clientCertificate: true);
                 });
+            }
         });
     }
 

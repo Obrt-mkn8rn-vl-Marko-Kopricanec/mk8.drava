@@ -1,3 +1,4 @@
+using Mk8.Drava.Application.BLL.ControlPlane.Observability;
 using Mk8.Drava.Application.INF.Proxy.Streams;
 using Mk8.Drava.Application.BLL.ControlPlane.Headers;
 using Mk8.Drava.Application.BLL.ControlPlane.Forwarding;
@@ -18,22 +19,14 @@ using Mk8.Drava.Application.DAL.Observability;
 using Mk8.Drava.Application.INF.Observability;
 
 namespace Mk8.Drava.Application.INF.Proxy.Forwarding;
-public sealed partial class UpgradeForwarder
+public sealed partial class UpgradeForwarder(UpstreamConnectionFactory connectionFactory, HopByHopHeaderPolicy headerPolicy, TunnelRelay tunnelRelay, ProxyMetrics metrics, ILogger<UpgradeForwarder> logger)
 {
     private const string WebSocketAcceptGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    private readonly UpstreamConnectionFactory _connectionFactory;
-    private readonly HopByHopHeaderPolicy _headerPolicy;
-    private readonly TunnelRelay _tunnelRelay;
-    private readonly ProxyMetrics _metrics;
-    private readonly ILogger<UpgradeForwarder> _logger;
-    public UpgradeForwarder(UpstreamConnectionFactory connectionFactory, HopByHopHeaderPolicy headerPolicy, TunnelRelay tunnelRelay, ProxyMetrics metrics, ILogger<UpgradeForwarder> logger)
-    {
-        _connectionFactory = connectionFactory;
-        _headerPolicy = headerPolicy;
-        _tunnelRelay = tunnelRelay;
-        _metrics = metrics;
-        _logger = logger;
-    }
+    private readonly UpstreamConnectionFactory _connectionFactory = connectionFactory;
+    private readonly HopByHopHeaderPolicy _headerPolicy = headerPolicy;
+    private readonly TunnelRelay _tunnelRelay = tunnelRelay;
+    private readonly ProxyMetrics _metrics = metrics;
+    private readonly ILogger<UpgradeForwarder> _logger = logger;
 
     public async ValueTask<ForwardingResult> ForwardAsync(Stream clientStream, Http1RequestHead requestHead, UpgradeRequestInfo upgrade, RuntimeRoute route, RuntimeUpstream upstream, RuntimeListener listener, RuntimeTimeouts timeouts, RuntimeConnectionLimits connectionLimits, string upstreamTarget, ForwardedHeadersContext forwardedHeaders, string requestId, CancellationToken cancellationToken)
     {
@@ -136,8 +129,12 @@ public sealed partial class UpgradeForwarder
         _metrics.UpgradeRequestSucceeded();
         _metrics.TunnelStarted();
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-            LogUpgradedToProtocolThroughUpstream10028(_logger, requestHead.Method, requestHead.Target, upgrade.Protocol, upstream.Name, null);
-        using var input = new PrefixReadStream(upstreamStream, initialBody);
+        {
+            var targetPath = RequestDiagnosticTarget.PathOnly(requestHead.Target);
+            LogUpgradedToProtocolThroughUpstream10028(_logger, requestHead.Method, targetPath, upgrade.Protocol, upstream.Name, exception: null);
+        }
+        var input = new PrefixReadStream(upstreamStream, initialBody);
+        await using var inputLifetime = input.ConfigureAwait(false);
         var result = await _tunnelRelay.RelayAsync(clientStream, input, listener, timeouts, cancellationToken).ConfigureAwait(false);
         return ForwardingResult.TunnelCompleted(responseStatusCode: 101, tunnel: result);
     }
@@ -150,7 +147,10 @@ public sealed partial class UpgradeForwarder
         _metrics.UpgradeUpstreamFailed();
         _metrics.UpstreamFailed();
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            LogUpstreamUpgradeResponseFailedFor10029(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+        {
+            var targetPath = RequestDiagnosticTarget.PathOnly(requestHead.Target);
+            LogUpstreamUpgradeResponseFailedFor10029(_logger, requestHead.Method, targetPath, upstream.Name, exception);
+        }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
             await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamMalformedResponse, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
         return ForwardingResult.Failure(responseStarted,
@@ -164,7 +164,10 @@ public sealed partial class UpgradeForwarder
         _metrics.UpgradeUpstreamFailed();
         _metrics.UpstreamFailed();
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
-            LogUpgradeForwardingFailedForTo10030(_logger, requestHead.Method, requestHead.Target, upstream.Name, exception);
+        {
+            var targetPath = RequestDiagnosticTarget.PathOnly(requestHead.Target);
+            LogUpgradeForwardingFailedForTo10030(_logger, requestHead.Method, targetPath, upstream.Name, exception);
+        }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(responseStarted, suppressGeneratedFailureResponse: false))
             await ProxyGeneratedFailureWriter.WriteAsync(clientStream, ProxyFailureKind.UpstreamConnectFailed, timeouts, requestId, _metrics, cancellationToken).ConfigureAwait(false);
         return ForwardingResult.Failure(responseStarted,
@@ -216,7 +219,8 @@ public sealed partial class UpgradeForwarder
                 _metrics.DownstreamWriteTimedOut();
                 if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
                 {
-                    LogDownstreamWriteTimedOutFor10034(_logger, requestHead.Method, requestHead.Target, exception);
+                    var targetPath = RequestDiagnosticTarget.PathOnly(requestHead.Target);
+                    LogDownstreamWriteTimedOutFor10034(_logger, requestHead.Method, targetPath, exception);
                 }
                 break;
         }

@@ -70,6 +70,9 @@ internal static class Program
         await using var privateStateLifetime = privateState.ConfigureAwait(false);
         startup.Enter(ApplicationStartupPhase.ServiceConfiguration);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+        // Structured proxy access events provide the safe path. Framework request
+        // start/finish events also print QueryString and must not duplicate them.
+        builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
         builder.Configuration["Mdrava:DataDirectory"] = bootstrap.StateDirectory;
         builder.Services.AddSingleton(bootstrap);
         builder.Services.AddProxyApplication(builder.Configuration);

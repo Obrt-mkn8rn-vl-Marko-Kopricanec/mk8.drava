@@ -201,8 +201,7 @@ public sealed partial class ProxyPersistentLogWriter(IMdravaDataDirectoryProvide
             return safe;
         }
 
-        var queryIndex = safe.IndexOfAny(['?', '#']);
-        return queryIndex >= 0 ? safe[..queryIndex] : safe;
+        return RequestDiagnosticTarget.PathOnly(safe);
     }
 
     private static string? SafeValue(string? value, int maxLength = MaxTextLength)

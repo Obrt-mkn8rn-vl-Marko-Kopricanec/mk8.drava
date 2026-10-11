@@ -44,6 +44,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public string ApplicationPlanPath => Path.Combine(_directory, "app", "gateway-serving.plan");
     public string GatewayPlanPath => Path.Combine(_directory, "gateway", "serving.plan");
     internal string GatewayLog => _gateway.CapturedLog;
+    internal string ApplicationLog => _application?.CapturedLog ?? "";
     internal string EvidenceId => Path.GetFileName(_directory);
 
     public async Task StopApplicationAsync()
@@ -89,7 +90,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null, DevelopmentFlowTimeoutSettings? flowTimeouts = null, bool observeUploadTiming = false)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null, DevelopmentFlowTimeoutSettings? flowTimeouts = null, bool observeUploadTiming = false, bool observeForwarding = false)
     {
         if (upstreamHttp2 && upstreamHttp3) throw new ArgumentException("Development upstream protocol must be unambiguous.", nameof(upstreamHttp3));
         if (flowTimeouts is not null && (!manualRoute || upstreamHttp2 || upstreamHttp3 || verifiedUpstreamTls is not null ||
@@ -114,7 +115,9 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var managementPort = administration ? UnusedPort() : 0;
         var relayAddress = relayNode ? LocalRelayAddress() : null;
         var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs, verifiedUpstreamTls, flowTimeouts).ConfigureAwait(false);
-        var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath) : null;
+        var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath,
+            environment: observeForwarding ? new Dictionary<string, string>(StringComparer.Ordinal)
+                { ["Logging__LogLevel__Mk8.Drava.Application.INF.Proxy.Forwarding"] = "Debug" } : null) : null;
         DevelopmentProcess? gateway = null;
         try
         {

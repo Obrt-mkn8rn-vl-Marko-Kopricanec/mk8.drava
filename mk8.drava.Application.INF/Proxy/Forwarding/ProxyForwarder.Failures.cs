@@ -1,3 +1,4 @@
+using Mk8.Drava.Application.BLL.ControlPlane.Observability;
 using System.Net.Sockets;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.ControlPlane.Forwarding;
@@ -44,7 +45,8 @@ public sealed partial class ProxyForwarder
         _metrics.ClientBodyRelayFailed();
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
         {
-            LogRejectedOversizedRequestBodyFor10014(_logger, context.Method, context.Target, exception);
+            var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+            LogRejectedOversizedRequestBodyFor10014(_logger, context.Method, targetPath, exception);
         }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(context.ResponseStarted, context.SuppressGeneratedFailureResponse))
         {
@@ -59,7 +61,8 @@ public sealed partial class ProxyForwarder
         _metrics.MalformedRequestRejected();
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
         {
-            LogRejectedMalformedRequestBodyFor10015(_logger, context.Method, context.Target, exception);
+            var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+            LogRejectedMalformedRequestBodyFor10015(_logger, context.Method, targetPath, exception);
         }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(context.ResponseStarted, context.SuppressGeneratedFailureResponse))
         {
@@ -80,7 +83,8 @@ public sealed partial class ProxyForwarder
 
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
         {
-            LogUpstreamResponseFramingFailedFor10016(_logger, context.Method, context.Target, context.UpstreamName, exception);
+            var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+            LogUpstreamResponseFramingFailedFor10016(_logger, context.Method, targetPath, context.UpstreamName, exception);
         }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(context.ResponseStarted, context.SuppressGeneratedFailureResponse))
         {
@@ -102,7 +106,8 @@ public sealed partial class ProxyForwarder
 
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
         {
-            LogUpstreamHTTPResponseFramingFailed10017(_logger, context.Method, context.Target, context.UpstreamName, exception);
+            var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+            LogUpstreamHTTPResponseFramingFailed10017(_logger, context.Method, targetPath, context.UpstreamName, exception);
         }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(context.ResponseStarted, context.SuppressGeneratedFailureResponse))
         {
@@ -129,7 +134,8 @@ public sealed partial class ProxyForwarder
 
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
         {
-            LogUpstreamHTTPForwardingFailedFor10018(_logger, context.Method, context.Target, context.UpstreamName, exception);
+            var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+            LogUpstreamHTTPForwardingFailedFor10018(_logger, context.Method, targetPath, context.UpstreamName, exception);
         }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(context.ResponseStarted, context.SuppressGeneratedFailureResponse))
         {
@@ -149,7 +155,8 @@ public sealed partial class ProxyForwarder
 
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
         {
-            LogUpstreamTLSFailedForTo10019(_logger, context.Method, context.Target, context.UpstreamName, exception);
+            var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+            LogUpstreamTLSFailedForTo10019(_logger, context.Method, targetPath, context.UpstreamName, exception);
         }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(context.ResponseStarted, context.SuppressGeneratedFailureResponse))
         {
@@ -165,7 +172,8 @@ public sealed partial class ProxyForwarder
         _metrics.UpstreamFailed();
         if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Warning))
         {
-            LogUpstreamForwardingFailedForTo10020(_logger, context.Method, context.Target, context.UpstreamName, exception);
+            var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+            LogUpstreamForwardingFailedForTo10020(_logger, context.Method, targetPath, context.UpstreamName, exception);
         }
         if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(context.ResponseStarted, context.SuppressGeneratedFailureResponse))
         {
@@ -184,7 +192,8 @@ public sealed partial class ProxyForwarder
                 _metrics.ClientRequestBodyTimedOut();
                 if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
                 {
-                    LogClientRequestBodyTimedOut10021(_logger, context.Method, context.Target, exception);
+                    var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+                    LogClientRequestBodyTimedOut10021(_logger, context.Method, targetPath, exception);
                 }
                 if (ProxyGeneratedFailurePolicy.CanWriteFailureResponse(context.ResponseStarted, context.SuppressGeneratedFailureResponse))
                 {
@@ -230,7 +239,8 @@ public sealed partial class ProxyForwarder
                 _metrics.DownstreamWriteTimedOut();
                 if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
                 {
-                    LogDownstreamWriteTimedOutFor10025(_logger, context.Method, context.Target, exception);
+                    var targetPath = RequestDiagnosticTarget.PathOnly(context.Target);
+                    LogDownstreamWriteTimedOutFor10025(_logger, context.Method, targetPath, exception);
                 }
                 break;
         }
