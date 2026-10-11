@@ -728,7 +728,9 @@ internal static partial class ClientHttp3Tests
             releaseUpstream.SetResult();
             _ = await ReadHttp3ResponseRemainderAsync(stream, timeout.Token).ConfigureAwait(false);
             var upstreamRequest = await upstreamTask.WaitAsync(timeout.Token).ConfigureAwait(false);
-            var metrics = host.Services.GetRequiredService<ProxyMetrics>().Snapshot();
+            var responseMetrics = host.Services.GetRequiredService<ProxyMetrics>();
+            await WaitForSuccessfulHttp3RequestCompletionAsync(responseMetrics, timeout.Token).ConfigureAwait(false);
+            var metrics = responseMetrics.Snapshot();
             AssertEx.Equal("stream-", firstData);
             AssertEx.True(upstreamRequest.StartsWith("GET /stream HTTP/1.1", StringComparison.Ordinal), upstreamRequest);
             AssertEx.Equal(0L, metrics.Http3.ActiveResponseStreams);
@@ -740,6 +742,43 @@ internal static partial class ClientHttp3Tests
             host.Dispose();
             temp.Dispose();
         }
+    }
+
+    public static async Task Http3CompletionObserverRequiresRequestOutcomeAsync()
+    {
+        var metrics = new ProxyMetrics();
+        using var cancellation = new CancellationTokenSource();
+        var completion = WaitForSuccessfulHttp3RequestCompletionAsync(metrics, cancellation.Token);
+        try
+        {
+            AssertEx.Equal(0L, metrics.Snapshot().Http3.ActiveResponseStreams);
+            AssertEx.False(completion.IsCompleted, "An idle response gauge is not a request completion signal.");
+        }
+        finally
+        {
+            await cancellation.CancelAsync().ConfigureAwait(false);
+            var canceledWait = false;
+            try
+            {
+                await completion.ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                canceledWait = true;
+            }
+
+            AssertEx.True(canceledWait, "The owned completion observer must settle after cancellation.");
+        }
+    }
+
+    public static async Task Http3CompletionObserverPreservesLeakedResponseGaugeAsync()
+    {
+        var metrics = new ProxyMetrics();
+        metrics.Http3ResponseStreamStarted();
+        metrics.Http3RequestCompleted("GET", 200, "success");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await WaitForSuccessfulHttp3RequestCompletionAsync(metrics, timeout.Token).ConfigureAwait(false);
+        AssertEx.Equal(1L, metrics.Snapshot().Http3.ActiveResponseStreams);
     }
 
     public static async Task Http3CacheInteractionUsesStoredResponseAsync()
@@ -2222,6 +2261,15 @@ internal static partial class ClientHttp3Tests
     private static Task<ProxyListenerStatus> WaitForListenerAsync(ProxyRuntimeState runtimeState, string name, string kind, ProxyListenerState state, CancellationToken cancellationToken)
     {
         return TestWaiters.WaitForListenerAsync(runtimeState, name, kind, state, cancellationToken);
+    }
+
+    private static Task WaitForSuccessfulHttp3RequestCompletionAsync(ProxyMetrics metrics, CancellationToken cancellationToken)
+    {
+        return TestWaiters.UntilAsync(() => metrics.Snapshot().Http3.RequestsByOutcome.Any(static outcome =>
+            string.Equals(outcome.Method, "GET", StringComparison.Ordinal) &&
+            string.Equals(outcome.StatusClass, "2xx", StringComparison.Ordinal) &&
+            string.Equals(outcome.Outcome, "success", StringComparison.Ordinal) && outcome.Count > 0),
+            static () => "Timed out waiting for the isolated successful HTTP/3 GET request to complete.", cancellationToken);
     }
 
     private static Task WaitForHttp3StreamsToDrainAsync(ProxyMetrics metrics, CancellationToken cancellationToken)
