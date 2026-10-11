@@ -58,7 +58,9 @@ public sealed partial class GatewayUpload : IDisposable
     private async Task SendBodyAsync(CancellationToken cancellationToken)
     {
         await _allowed.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-        await SendBytesAsync(_context.Request.Body, boundedBody: true, cancellationToken).ConfigureAwait(false);
+        var readAhead = new GatewayBodyReadAhead(_context.Request.Body, _frameBytes, cancellationToken);
+        await using (readAhead.ConfigureAwait(false))
+            await SendBytesAsync(readAhead.Reader, boundedBody: true, cancellationToken).ConfigureAwait(false);
         var feature = _context.Features.Get<IHttpRequestTrailersFeature>();
         if (feature is not { Available: true } || feature.Trailers.Count == 0) return;
         var trailers = new TrailerFrame();
