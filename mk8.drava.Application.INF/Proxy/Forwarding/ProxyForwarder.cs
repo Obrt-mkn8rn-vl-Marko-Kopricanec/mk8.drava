@@ -543,9 +543,8 @@ public sealed partial class ProxyForwarder(UpstreamConnectionPool upstreamConnec
             {
                 if (Http1UpstreamContentLength(requestHead) is not null)
                 {
-                    await RelayChunkedBodyToFramedUpstreamAsync(reader,
-                                        (data, _, policy, token) => WriteHttp1PayloadAsync(upstreamStream, data, policy, token),
-                                        listener, timeouts, preReadChunkLine, maxRequestBodyBytes, RejectFixedHttp1TrailersAsync, cancellationToken).ConfigureAwait(false);
+                    await RelayKnownHttp1PayloadAsync(reader, upstreamStream, requestHead, listener, timeouts, preReadChunkLine,
+                        maxRequestBodyBytes, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
