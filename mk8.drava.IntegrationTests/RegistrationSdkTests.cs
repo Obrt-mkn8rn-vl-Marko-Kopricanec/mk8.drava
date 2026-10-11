@@ -7,17 +7,19 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Contracts.Registration.V1;
 using Mk8.Drava.Registration;
 using Mk8.Drava.Transport.Discovery;
 using Mk8.Drava.Transport.Registration;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Mk8.Drava.IntegrationTests;
 
 [Collection(DevelopmentSubprocessTests.Name)]
-public sealed class RegistrationSdkTests
+public sealed class RegistrationSdkTests(ITestOutputHelper output)
 {
     [Theory]
     [InlineData(false, false)]
@@ -31,16 +33,20 @@ public sealed class RegistrationSdkTests
         await using var dnsLifetime = dns.ConfigureAwait(true);
         var proxy = await TwoProcessProxy.StartAsync(unused, enrolledSite: true, manualRoute: false, dnsPort: dns.Port, discovery: automaticDiscovery, lifecycleSettings: customLifetimes ? DevelopmentLifecycleSettings.Fast : null).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
+        output.WriteLine("sdk_fixture: {0}", proxy.EvidenceId);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+        using var registrationEvents = new DevelopmentRegistrationEvents();
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
         var sdkOptions = customLifetimes ? Options(proxy) with { PendingRetrySeconds = 1, RenewJitterPercent = 0, ShutdownDeadlineMilliseconds = 1500, AgentDrainDeadlineMilliseconds = 500 } : Options(proxy);
         builder.Services.AddDravaRegistration(automaticDiscovery ? sdkOptions with { MulticastDiscovery = true, GatewaySeeds = [] } : sdkOptions);
         var application = builder.Build();
         await using var applicationLifetime = application.ConfigureAwait(true);
-        application.Run(context => context.Response.WriteAsync(string.Equals(context.Request.Path.Value, "/ready", StringComparison.Ordinal) ? "ready" : "sdk-body"));
-        await application.StartAsync().ConfigureAwait(true);
+        application.Run(context => context.Response.WriteAsync(string.Equals(context.Request.Path.Value, "/ready", StringComparison.Ordinal) ? "ready" : "sdk-body", context.RequestAborted));
+        await application.StartAsync(CancellationToken.None).ConfigureAwait(true);
         var bound = application.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>() ?? throw new InvalidOperationException("Backend is not bound.");
-        Assert.Collection(bound.Addresses, static value => Assert.True(new Uri(value).Port > 0));
+#pragma warning disable HLQ005 // Assert.Single verifies the exact bound-address cardinality; First would weaken this contract.
+        Assert.True(new Uri(Assert.Single(bound.Addresses)).Port > 0);
+#pragma warning restore HLQ005
         var state = application.Services.GetRequiredService<DravaRegistrationState>();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         while (state.Status?.Phase != RegistrationPhase.Ready) await Task.Delay(100, timeout.Token).ConfigureAwait(true);
@@ -50,10 +56,29 @@ public sealed class RegistrationSdkTests
         using var response = await client.Client.GetAsync(new Uri("/", UriKind.Relative), timeout.Token).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("sdk-body", await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(true));
-        await application.StopAsync(timeout.Token).ConfigureAwait(true);
+        await StopAndCaptureAsync(application, state, registrationEvents, output, timeout.Token).ConfigureAwait(true);
+        Assert.NotEmpty(registrationEvents.Read());
         Assert.True(state.Status is { Phase: RegistrationPhase.Draining }, state.Failure);
         using var drained = await client.Client.GetAsync(new Uri("/", UriKind.Relative), timeout.Token).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, drained.StatusCode);
+    }
+
+    private static async Task StopAndCaptureAsync(WebApplication application, DravaRegistrationState state, DevelopmentRegistrationEvents registrationEvents, ITestOutputHelper output, CancellationToken cancellationToken)
+    {
+        var stopStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+        var beforeStop = state.Status?.Phase;
+        try { await application.StopAsync(cancellationToken).ConfigureAwait(true); }
+        finally
+        {
+            output.WriteLine("sdk_stop: before={0}; after={1}; elapsed_ms={2}; caller_cancelled={3}", beforeStop, state.Status?.Phase,
+                System.Diagnostics.Stopwatch.GetElapsedTime(stopStarted).TotalMilliseconds, cancellationToken.IsCancellationRequested);
+            foreach (var service in application.Services.GetServices<IHostedService>())
+            {
+                if (service is BackgroundService background)
+                    output.WriteLine("sdk_background_task: status={0}", background.ExecuteTask?.Status);
+            }
+            foreach (var entry in registrationEvents.Read()) output.WriteLine(entry);
+        }
     }
 
     [Fact]
