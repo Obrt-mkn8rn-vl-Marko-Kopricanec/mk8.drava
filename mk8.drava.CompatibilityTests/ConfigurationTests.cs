@@ -651,98 +651,16 @@ internal static class ConfigurationTests
 
     public static void RuntimeConfigurationPolicyRecordsCopyInputCollections()
     {
-        var acmeDomains = new List<string>
-        {
-            "home.test"
-        };
-        var acmeContacts = new List<string>
-        {
-            "admin@home.test"
-        };
-        var acmeCertificates = new List<RuntimeAcmeCertificateOptions>
-        {
-            new("home-cert", true, acmeDomains, 21)
-        };
-        var acmeProjectionDomains = new List<string>
-        {
-            "api.home.test"
-        };
-        var acmeProjectionContacts = new List<string>
-        {
-            "ops@home.test"
-        };
-        var acmeProjectionCertificates = new List<RuntimeAcmeCertificateProjection>
-        {
-            new("api-cert", true, acmeProjectionDomains, 14)
-        };
-        var adminUrls = new List<string>
-        {
-            "http://127.0.0.1:18081"
-        };
-        var projectionUrls = new List<string>
-        {
-            "http://127.0.0.1:18082"
-        };
-        var trustedProxies = new List<string>
-        {
-            "127.0.0.1"
-        };
-        var cacheVaryHeaders = new List<string>
-        {
-            "X-Tenant"
-        };
-        var cacheStatusCodes = new List<int>
-        {
-            200
-        };
-        var cacheMethods = new List<string>
-        {
-            "GET"
-        };
-        var certificateDomains = new List<string>
-        {
-            "home.test"
-        };
-        var projectionDomains = new List<string>
-        {
-            "api.home.test"
-        };
+        var (acmeDomains, acmeContacts, acmeCertificates, acmeProjectionDomains, acmeProjectionContacts, acmeProjectionCertificates) = CreatePolicyAcmeInputs();
+        var (adminUrls, projectionUrls, trustedProxies) = CreatePolicyAdministrativeInputs();
+        var (cacheVaryHeaders, cacheStatusCodes, cacheMethods) = CreatePolicyCacheInputs();
+        var (certificateDomains, projectionDomains) = CreatePolicyCertificateInputs();
         var circuitBreakerCodes = new List<int>
         {
             503
         };
-        var setRequestHeaders = new List<ProxyHeaderField>
-        {
-            new("X-Trace", "enabled")
-        };
-        var removeRequestHeaders = new List<string>
-        {
-            "X-Remove-Request"
-        };
-        var setResponseHeaders = new List<ProxyHeaderField>
-        {
-            new("X-Frame-Options", "DENY")
-        };
-        var removeResponseHeaders = new List<string>
-        {
-            "Server"
-        };
-        var setRequestHeaderProjections = new List<RuntimeHeaderFieldProjection>
-        {
-            new("X-Trace", "enabled")
-        };
-        var setResponseHeaderProjections = new List<RuntimeHeaderFieldProjection>
-        {
-            new("X-Frame-Options", "DENY")
-        };
-        var retryStatusCodes = new List<int>
-        {
-            502
-        };
-        var retryMethods = new List<string>
-        {
-            "GET"
-        };
+        var (setRequestHeaders, removeRequestHeaders, setResponseHeaders, removeResponseHeaders, setRequestHeaderProjections, setResponseHeaderProjections) = CreatePolicyHeaderInputs();
+        var (retryStatusCodes, retryMethods) = CreatePolicyRetryInputs();
         using var certificate = X509CertificateLoader.LoadPkcs12(TestCertificates.CreateSelfSignedPfxBytes("home.test"), password: null);
         var acme = new RuntimeAcmeOptions(true, false, "https://acme.test/directory", acmeContacts, true, "acme", 21, 60, 10, acmeCertificates);
         var acmeProjection = new RuntimeAcmeProjection(true, false, "https://acme.test/directory", acmeProjectionContacts, true, "acme", 14, 60, 10, acmeProjectionCertificates);
@@ -759,245 +677,83 @@ internal static class ConfigurationTests
         var headerPolicyProjection = new RuntimeHeaderPolicyProjection(setRequestHeaderProjections.Select(static header => header), removeRequestHeaders.Select(static header => header), setResponseHeaderProjections.Select(static header => header), removeResponseHeaders.Select(static header => header));
         var retry = new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: retryStatusCodes.Select(static statusCode => statusCode), RetryMethods: retryMethods.Select(static method => method), RetryBackoff: TimeSpan.FromMilliseconds(50));
         var retryProjection = new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: retryStatusCodes.Select(static statusCode => statusCode), RetryMethods: retryMethods.Select(static method => method), RetryBackoff: TimeSpan.FromMilliseconds(50));
-        acmeDomains.Clear();
-        acmeContacts.Clear();
-        acmeCertificates.Clear();
-        acmeProjectionDomains.Clear();
-        acmeProjectionContacts.Clear();
-        acmeProjectionCertificates.Clear();
-        adminUrls.Clear();
-        projectionUrls.Clear();
-        trustedProxies.Clear();
-        cacheVaryHeaders.Clear();
-        cacheStatusCodes.Clear();
-        cacheMethods.Clear();
-        certificateDomains.Clear();
-        projectionDomains.Clear();
-        circuitBreakerCodes.Clear();
-        setRequestHeaders.Clear();
-        removeRequestHeaders.Clear();
-        setResponseHeaders.Clear();
-        removeResponseHeaders.Clear();
-        setRequestHeaderProjections.Clear();
-        setResponseHeaderProjections.Clear();
-        retryStatusCodes.Clear();
-        retryMethods.Clear();
-        AssertEx.Equal("home.test", acme.Certificates[0].Domains[0]);
-        AssertEx.Equal("admin@home.test", acme.ContactEmails[0]);
-        AssertEx.Equal("api.home.test", acmeProjection.Certificates[0].Domains[0]);
-        AssertEx.Equal("ops@home.test", acmeProjection.ContactEmails[0]);
-        AssertEx.Equal("api-cert", acmeProjection.Certificates[0].Id);
-        AssertEx.Equal(14, acmeProjection.Certificates[0].RenewBeforeDays);
-        AssertEx.Equal("http://127.0.0.1:18081", admin.Urls[0]);
-        AssertEx.Equal("http://127.0.0.1:18082", adminProjection.Urls[0]);
-        AssertEx.Equal("***", adminProjection.Token);
-        AssertEx.Equal("environment", adminProjection.TokenSource);
-        AssertEx.Equal(128, adminProjection.RecentAuditCapacity);
-        AssertEx.Equal("127.0.0.1", forwardedHeaders.TrustedProxies[0]);
-        AssertEx.Equal("127.0.0.1", forwardedHeadersProjection.TrustedProxies[0]);
-        AssertEx.True(forwardedHeadersProjection.Enabled);
-        AssertEx.Equal("X-Tenant", cache.VaryByHeaders[0]);
-        AssertEx.Equal(200, cache.CacheableStatusCodes[0]);
-        AssertEx.Equal("GET", cache.Methods[0]);
-        AssertEx.Equal("X-Tenant", cacheProjection.VaryByHeaders[0]);
-        AssertEx.Equal(200, cacheProjection.CacheableStatusCodes[0]);
-        AssertEx.Equal("GET", cacheProjection.Methods[0]);
-        AssertEx.True(cacheProjection.Enabled);
-        AssertEx.Equal(1024L, cacheProjection.MaxEntryBytes);
-        AssertEx.Equal(TimeSpan.FromSeconds(60), cacheProjection.DefaultTtl);
-        AssertEx.Equal("home.test", runtimeCertificate.Domains[0]);
-        AssertEx.Equal("api.home.test", certificateProjection.Domains[0]);
-        AssertEx.Equal("api-cert", certificateProjection.Id);
-        AssertEx.Equal("manual", certificateProjection.Source);
-        AssertEx.Equal(DateTime.UnixEpoch.AddDays(30), certificateProjection.NotAfter);
-        AssertEx.Equal(503, circuitBreaker.FailureStatusCodes[0]);
-        AssertEx.Equal("X-Trace", headerPolicy.SetRequestHeaders[0].Name);
-        AssertEx.Equal("X-Remove-Request", headerPolicy.RemoveRequestHeaders[0]);
-        AssertEx.Equal("X-Frame-Options", headerPolicy.SetResponseHeaders[0].Name);
-        AssertEx.Equal("Server", headerPolicy.RemoveResponseHeaders[0]);
-        AssertEx.Equal("X-Trace", headerPolicyProjection.SetRequestHeaders[0].Name);
-        AssertEx.Equal("X-Remove-Request", headerPolicyProjection.RemoveRequestHeaders[0]);
-        AssertEx.Equal("X-Frame-Options", headerPolicyProjection.SetResponseHeaders[0].Name);
-        AssertEx.Equal("Server", headerPolicyProjection.RemoveResponseHeaders[0]);
-        AssertEx.Equal(502, retry.RetryOnStatusCodes[0]);
-        AssertEx.Equal("GET", retry.RetryMethods[0]);
-        AssertEx.Equal(502, retryProjection.RetryOnStatusCodes[0]);
-        AssertEx.Equal("GET", retryProjection.RetryMethods[0]);
-        AssertEx.True(retryProjection.Enabled);
-        AssertEx.Equal(2, retryProjection.MaxAttempts);
-        AssertEx.Equal(TimeSpan.FromMilliseconds(50), retryProjection.RetryBackoff);
-        AssertEx.False(acme.ContactEmails is string[]);
-        AssertEx.False(acme.Certificates is RuntimeAcmeCertificateOptions[]);
-        AssertEx.False(acme.Certificates[0].Domains is string[]);
-        AssertEx.False(acmeProjection.ContactEmails is string[]);
-        AssertEx.False(acmeProjection.Certificates is RuntimeAcmeCertificateProjection[]);
-        AssertEx.False(acmeProjection.Certificates[0].Domains is string[]);
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeProjection(true, false, null!, [], true, "acme", 14, 60, 10, []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeProjection(true, false, "https://acme.test/directory", [], true, null!, 14, 60, 10, []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeProjection(true, false, "https://acme.test/directory", null!, true, "acme", 14, 60, 10, []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeProjection(true, false, "https://acme.test/directory", [], true, "acme", 14, 60, 10, null!));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeCertificateProjection(null!, true, [], 14));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeCertificateProjection("api-cert", true, null!, 14));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection(null!, "certs/api.pfx", "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", null!, "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", null!, "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", null!, [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", "manual", null!, HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeCertificateProjection(" ", "certs/api.pfx", "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeCertificateProjection("api-cert", "", "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "\t", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", " ", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", "manual", [null!], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch.AddDays(30), NotAfter: DateTime.UnixEpoch));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAdminSecurityProjection(Urls: null!, RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 128));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeAdminSecurityOptions(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "secret", TokenEnvironmentVariable: " ", TokenSource: "environment", RecentAuditCapacity: 128));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeAdminSecurityOptions(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "secret", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: " ", RecentAuditCapacity: 128));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeAdminSecurityOptions(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "secret", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 0));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeAdminSecurityOptions(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "secret", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 10_001));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: null!, TokenSource: "environment", RecentAuditCapacity: 128));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: null!, RecentAuditCapacity: 128));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: " ", TokenSource: "environment", RecentAuditCapacity: 128));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: " ", RecentAuditCapacity: 128));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 0));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 10_001));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeForwardedHeadersProjection(Enabled: true, TrustedProxies: null!));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: null!, CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: null!, Methods: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: null!));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: -1, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: -1, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromTicks(-1), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: null!, RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: null!, RetryBackoff: TimeSpan.FromMilliseconds(50)));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 0, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromTicks(-1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromTicks(-1)));
-        AssertEx.False(admin.Urls is string[]);
-        AssertEx.False(adminProjection.Urls is string[]);
-        AssertEx.False(forwardedHeaders.TrustedProxies is string[]);
-        AssertEx.False(forwardedHeadersProjection.TrustedProxies is string[]);
-        AssertEx.False(cache.VaryByHeaders is string[]);
-        AssertEx.False(cache.CacheableStatusCodes is int[]);
-        AssertEx.False(cache.Methods is string[]);
-        AssertEx.False(cacheProjection.VaryByHeaders is string[]);
-        AssertEx.False(cacheProjection.CacheableStatusCodes is int[]);
-        AssertEx.False(cacheProjection.Methods is string[]);
-        AssertEx.False(runtimeCertificate.Domains is string[]);
-        AssertEx.False(certificateProjection.Domains is string[]);
-        AssertEx.False(circuitBreaker.FailureStatusCodes is int[]);
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerPolicy(Enabled: true, FailureThreshold: 0, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerPolicy(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.Zero, OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerPolicy(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.Zero, HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerPolicy(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 0, FailureStatusCodes: []));
-        AssertEx.False(headerPolicy.SetRequestHeaders is ProxyHeaderField[]);
-        AssertEx.False(headerPolicy.RemoveRequestHeaders is string[]);
-        AssertEx.False(headerPolicy.SetResponseHeaders is ProxyHeaderField[]);
-        AssertEx.False(headerPolicy.RemoveResponseHeaders is string[]);
-        AssertEx.False(headerPolicyProjection.SetRequestHeaders is RuntimeHeaderFieldProjection[]);
-        AssertEx.False(headerPolicyProjection.RemoveRequestHeaders is string[]);
-        AssertEx.False(headerPolicyProjection.SetResponseHeaders is RuntimeHeaderFieldProjection[]);
-        AssertEx.False(headerPolicyProjection.RemoveResponseHeaders is string[]);
-        AssertEx.False(retry.RetryOnStatusCodes is int[]);
-        AssertEx.False(retry.RetryMethods is string[]);
-        AssertEx.False(retryProjection.RetryOnStatusCodes is int[]);
-        AssertEx.False(retryProjection.RetryMethods is string[]);
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [null!], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: [null!]));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: -1, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: -1, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromTicks(-1), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicy([null!], [], [], []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicy([], [], [null!], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([new ProxyHeaderField(" ", "value")], [], [], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([new ProxyHeaderField("Host", "value")], [], [], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([new ProxyHeaderField("Bad Header", "value")], [], [], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([new ProxyHeaderField("X-Test", "bad\r\nvalue")], [], [], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([], ["Host"], [], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([], ["Bad Header"], [], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderFieldProjection(" ", "value"));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderFieldProjection("Host", "value"));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderFieldProjection("Bad Header", "value"));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderFieldProjection("X-Test", null!));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderFieldProjection("X-Test", "bad\nvalue"));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyProjection([null!], [], [], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicyProjection([], ["Host"], [], []));
-        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicyProjection([], ["Bad Header"], [], []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [null!], RetryBackoff: TimeSpan.FromMilliseconds(50)));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 0, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromTicks(-1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromTicks(-1)));
-        var adminResponse = RuntimeAdminSecurityResponseMapper.FromProjection(adminProjection);
-        AssertEx.False(adminResponse.Urls is string[], "Admin security API URLs should not expose a mutable array.");
-        var adminResponseUrls = new List<string>
+        ClearPolicyAcmeInputs(acmeDomains, acmeContacts, acmeCertificates, acmeProjectionDomains, acmeProjectionContacts, acmeProjectionCertificates);
+        ClearPolicyAdministrativeInputs(adminUrls, projectionUrls, trustedProxies);
+        ClearPolicyCacheInputs(cacheVaryHeaders, cacheStatusCodes, cacheMethods);
+        ClearPolicyCertificateAndCircuitInputs(certificateDomains, projectionDomains, circuitBreakerCodes);
+        ClearPolicyHeaderInputs(setRequestHeaders, removeRequestHeaders, setResponseHeaders, removeResponseHeaders, setRequestHeaderProjections, setResponseHeaderProjections);
+        ClearPolicyRetryInputs(retryStatusCodes, retryMethods);
+        AssertPolicyGraphsAndResponses(acme, acmeProjection, admin, adminProjection, forwardedHeaders, forwardedHeadersProjection, cache, cacheProjection, runtimeCertificate, certificateProjection, circuitBreaker, headerPolicy, headerPolicyProjection, retry, retryProjection);
+    }
+
+    private static void AssertPolicyGraphsAndResponses(RuntimeAcmeOptions acme, RuntimeAcmeProjection acmeProjection, RuntimeAdminSecurityOptions admin, RuntimeAdminSecurityProjection adminProjection, RuntimeForwardedHeadersOptions forwardedHeaders, RuntimeForwardedHeadersProjection forwardedHeadersProjection, RuntimeCachePolicy cache, RuntimeCacheProjection cacheProjection, RuntimeCertificate runtimeCertificate, RuntimeCertificateProjection certificateProjection, RuntimeCircuitBreakerPolicy circuitBreaker, RuntimeHeaderPolicy headerPolicy, RuntimeHeaderPolicyProjection headerPolicyProjection, RuntimeRetryPolicy retry, RuntimeRetryProjection retryProjection)
+    {
+        AssertAcmeAndAdministrativePolicyCopies(acme, acmeProjection, admin, adminProjection, forwardedHeaders, forwardedHeadersProjection);
+        AssertCacheHeaderAndRetryPolicyCopies(acme, acmeProjection, cache, cacheProjection, runtimeCertificate, certificateProjection, circuitBreaker, headerPolicy, headerPolicyProjection, retry, retryProjection);
+        AssertIdentityAndCacheProjectionGuards();
+        AssertRetryProjectionGuards();
+        AssertPolicyCollectionRepresentations(admin, adminProjection, forwardedHeaders, forwardedHeadersProjection, cache, cacheProjection, runtimeCertificate, certificateProjection, circuitBreaker);
+        AssertCircuitAndForwardingCollectionContracts(headerPolicy, headerPolicyProjection, retry, retryProjection);
+        AssertRuntimeForwardingPolicyGuards();
+        AssertAdministrativeResponseCopies(adminProjection);
+        AssertForwardedHeaderResponseCopies(forwardedHeadersProjection);
+        AssertHeaderPolicyResponseCopies(headerPolicyProjection);
+        AssertCacheAndRetryResponseCopies(cacheProjection, retryProjection);
+        AssertAcmeAndCertificateResponseCopies(acmeProjection, certificateProjection);
+    }
+
+    private static void AssertAcmeAndCertificateResponseCopies(RuntimeAcmeProjection acmeProjection, RuntimeCertificateProjection certificateProjection)
+    {
+        var acmeResponse = RuntimeAcmeResponseMapper.FromProjection(acmeProjection);
+        AssertEx.False(acmeResponse.ContactEmails is string[], "ACME API contact emails should not expose a mutable array.");
+        AssertEx.False(acmeResponse.Certificates is RuntimeAcmeCertificateResponse[], "ACME API certificates should not expose a mutable array.");
+        AssertEx.False(acmeResponse.Certificates[0].Domains is string[], "ACME API certificate domains should not expose a mutable array.");
+        var certificateResponses = RuntimeCertificateResponseMapper.FromCertificates([certificateProjection]);
+        AssertEx.False(certificateResponses is RuntimeCertificateResponse[], "Configuration API certificates should not expose a mutable array.");
+        AssertEx.False(certificateResponses[0].Domains is string[], "Configuration API certificate domains should not expose a mutable array.");
+        var acmeResponseContacts = new List<string>
         {
-            adminResponse.Urls[0]
+            acmeResponse.ContactEmails[0]
         };
-        var directAdminResponse = new RuntimeAdminSecurityResponse(urls: adminResponseUrls, requireAuthentication: true, hasConfiguredToken: true, token: null, tokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", tokenSource: "configured", recentAuditCapacity: 64);
-        adminResponseUrls[0] = "http://127.0.0.1:19999";
-        adminResponseUrls.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAdminSecurityResponse(urls: null!, requireAuthentication: true, hasConfiguredToken: true, token: null, tokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", tokenSource: "configured", recentAuditCapacity: 64));
-        AssertEx.Equal("http://127.0.0.1:18082", directAdminResponse.Urls[0]);
-        AssertEx.False(directAdminResponse.Urls is string[], "Direct admin security API URLs should not expose a mutable array.");
-        var forwardedHeadersResponse = RuntimeForwardedHeadersResponseMapper.FromProjection(forwardedHeadersProjection);
-        AssertEx.False(forwardedHeadersResponse.TrustedProxies is string[], "Forwarded headers API trusted proxies should not expose a mutable array.");
-        var forwardedHeaderTrustedProxies = new List<string>
+        var acmeCertificateDomains = new List<string>
         {
-            forwardedHeadersResponse.TrustedProxies[0]
+            acmeResponse.Certificates[0].Domains[0]
         };
-        var directForwardedHeadersResponse = new RuntimeForwardedHeadersResponse(enabled: forwardedHeadersResponse.Enabled, trustedProxies: forwardedHeaderTrustedProxies);
-        forwardedHeaderTrustedProxies[0] = "10.0.0.1";
-        forwardedHeaderTrustedProxies.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeForwardedHeadersResponse(enabled: true, trustedProxies: null!));
-        AssertEx.Equal("127.0.0.1", directForwardedHeadersResponse.TrustedProxies[0]);
-        AssertEx.False(directForwardedHeadersResponse.TrustedProxies is string[], "Direct forwarded headers API trusted proxies should not expose a mutable array.");
-        var headerPolicyResponse = RuntimeHeaderPolicyResponseMapper.FromProjection(headerPolicyProjection);
-        AssertEx.False(headerPolicyResponse.SetRequestHeaders is RuntimeHeaderFieldResponse[], "Header policy API set request headers should not expose a mutable array.");
-        AssertEx.False(headerPolicyResponse.RemoveRequestHeaders is string[], "Header policy API remove request headers should not expose a mutable array.");
-        AssertEx.False(headerPolicyResponse.SetResponseHeaders is RuntimeHeaderFieldResponse[], "Header policy API set response headers should not expose a mutable array.");
-        AssertEx.False(headerPolicyResponse.RemoveResponseHeaders is string[], "Header policy API remove response headers should not expose a mutable array.");
-        var headerSetRequest = new List<RuntimeHeaderFieldResponse>
+        var directAcmeCertificate = new RuntimeAcmeCertificateResponse(id: acmeResponse.Certificates[0].Id, enabled: acmeResponse.Certificates[0].Enabled, domains: acmeCertificateDomains, renewBeforeDays: acmeResponse.Certificates[0].RenewBeforeDays);
+        var acmeResponseCertificates = new List<RuntimeAcmeCertificateResponse>
         {
-            headerPolicyResponse.SetRequestHeaders[0]
+            directAcmeCertificate
         };
-        var headerRemoveRequest = new List<string>
+        var directAcmeResponse = new RuntimeAcmeResponse(enabled: acmeResponse.Enabled, useStaging: acmeResponse.UseStaging, directoryUrl: acmeResponse.DirectoryUrl, contactEmails: acmeResponseContacts, termsAccepted: acmeResponse.TermsAccepted, storagePath: acmeResponse.StoragePath, renewBeforeDays: acmeResponse.RenewBeforeDays, checkIntervalMinutes: acmeResponse.CheckIntervalMinutes, retryAfterMinutes: acmeResponse.RetryAfterMinutes, certificates: acmeResponseCertificates);
+        var certificateResponseDomains = new List<string>
         {
-            headerPolicyResponse.RemoveRequestHeaders[0]
+            certificateResponses[0].Domains[0]
         };
-        var headerSetResponse = new List<RuntimeHeaderFieldResponse>
-        {
-            headerPolicyResponse.SetResponseHeaders[0]
-        };
-        var headerRemoveResponse = new List<string>
-        {
-            headerPolicyResponse.RemoveResponseHeaders[0]
-        };
-        var directHeaderPolicyResponse = new RuntimeHeaderPolicyResponse(setRequestHeaders: headerSetRequest, removeRequestHeaders: headerRemoveRequest, setResponseHeaders: headerSetResponse, removeResponseHeaders: headerRemoveResponse);
-        headerSetRequest[0] = headerSetRequest[0] with
-        {
-            Name = "X-Replacement-Request"
-        };
-        headerRemoveRequest[0] = "X-Replacement-Remove-Request";
-        headerSetResponse[0] = headerSetResponse[0] with
-        {
-            Name = "X-Replacement-Response"
-        };
-        headerRemoveResponse[0] = "X-Replacement-Remove-Response";
-        headerSetRequest.Clear();
-        headerRemoveRequest.Clear();
-        headerSetResponse.Clear();
-        headerRemoveResponse.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyResponse(setRequestHeaders: null!, removeRequestHeaders: [], setResponseHeaders: [], removeResponseHeaders: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyResponse(setRequestHeaders: [], removeRequestHeaders: null!, setResponseHeaders: [], removeResponseHeaders: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyResponse(setRequestHeaders: [], removeRequestHeaders: [], setResponseHeaders: null!, removeResponseHeaders: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyResponse(setRequestHeaders: [], removeRequestHeaders: [], setResponseHeaders: [], removeResponseHeaders: null!));
-        AssertEx.Equal("X-Trace", directHeaderPolicyResponse.SetRequestHeaders[0].Name);
-        AssertEx.Equal("X-Remove-Request", directHeaderPolicyResponse.RemoveRequestHeaders[0]);
-        AssertEx.Equal("X-Frame-Options", directHeaderPolicyResponse.SetResponseHeaders[0].Name);
-        AssertEx.Equal("Server", directHeaderPolicyResponse.RemoveResponseHeaders[0]);
-        AssertEx.False(directHeaderPolicyResponse.SetRequestHeaders is RuntimeHeaderFieldResponse[], "Direct header policy API set request headers should not expose a mutable array.");
-        AssertEx.False(directHeaderPolicyResponse.RemoveRequestHeaders is string[], "Direct header policy API remove request headers should not expose a mutable array.");
-        AssertEx.False(directHeaderPolicyResponse.SetResponseHeaders is RuntimeHeaderFieldResponse[], "Direct header policy API set response headers should not expose a mutable array.");
-        AssertEx.False(directHeaderPolicyResponse.RemoveResponseHeaders is string[], "Direct header policy API remove response headers should not expose a mutable array.");
+        var directCertificateResponse = new RuntimeCertificateResponse(id: certificateResponses[0].Id, path: certificateResponses[0].Path, format: certificateResponses[0].Format, source: certificateResponses[0].Source, domains: certificateResponseDomains, hasConfiguredPassword: certificateResponses[0].HasConfiguredPassword, subject: certificateResponses[0].Subject, thumbprint: certificateResponses[0].Thumbprint, notBefore: certificateResponses[0].NotBefore, notAfter: certificateResponses[0].NotAfter);
+        acmeResponseContacts[0] = "replacement@home.test";
+        acmeCertificateDomains[0] = "replacement.home.test";
+        acmeResponseCertificates[0] = new RuntimeAcmeCertificateResponse(id: "replacement-cert", enabled: false, domains: ["replacement.home.test"], renewBeforeDays: 1);
+        certificateResponseDomains[0] = "replacement.home.test";
+        acmeResponseContacts.Clear();
+        acmeCertificateDomains.Clear();
+        acmeResponseCertificates.Clear();
+        certificateResponseDomains.Clear();
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeResponse(enabled: true, useStaging: false, directoryUrl: "https://acme.test/directory", contactEmails: null!, termsAccepted: true, storagePath: "acme", renewBeforeDays: 14, checkIntervalMinutes: 60, retryAfterMinutes: 10, certificates: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeResponse(enabled: true, useStaging: false, directoryUrl: "https://acme.test/directory", contactEmails: [], termsAccepted: true, storagePath: "acme", renewBeforeDays: 14, checkIntervalMinutes: 60, retryAfterMinutes: 10, certificates: null!));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeCertificateResponse(id: "api-cert", enabled: true, domains: null!, renewBeforeDays: 14));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateResponse(id: "api-cert", path: "certs/api.pfx", format: "pfx", source: "manual", domains: null!, hasConfiguredPassword: false, subject: null, thumbprint: null, notBefore: DateTime.UnixEpoch, notAfter: DateTime.UnixEpoch.AddDays(1)));
+        AssertEx.Equal("ops@home.test", directAcmeResponse.ContactEmails[0]);
+        AssertEx.Equal("api-cert", directAcmeResponse.Certificates[0].Id);
+        AssertEx.Equal("api.home.test", directAcmeCertificate.Domains[0]);
+        AssertEx.Equal("api.home.test", directCertificateResponse.Domains[0]);
+        AssertEx.False(directAcmeResponse.ContactEmails is string[], "Direct ACME API contact emails should not expose a mutable array.");
+        AssertEx.False(directAcmeResponse.Certificates is RuntimeAcmeCertificateResponse[], "Direct ACME API certificates should not expose a mutable array.");
+        AssertEx.False(directAcmeCertificate.Domains is string[], "Direct ACME API certificate domains should not expose a mutable array.");
+        AssertEx.False(directCertificateResponse.Domains is string[], "Direct configuration API certificate domains should not expose a mutable array.");
+    }
+
+    private static void AssertCacheAndRetryResponseCopies(RuntimeCacheProjection cacheProjection, RuntimeRetryProjection retryProjection)
+    {
         var cacheResponse = RuntimeCachePolicyResponseMapper.FromProjection(cacheProjection);
         AssertEx.False(cacheResponse.VaryByHeaders is string[], "Cache API vary headers should not expose a mutable array.");
         AssertEx.False(cacheResponse.CacheableStatusCodes is int[], "Cache API cacheable status codes should not expose a mutable array.");
@@ -1052,52 +808,433 @@ internal static class ConfigurationTests
         AssertEx.False(directCacheResponse.Methods is string[], "Direct cache API methods should not expose a mutable array.");
         AssertEx.False(directRetryResponse.RetryOnStatusCodes is int[], "Direct retry API status codes should not expose a mutable array.");
         AssertEx.False(directRetryResponse.RetryMethods is string[], "Direct retry API methods should not expose a mutable array.");
-        var acmeResponse = RuntimeAcmeResponseMapper.FromProjection(acmeProjection);
-        AssertEx.False(acmeResponse.ContactEmails is string[], "ACME API contact emails should not expose a mutable array.");
-        AssertEx.False(acmeResponse.Certificates is RuntimeAcmeCertificateResponse[], "ACME API certificates should not expose a mutable array.");
-        AssertEx.False(acmeResponse.Certificates[0].Domains is string[], "ACME API certificate domains should not expose a mutable array.");
-        var certificateResponses = RuntimeCertificateResponseMapper.FromCertificates([certificateProjection]);
-        AssertEx.False(certificateResponses is RuntimeCertificateResponse[], "Configuration API certificates should not expose a mutable array.");
-        AssertEx.False(certificateResponses[0].Domains is string[], "Configuration API certificate domains should not expose a mutable array.");
-        var acmeResponseContacts = new List<string>
+    }
+
+    private static void AssertHeaderPolicyResponseCopies(RuntimeHeaderPolicyProjection headerPolicyProjection)
+    {
+        var headerPolicyResponse = RuntimeHeaderPolicyResponseMapper.FromProjection(headerPolicyProjection);
+        AssertEx.False(headerPolicyResponse.SetRequestHeaders is RuntimeHeaderFieldResponse[], "Header policy API set request headers should not expose a mutable array.");
+        AssertEx.False(headerPolicyResponse.RemoveRequestHeaders is string[], "Header policy API remove request headers should not expose a mutable array.");
+        AssertEx.False(headerPolicyResponse.SetResponseHeaders is RuntimeHeaderFieldResponse[], "Header policy API set response headers should not expose a mutable array.");
+        AssertEx.False(headerPolicyResponse.RemoveResponseHeaders is string[], "Header policy API remove response headers should not expose a mutable array.");
+        var headerSetRequest = new List<RuntimeHeaderFieldResponse>
         {
-            acmeResponse.ContactEmails[0]
+            headerPolicyResponse.SetRequestHeaders[0]
         };
-        var acmeCertificateDomains = new List<string>
+        var headerRemoveRequest = new List<string>
         {
-            acmeResponse.Certificates[0].Domains[0]
+            headerPolicyResponse.RemoveRequestHeaders[0]
         };
-        var directAcmeCertificate = new RuntimeAcmeCertificateResponse(id: acmeResponse.Certificates[0].Id, enabled: acmeResponse.Certificates[0].Enabled, domains: acmeCertificateDomains, renewBeforeDays: acmeResponse.Certificates[0].RenewBeforeDays);
-        var acmeResponseCertificates = new List<RuntimeAcmeCertificateResponse>
+        var headerSetResponse = new List<RuntimeHeaderFieldResponse>
         {
-            directAcmeCertificate
+            headerPolicyResponse.SetResponseHeaders[0]
         };
-        var directAcmeResponse = new RuntimeAcmeResponse(enabled: acmeResponse.Enabled, useStaging: acmeResponse.UseStaging, directoryUrl: acmeResponse.DirectoryUrl, contactEmails: acmeResponseContacts, termsAccepted: acmeResponse.TermsAccepted, storagePath: acmeResponse.StoragePath, renewBeforeDays: acmeResponse.RenewBeforeDays, checkIntervalMinutes: acmeResponse.CheckIntervalMinutes, retryAfterMinutes: acmeResponse.RetryAfterMinutes, certificates: acmeResponseCertificates);
-        var certificateResponseDomains = new List<string>
+        var headerRemoveResponse = new List<string>
         {
-            certificateResponses[0].Domains[0]
+            headerPolicyResponse.RemoveResponseHeaders[0]
         };
-        var directCertificateResponse = new RuntimeCertificateResponse(id: certificateResponses[0].Id, path: certificateResponses[0].Path, format: certificateResponses[0].Format, source: certificateResponses[0].Source, domains: certificateResponseDomains, hasConfiguredPassword: certificateResponses[0].HasConfiguredPassword, subject: certificateResponses[0].Subject, thumbprint: certificateResponses[0].Thumbprint, notBefore: certificateResponses[0].NotBefore, notAfter: certificateResponses[0].NotAfter);
-        acmeResponseContacts[0] = "replacement@home.test";
-        acmeCertificateDomains[0] = "replacement.home.test";
-        acmeResponseCertificates[0] = new RuntimeAcmeCertificateResponse(id: "replacement-cert", enabled: false, domains: ["replacement.home.test"], renewBeforeDays: 1);
-        certificateResponseDomains[0] = "replacement.home.test";
-        acmeResponseContacts.Clear();
-        acmeCertificateDomains.Clear();
-        acmeResponseCertificates.Clear();
-        certificateResponseDomains.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeResponse(enabled: true, useStaging: false, directoryUrl: "https://acme.test/directory", contactEmails: null!, termsAccepted: true, storagePath: "acme", renewBeforeDays: 14, checkIntervalMinutes: 60, retryAfterMinutes: 10, certificates: []));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeResponse(enabled: true, useStaging: false, directoryUrl: "https://acme.test/directory", contactEmails: [], termsAccepted: true, storagePath: "acme", renewBeforeDays: 14, checkIntervalMinutes: 60, retryAfterMinutes: 10, certificates: null!));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeCertificateResponse(id: "api-cert", enabled: true, domains: null!, renewBeforeDays: 14));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateResponse(id: "api-cert", path: "certs/api.pfx", format: "pfx", source: "manual", domains: null!, hasConfiguredPassword: false, subject: null, thumbprint: null, notBefore: DateTime.UnixEpoch, notAfter: DateTime.UnixEpoch.AddDays(1)));
-        AssertEx.Equal("ops@home.test", directAcmeResponse.ContactEmails[0]);
-        AssertEx.Equal("api-cert", directAcmeResponse.Certificates[0].Id);
-        AssertEx.Equal("api.home.test", directAcmeCertificate.Domains[0]);
-        AssertEx.Equal("api.home.test", directCertificateResponse.Domains[0]);
-        AssertEx.False(directAcmeResponse.ContactEmails is string[], "Direct ACME API contact emails should not expose a mutable array.");
-        AssertEx.False(directAcmeResponse.Certificates is RuntimeAcmeCertificateResponse[], "Direct ACME API certificates should not expose a mutable array.");
-        AssertEx.False(directAcmeCertificate.Domains is string[], "Direct ACME API certificate domains should not expose a mutable array.");
-        AssertEx.False(directCertificateResponse.Domains is string[], "Direct configuration API certificate domains should not expose a mutable array.");
+        var directHeaderPolicyResponse = new RuntimeHeaderPolicyResponse(setRequestHeaders: headerSetRequest, removeRequestHeaders: headerRemoveRequest, setResponseHeaders: headerSetResponse, removeResponseHeaders: headerRemoveResponse);
+        headerSetRequest[0] = headerSetRequest[0] with
+        {
+            Name = "X-Replacement-Request"
+        };
+        headerRemoveRequest[0] = "X-Replacement-Remove-Request";
+        headerSetResponse[0] = headerSetResponse[0] with
+        {
+            Name = "X-Replacement-Response"
+        };
+        headerRemoveResponse[0] = "X-Replacement-Remove-Response";
+        headerSetRequest.Clear();
+        headerRemoveRequest.Clear();
+        headerSetResponse.Clear();
+        headerRemoveResponse.Clear();
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyResponse(setRequestHeaders: null!, removeRequestHeaders: [], setResponseHeaders: [], removeResponseHeaders: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyResponse(setRequestHeaders: [], removeRequestHeaders: null!, setResponseHeaders: [], removeResponseHeaders: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyResponse(setRequestHeaders: [], removeRequestHeaders: [], setResponseHeaders: null!, removeResponseHeaders: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyResponse(setRequestHeaders: [], removeRequestHeaders: [], setResponseHeaders: [], removeResponseHeaders: null!));
+        AssertEx.Equal("X-Trace", directHeaderPolicyResponse.SetRequestHeaders[0].Name);
+        AssertEx.Equal("X-Remove-Request", directHeaderPolicyResponse.RemoveRequestHeaders[0]);
+        AssertEx.Equal("X-Frame-Options", directHeaderPolicyResponse.SetResponseHeaders[0].Name);
+        AssertEx.Equal("Server", directHeaderPolicyResponse.RemoveResponseHeaders[0]);
+        AssertEx.False(directHeaderPolicyResponse.SetRequestHeaders is RuntimeHeaderFieldResponse[], "Direct header policy API set request headers should not expose a mutable array.");
+        AssertEx.False(directHeaderPolicyResponse.RemoveRequestHeaders is string[], "Direct header policy API remove request headers should not expose a mutable array.");
+        AssertEx.False(directHeaderPolicyResponse.SetResponseHeaders is RuntimeHeaderFieldResponse[], "Direct header policy API set response headers should not expose a mutable array.");
+        AssertEx.False(directHeaderPolicyResponse.RemoveResponseHeaders is string[], "Direct header policy API remove response headers should not expose a mutable array.");
+    }
+
+    private static void AssertForwardedHeaderResponseCopies(RuntimeForwardedHeadersProjection forwardedHeadersProjection)
+    {
+        var forwardedHeadersResponse = RuntimeForwardedHeadersResponseMapper.FromProjection(forwardedHeadersProjection);
+        AssertEx.False(forwardedHeadersResponse.TrustedProxies is string[], "Forwarded headers API trusted proxies should not expose a mutable array.");
+        var forwardedHeaderTrustedProxies = new List<string>
+        {
+            forwardedHeadersResponse.TrustedProxies[0]
+        };
+        var directForwardedHeadersResponse = new RuntimeForwardedHeadersResponse(enabled: forwardedHeadersResponse.Enabled, trustedProxies: forwardedHeaderTrustedProxies);
+        forwardedHeaderTrustedProxies[0] = "10.0.0.1";
+        forwardedHeaderTrustedProxies.Clear();
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeForwardedHeadersResponse(enabled: true, trustedProxies: null!));
+        AssertEx.Equal("127.0.0.1", directForwardedHeadersResponse.TrustedProxies[0]);
+        AssertEx.False(directForwardedHeadersResponse.TrustedProxies is string[], "Direct forwarded headers API trusted proxies should not expose a mutable array.");
+    }
+
+    private static void AssertAdministrativeResponseCopies(RuntimeAdminSecurityProjection adminProjection)
+    {
+        var adminResponse = RuntimeAdminSecurityResponseMapper.FromProjection(adminProjection);
+        AssertEx.False(adminResponse.Urls is string[], "Admin security API URLs should not expose a mutable array.");
+        var adminResponseUrls = new List<string>
+        {
+            adminResponse.Urls[0]
+        };
+        var directAdminResponse = new RuntimeAdminSecurityResponse(urls: adminResponseUrls, requireAuthentication: true, hasConfiguredToken: true, token: null, tokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", tokenSource: "configured", recentAuditCapacity: 64);
+        adminResponseUrls[0] = "http://127.0.0.1:19999";
+        adminResponseUrls.Clear();
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAdminSecurityResponse(urls: null!, requireAuthentication: true, hasConfiguredToken: true, token: null, tokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", tokenSource: "configured", recentAuditCapacity: 64));
+        AssertEx.Equal("http://127.0.0.1:18082", directAdminResponse.Urls[0]);
+        AssertEx.False(directAdminResponse.Urls is string[], "Direct admin security API URLs should not expose a mutable array.");
+    }
+
+    private static void AssertRuntimeForwardingPolicyGuards()
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [null!], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: [null!]));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: -1, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: -1, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCachePolicy(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromTicks(-1), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicy([null!], [], [], []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicy([], [], [null!], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([new ProxyHeaderField(" ", "value")], [], [], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([new ProxyHeaderField("Host", "value")], [], [], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([new ProxyHeaderField("Bad Header", "value")], [], [], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([new ProxyHeaderField("X-Test", "bad\r\nvalue")], [], [], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([], ["Host"], [], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicy([], ["Bad Header"], [], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderFieldProjection(" ", "value"));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderFieldProjection("Host", "value"));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderFieldProjection("Bad Header", "value"));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderFieldProjection("X-Test", null!));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderFieldProjection("X-Test", "bad\nvalue"));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHeaderPolicyProjection([null!], [], [], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicyProjection([], ["Host"], [], []));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeHeaderPolicyProjection([], ["Bad Header"], [], []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [null!], RetryBackoff: TimeSpan.FromMilliseconds(50)));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 0, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromTicks(-1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryPolicy(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromTicks(-1)));
+    }
+
+    private static void AssertCircuitAndForwardingCollectionContracts(RuntimeHeaderPolicy headerPolicy, RuntimeHeaderPolicyProjection headerPolicyProjection, RuntimeRetryPolicy retry, RuntimeRetryProjection retryProjection)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerPolicy(Enabled: true, FailureThreshold: 0, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerPolicy(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.Zero, OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerPolicy(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.Zero, HalfOpenMaxAttempts: 1, FailureStatusCodes: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCircuitBreakerPolicy(Enabled: true, FailureThreshold: 2, SamplingWindow: TimeSpan.FromSeconds(30), OpenDuration: TimeSpan.FromSeconds(10), HalfOpenMaxAttempts: 0, FailureStatusCodes: []));
+        AssertEx.False(headerPolicy.SetRequestHeaders is ProxyHeaderField[]);
+        AssertEx.False(headerPolicy.RemoveRequestHeaders is string[]);
+        AssertEx.False(headerPolicy.SetResponseHeaders is ProxyHeaderField[]);
+        AssertEx.False(headerPolicy.RemoveResponseHeaders is string[]);
+        AssertEx.False(headerPolicyProjection.SetRequestHeaders is RuntimeHeaderFieldProjection[]);
+        AssertEx.False(headerPolicyProjection.RemoveRequestHeaders is string[]);
+        AssertEx.False(headerPolicyProjection.SetResponseHeaders is RuntimeHeaderFieldProjection[]);
+        AssertEx.False(headerPolicyProjection.RemoveResponseHeaders is string[]);
+        AssertEx.False(retry.RetryOnStatusCodes is int[]);
+        AssertEx.False(retry.RetryMethods is string[]);
+        AssertEx.False(retryProjection.RetryOnStatusCodes is int[]);
+        AssertEx.False(retryProjection.RetryMethods is string[]);
+    }
+
+    private static void AssertPolicyCollectionRepresentations(RuntimeAdminSecurityOptions admin, RuntimeAdminSecurityProjection adminProjection, RuntimeForwardedHeadersOptions forwardedHeaders, RuntimeForwardedHeadersProjection forwardedHeadersProjection, RuntimeCachePolicy cache, RuntimeCacheProjection cacheProjection, RuntimeCertificate runtimeCertificate, RuntimeCertificateProjection certificateProjection, RuntimeCircuitBreakerPolicy circuitBreaker)
+    {
+        AssertEx.False(admin.Urls is string[]);
+        AssertEx.False(adminProjection.Urls is string[]);
+        AssertEx.False(forwardedHeaders.TrustedProxies is string[]);
+        AssertEx.False(forwardedHeadersProjection.TrustedProxies is string[]);
+        AssertEx.False(cache.VaryByHeaders is string[]);
+        AssertEx.False(cache.CacheableStatusCodes is int[]);
+        AssertEx.False(cache.Methods is string[]);
+        AssertEx.False(cacheProjection.VaryByHeaders is string[]);
+        AssertEx.False(cacheProjection.CacheableStatusCodes is int[]);
+        AssertEx.False(cacheProjection.Methods is string[]);
+        AssertEx.False(runtimeCertificate.Domains is string[]);
+        AssertEx.False(certificateProjection.Domains is string[]);
+        AssertEx.False(circuitBreaker.FailureStatusCodes is int[]);
+    }
+
+    private static void AssertRetryProjectionGuards()
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: null!, RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: null!, RetryBackoff: TimeSpan.FromMilliseconds(50)));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 0, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromTicks(-1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromMilliseconds(50)));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeRetryProjection(Enabled: true, MaxAttempts: 2, PerAttemptTimeout: TimeSpan.FromSeconds(1), RetryOnConnectFailure: true, RetryOnUpstreamResponseHeadTimeout: true, RetryOnStatusCodes: [], RetryMethods: [], RetryBackoff: TimeSpan.FromTicks(-1)));
+    }
+
+    private static void AssertIdentityAndCacheProjectionGuards()
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeProjection(true, false, null!, [], true, "acme", 14, 60, 10, []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeProjection(true, false, "https://acme.test/directory", [], true, null!, 14, 60, 10, []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeProjection(true, false, "https://acme.test/directory", null!, true, "acme", 14, 60, 10, []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeProjection(true, false, "https://acme.test/directory", [], true, "acme", 14, 60, 10, null!));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeCertificateProjection(null!, true, [], 14));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAcmeCertificateProjection("api-cert", true, null!, 14));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection(null!, "certs/api.pfx", "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", null!, "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", null!, "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", null!, [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", "manual", null!, HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeCertificateProjection(" ", "certs/api.pfx", "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeCertificateProjection("api-cert", "", "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "\t", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", " ", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", "manual", [null!], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch, NotAfter: DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCertificateProjection("api-cert", "certs/api.pfx", "pfx", "manual", [], HasConfiguredPassword: false, Subject: null, Thumbprint: null, NotBefore: DateTime.UnixEpoch.AddDays(30), NotAfter: DateTime.UnixEpoch));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAdminSecurityProjection(Urls: null!, RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 128));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeAdminSecurityOptions(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "secret", TokenEnvironmentVariable: " ", TokenSource: "environment", RecentAuditCapacity: 128));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeAdminSecurityOptions(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "secret", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: " ", RecentAuditCapacity: 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeAdminSecurityOptions(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "secret", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 0));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeAdminSecurityOptions(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "secret", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 10_001));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: null!, TokenSource: "environment", RecentAuditCapacity: 128));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: null!, RecentAuditCapacity: 128));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: " ", TokenSource: "environment", RecentAuditCapacity: 128));
+        AssertEx.Throws<ArgumentException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: " ", RecentAuditCapacity: 128));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 0));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeAdminSecurityProjection(Urls: [], RequireAuthentication: true, HasConfiguredToken: true, Token: "***", TokenEnvironmentVariable: "MDRAVA_ADMIN_TOKEN", TokenSource: "environment", RecentAuditCapacity: 10_001));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeForwardedHeadersProjection(Enabled: true, TrustedProxies: null!));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: null!, CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: null!, Methods: []));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: null!));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: -1, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: -1, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeCacheProjection(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromTicks(-1), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+    }
+
+    private static void AssertCacheHeaderAndRetryPolicyCopies(RuntimeAcmeOptions acme, RuntimeAcmeProjection acmeProjection, RuntimeCachePolicy cache, RuntimeCacheProjection cacheProjection, RuntimeCertificate runtimeCertificate, RuntimeCertificateProjection certificateProjection, RuntimeCircuitBreakerPolicy circuitBreaker, RuntimeHeaderPolicy headerPolicy, RuntimeHeaderPolicyProjection headerPolicyProjection, RuntimeRetryPolicy retry, RuntimeRetryProjection retryProjection)
+    {
+        AssertEx.Equal("X-Tenant", cache.VaryByHeaders[0]);
+        AssertEx.Equal(200, cache.CacheableStatusCodes[0]);
+        AssertEx.Equal("GET", cache.Methods[0]);
+        AssertEx.Equal("X-Tenant", cacheProjection.VaryByHeaders[0]);
+        AssertEx.Equal(200, cacheProjection.CacheableStatusCodes[0]);
+        AssertEx.Equal("GET", cacheProjection.Methods[0]);
+        AssertEx.True(cacheProjection.Enabled);
+        AssertEx.Equal(1024L, cacheProjection.MaxEntryBytes);
+        AssertEx.Equal(TimeSpan.FromSeconds(60), cacheProjection.DefaultTtl);
+        AssertEx.Equal("home.test", runtimeCertificate.Domains[0]);
+        AssertEx.Equal("api.home.test", certificateProjection.Domains[0]);
+        AssertEx.Equal("api-cert", certificateProjection.Id);
+        AssertEx.Equal("manual", certificateProjection.Source);
+        AssertEx.Equal(DateTime.UnixEpoch.AddDays(30), certificateProjection.NotAfter);
+        AssertEx.Equal(503, circuitBreaker.FailureStatusCodes[0]);
+        AssertEx.Equal("X-Trace", headerPolicy.SetRequestHeaders[0].Name);
+        AssertEx.Equal("X-Remove-Request", headerPolicy.RemoveRequestHeaders[0]);
+        AssertEx.Equal("X-Frame-Options", headerPolicy.SetResponseHeaders[0].Name);
+        AssertEx.Equal("Server", headerPolicy.RemoveResponseHeaders[0]);
+        AssertEx.Equal("X-Trace", headerPolicyProjection.SetRequestHeaders[0].Name);
+        AssertEx.Equal("X-Remove-Request", headerPolicyProjection.RemoveRequestHeaders[0]);
+        AssertEx.Equal("X-Frame-Options", headerPolicyProjection.SetResponseHeaders[0].Name);
+        AssertEx.Equal("Server", headerPolicyProjection.RemoveResponseHeaders[0]);
+        AssertEx.Equal(502, retry.RetryOnStatusCodes[0]);
+        AssertEx.Equal("GET", retry.RetryMethods[0]);
+        AssertEx.Equal(502, retryProjection.RetryOnStatusCodes[0]);
+        AssertEx.Equal("GET", retryProjection.RetryMethods[0]);
+        AssertEx.True(retryProjection.Enabled);
+        AssertEx.Equal(2, retryProjection.MaxAttempts);
+        AssertEx.Equal(TimeSpan.FromMilliseconds(50), retryProjection.RetryBackoff);
+        AssertEx.False(acme.ContactEmails is string[]);
+        AssertEx.False(acme.Certificates is RuntimeAcmeCertificateOptions[]);
+        AssertEx.False(acme.Certificates[0].Domains is string[]);
+        AssertEx.False(acmeProjection.ContactEmails is string[]);
+        AssertEx.False(acmeProjection.Certificates is RuntimeAcmeCertificateProjection[]);
+        AssertEx.False(acmeProjection.Certificates[0].Domains is string[]);
+    }
+
+    private static void AssertAcmeAndAdministrativePolicyCopies(RuntimeAcmeOptions acme, RuntimeAcmeProjection acmeProjection, RuntimeAdminSecurityOptions admin, RuntimeAdminSecurityProjection adminProjection, RuntimeForwardedHeadersOptions forwardedHeaders, RuntimeForwardedHeadersProjection forwardedHeadersProjection)
+    {
+        AssertEx.Equal("home.test", acme.Certificates[0].Domains[0]);
+        AssertEx.Equal("admin@home.test", acme.ContactEmails[0]);
+        AssertEx.Equal("api.home.test", acmeProjection.Certificates[0].Domains[0]);
+        AssertEx.Equal("ops@home.test", acmeProjection.ContactEmails[0]);
+        AssertEx.Equal("api-cert", acmeProjection.Certificates[0].Id);
+        AssertEx.Equal(14, acmeProjection.Certificates[0].RenewBeforeDays);
+        AssertEx.Equal("http://127.0.0.1:18081", admin.Urls[0]);
+        AssertEx.Equal("http://127.0.0.1:18082", adminProjection.Urls[0]);
+        AssertEx.Equal("***", adminProjection.Token);
+        AssertEx.Equal("environment", adminProjection.TokenSource);
+        AssertEx.Equal(128, adminProjection.RecentAuditCapacity);
+        AssertEx.Equal("127.0.0.1", forwardedHeaders.TrustedProxies[0]);
+        AssertEx.Equal("127.0.0.1", forwardedHeadersProjection.TrustedProxies[0]);
+        AssertEx.True(forwardedHeadersProjection.Enabled);
+    }
+
+    private static void ClearPolicyRetryInputs(List<int> retryStatusCodes, List<string> retryMethods)
+    {
+        retryStatusCodes.Clear();
+        retryMethods.Clear();
+    }
+
+    private static void ClearPolicyHeaderInputs(List<ProxyHeaderField> setRequestHeaders, List<string> removeRequestHeaders, List<ProxyHeaderField> setResponseHeaders, List<string> removeResponseHeaders, List<RuntimeHeaderFieldProjection> setRequestHeaderProjections, List<RuntimeHeaderFieldProjection> setResponseHeaderProjections)
+    {
+        setRequestHeaders.Clear();
+        removeRequestHeaders.Clear();
+        setResponseHeaders.Clear();
+        removeResponseHeaders.Clear();
+        setRequestHeaderProjections.Clear();
+        setResponseHeaderProjections.Clear();
+    }
+
+    private static void ClearPolicyCertificateAndCircuitInputs(List<string> certificateDomains, List<string> projectionDomains, List<int> circuitBreakerCodes)
+    {
+        certificateDomains.Clear();
+        projectionDomains.Clear();
+        circuitBreakerCodes.Clear();
+    }
+
+    private static void ClearPolicyCacheInputs(List<string> cacheVaryHeaders, List<int> cacheStatusCodes, List<string> cacheMethods)
+    {
+        cacheVaryHeaders.Clear();
+        cacheStatusCodes.Clear();
+        cacheMethods.Clear();
+    }
+
+    private static void ClearPolicyAdministrativeInputs(List<string> adminUrls, List<string> projectionUrls, List<string> trustedProxies)
+    {
+        adminUrls.Clear();
+        projectionUrls.Clear();
+        trustedProxies.Clear();
+    }
+
+    private static void ClearPolicyAcmeInputs(List<string> acmeDomains, List<string> acmeContacts, List<RuntimeAcmeCertificateOptions> acmeCertificates, List<string> acmeProjectionDomains, List<string> acmeProjectionContacts, List<RuntimeAcmeCertificateProjection> acmeProjectionCertificates)
+    {
+        acmeDomains.Clear();
+        acmeContacts.Clear();
+        acmeCertificates.Clear();
+        acmeProjectionDomains.Clear();
+        acmeProjectionContacts.Clear();
+        acmeProjectionCertificates.Clear();
+    }
+
+    private static (List<int> RetryStatusCodes, List<string> RetryMethods) CreatePolicyRetryInputs()
+    {
+        var retryStatusCodes = new List<int>
+        {
+            502
+        };
+        var retryMethods = new List<string>
+        {
+            "GET"
+        };
+
+        return (retryStatusCodes, retryMethods);
+    }
+
+    private static (List<ProxyHeaderField> SetRequestHeaders, List<string> RemoveRequestHeaders, List<ProxyHeaderField> SetResponseHeaders, List<string> RemoveResponseHeaders, List<RuntimeHeaderFieldProjection> SetRequestHeaderProjections, List<RuntimeHeaderFieldProjection> SetResponseHeaderProjections) CreatePolicyHeaderInputs()
+    {
+        var setRequestHeaders = new List<ProxyHeaderField>
+        {
+            new("X-Trace", "enabled")
+        };
+        var removeRequestHeaders = new List<string>
+        {
+            "X-Remove-Request"
+        };
+        var setResponseHeaders = new List<ProxyHeaderField>
+        {
+            new("X-Frame-Options", "DENY")
+        };
+        var removeResponseHeaders = new List<string>
+        {
+            "Server"
+        };
+        var setRequestHeaderProjections = new List<RuntimeHeaderFieldProjection>
+        {
+            new("X-Trace", "enabled")
+        };
+        var setResponseHeaderProjections = new List<RuntimeHeaderFieldProjection>
+        {
+            new("X-Frame-Options", "DENY")
+        };
+
+        return (setRequestHeaders, removeRequestHeaders, setResponseHeaders, removeResponseHeaders, setRequestHeaderProjections, setResponseHeaderProjections);
+    }
+
+    private static (List<string> CertificateDomains, List<string> ProjectionDomains) CreatePolicyCertificateInputs()
+    {
+        var certificateDomains = new List<string>
+        {
+            "home.test"
+        };
+        var projectionDomains = new List<string>
+        {
+            "api.home.test"
+        };
+
+        return (certificateDomains, projectionDomains);
+    }
+
+    private static (List<string> CacheVaryHeaders, List<int> CacheStatusCodes, List<string> CacheMethods) CreatePolicyCacheInputs()
+    {
+        var cacheVaryHeaders = new List<string>
+        {
+            "X-Tenant"
+        };
+        var cacheStatusCodes = new List<int>
+        {
+            200
+        };
+        var cacheMethods = new List<string>
+        {
+            "GET"
+        };
+
+        return (cacheVaryHeaders, cacheStatusCodes, cacheMethods);
+    }
+
+    private static (List<string> AdminUrls, List<string> ProjectionUrls, List<string> TrustedProxies) CreatePolicyAdministrativeInputs()
+    {
+        var adminUrls = new List<string>
+        {
+            "http://127.0.0.1:18081"
+        };
+        var projectionUrls = new List<string>
+        {
+            "http://127.0.0.1:18082"
+        };
+        var trustedProxies = new List<string>
+        {
+            "127.0.0.1"
+        };
+
+        return (adminUrls, projectionUrls, trustedProxies);
+    }
+
+    private static (List<string> AcmeDomains, List<string> AcmeContacts, List<RuntimeAcmeCertificateOptions> AcmeCertificates, List<string> AcmeProjectionDomains, List<string> AcmeProjectionContacts, List<RuntimeAcmeCertificateProjection> AcmeProjectionCertificates) CreatePolicyAcmeInputs()
+    {
+        var acmeDomains = new List<string>
+        {
+            "home.test"
+        };
+        var acmeContacts = new List<string>
+        {
+            "admin@home.test"
+        };
+        var acmeCertificates = new List<RuntimeAcmeCertificateOptions>
+        {
+            new("home-cert", true, acmeDomains, 21)
+        };
+        var acmeProjectionDomains = new List<string>
+        {
+            "api.home.test"
+        };
+        var acmeProjectionContacts = new List<string>
+        {
+            "ops@home.test"
+        };
+        var acmeProjectionCertificates = new List<RuntimeAcmeCertificateProjection>
+        {
+            new("api-cert", true, acmeProjectionDomains, 14)
+        };
+
+        return (acmeDomains, acmeContacts, acmeCertificates, acmeProjectionDomains, acmeProjectionContacts, acmeProjectionCertificates);
     }
 
     public static void RuntimeConfigurationGraphRecordsCopyInputCollections()
@@ -1137,50 +1274,13 @@ internal static class ConfigurationTests
         certificates.Clear();
         listeners.Clear();
         routes.Clear();
-        AssertEx.Equal("home.test", listener.SniCertificates[0].HostName);
-        AssertEx.Equal("local", route.Upstreams[0].Name);
-        AssertEx.Equal("sites/home.json", snapshot.SourceFiles[0]);
-        AssertEx.True(snapshot.Certificates.ContainsKey("HOME-CERT"));
-        AssertEx.Equal("home-cert", snapshot.Certificates["HOME-CERT"].Id);
-        AssertEx.Equal("web", snapshot.Listeners[0].Name);
-        AssertEx.Equal("home", snapshot.Routes[0].Name);
-        AssertEx.False(listener.SniCertificates is RuntimeSniCertificateBinding[]);
-        AssertEx.False(route.Upstreams is RuntimeUpstream[]);
-        AssertEx.False(snapshot.SourceFiles is string[]);
-        AssertEx.False(snapshot.Certificates is Dictionary<string, RuntimeCertificate>);
-        AssertEx.False(snapshot.Listeners is RuntimeListener[]);
-        AssertEx.False(snapshot.Routes is RuntimeRoute[]);
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyConfigurationSnapshot(0, snapshot.LoadedAtUtc, snapshot.SourceDirectory, snapshot.SourceFiles, snapshot.Discovery, snapshot.AdminSecurity, snapshot.Acme, snapshot.Timeouts, snapshot.ConnectionLimits, snapshot.Observability, snapshot.Limits, snapshot.ForwardedHeaders, snapshot.Certificates, snapshot.Listeners, snapshot.Routes, snapshot.Metrics));
-        AssertConnectionLimitsRejects(maxRequestsPerClientConnection: 0);
-        AssertConnectionLimitsRejects(maxIdleUpstreamConnectionsPerUpstream: -1);
-        AssertConnectionLimitsRejects(maxActiveUpgradedTunnels: 0);
-        AssertConnectionLimitsProjectionRejects(maxRequestsPerClientConnection: 0);
-        AssertConnectionLimitsProjectionRejects(maxIdleUpstreamConnectionsPerUpstream: -1);
-        AssertConnectionLimitsProjectionRejects(maxActiveUpgradedTunnels: 0);
-        AssertLimitsRejects(maxActiveClientConnections: 0);
-        AssertLimitsRejects(maxConcurrentTlsHandshakes: 0);
-        AssertLimitsRejects(requestsPerMinutePerIp: 0);
-        AssertLimitsRejects(upgradeRequestsPerMinutePerIp: 0);
-        AssertLimitsRejects(maxRequestHeadBytes: 0);
-        AssertLimitsRejects(maxHeaderCount: 0);
-        AssertLimitsRejects(maxHeaderLineBytes: 0);
-        AssertLimitsRejects(maxRequestBodyBytes: -1);
-        AssertLimitsRejects(maxPathBytes: 0);
-        AssertLimitsRejects(shutdownGracePeriod: TimeSpan.Zero);
-        AssertLimitsProjectionRejects(maxActiveClientConnections: 0);
-        AssertLimitsProjectionRejects(maxConcurrentTlsHandshakes: 0);
-        AssertLimitsProjectionRejects(requestsPerMinutePerIp: 0);
-        AssertLimitsProjectionRejects(upgradeRequestsPerMinutePerIp: 0);
-        AssertLimitsProjectionRejects(maxRequestHeadBytes: 0);
-        AssertLimitsProjectionRejects(maxHeaderCount: 0);
-        AssertLimitsProjectionRejects(maxHeaderLineBytes: 0);
-        AssertLimitsProjectionRejects(maxRequestBodyBytes: -1);
-        AssertLimitsProjectionRejects(maxPathBytes: 0);
-        AssertLimitsProjectionRejects(shutdownGracePeriod: TimeSpan.Zero);
-        AssertEx.Throws<ArgumentNullException>(() => listener.WithSniCertificates([null!]));
-        AssertEx.Throws<ArgumentNullException>(() => route.WithUpstreams([null!]));
-        AssertEx.Throws<ArgumentNullException>(() => snapshot.WithListenersAndRoutes([null!], snapshot.Routes));
-        AssertEx.Throws<ArgumentNullException>(() => snapshot.WithListenersAndRoutes(snapshot.Listeners, [null!]));
+        AssertConfigurationGraphCopies(listener, route, snapshot);
+        AssertConfigurationGraphGuards(snapshot, listener, route);
+        AssertConfigurationGraphProjectionAndResponses(snapshot, listener, route);
+    }
+
+    private static void AssertConfigurationGraphProjectionAndResponses(ProxyConfigurationSnapshot snapshot, RuntimeListener listener, RuntimeRoute route)
+    {
         var http3Projection = new RuntimeHttp3SupportProjection("unknown", QuicListenerSupported: false, QuicConnectionSupported: false, "disabled", "disabled", EnabledForTraffic: false, QuicListenerReady: false, AltSvcConfigured: false, AltSvcActive: false, AltSvcMaxAgeSeconds: null, "not_configured", UdpQuicListenerIdentityModeled: true, "not_ready");
         var projection = ProxyConfigurationProjectionMapper.ToProjection(snapshot, http3Projection);
         AssertEx.Equal("sites/home.json", projection.SourceFiles[0]);
@@ -1195,47 +1295,84 @@ internal static class ConfigurationTests
         AssertEx.Equal("not_ready", projection.Http3.ReadinessConclusion);
         AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(null!, http3Projection));
         AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(snapshot, null!));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(acme: new RuntimeAcmeOptions(false, true, "", [], false, "acme", 30, 720, 60, [null!])), http3Projection));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(certificates: new Dictionary<string, RuntimeCertificate>(StringComparer.OrdinalIgnoreCase) { ["broken-cert"] = null! }), http3Projection));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(listeners: [null!]), http3Projection));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(listeners: [listener.WithSniCertificates([null!])]), http3Projection));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(routes: [null!]), http3Projection));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(routes: [route.WithUpstreams([null!])]), http3Projection));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(routes: [RouteWithHeaderPolicy(new RuntimeHeaderPolicy([null!], [], [], []))]), http3Projection));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(routes: [RouteWithHeaderPolicy(new RuntimeHeaderPolicy([], [], [null!], []))]), http3Projection));
-        var directProjectionSourceFiles = new List<string>
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(snapshot, acme: new RuntimeAcmeOptions(false, true, "", [], false, "acme", 30, 720, 60, [null!])), http3Projection));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(snapshot, certificates: new Dictionary<string, RuntimeCertificate>(StringComparer.OrdinalIgnoreCase) { ["broken-cert"] = null! }), http3Projection));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(snapshot, listeners: [null!]), http3Projection));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(snapshot, listeners: [listener.WithSniCertificates([null!])]), http3Projection));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(snapshot, routes: [null!]), http3Projection));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(snapshot, routes: [route.WithUpstreams([null!])]), http3Projection));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(snapshot, routes: [RouteWithHeaderPolicy(route, new RuntimeHeaderPolicy([null!], [], [], []))]), http3Projection));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigurationProjectionMapper.ToProjection(SnapshotWith(snapshot, routes: [RouteWithHeaderPolicy(route, new RuntimeHeaderPolicy([], [], [null!], []))]), http3Projection));
+        AssertDirectConfigurationProjectionCopies(projection);
+        AssertConfigurationApiCopies(projection);
+        AssertListenerApiCopies(projection);
+        AssertRouteApiCopies(projection);
+    }
+
+    private static void AssertRouteApiCopies(ProxyConfigurationProjection projection)
+    {
+        var routeResponses = RuntimeRouteResponseMapper.FromRoutes(projection.Routes.Select(static route => route));
+        AssertEx.False(routeResponses is RuntimeRouteResponse[], "Configuration API routes should not expose a mutable array.");
+        AssertEx.False(routeResponses[0].Upstreams is RuntimeUpstreamResponse[], "Configuration API route upstreams should not expose a mutable array.");
+        AssertEx.False(routeResponses[0].Upstreams[0].CircuitBreaker.FailureStatusCodes is int[], "Configuration API circuit breaker status codes should not expose a mutable array.");
+        var failureStatusCodes = new List<int>
         {
-            projection.SourceFiles[0]
+            503
         };
-        var directProjectionCertificates = new List<RuntimeCertificateProjection>
+        var directCircuitBreakerResponse = new RuntimeCircuitBreakerResponse(enabled: true, failureThreshold: 3, samplingWindow: TimeSpan.FromSeconds(30), openDuration: TimeSpan.FromSeconds(10), halfOpenMaxAttempts: 1, failureStatusCodes: failureStatusCodes);
+        var directUpstreamResponse = new RuntimeUpstreamResponse(routeName: "home", name: "local", scheme: "http", protocol: "http1", address: "127.0.0.1", port: 5000, weight: 1, tls: new RuntimeUpstreamTlsResponse(false, null), endpoint: "127.0.0.1:5000", uriEndpoint: "http://127.0.0.1:5000", effectiveSniHost: "", identity: "home/local", circuitBreaker: directCircuitBreakerResponse);
+        failureStatusCodes[0] = 502;
+        failureStatusCodes.Clear();
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCircuitBreakerResponse(enabled: true, failureThreshold: 3, samplingWindow: TimeSpan.FromSeconds(30), openDuration: TimeSpan.FromSeconds(10), halfOpenMaxAttempts: 1, failureStatusCodes: null!));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeUpstreamResponse(routeName: "home", name: "local", scheme: "http", protocol: "http1", address: "127.0.0.1", port: 5000, weight: 1, tls: null!, endpoint: "127.0.0.1:5000", uriEndpoint: "http://127.0.0.1:5000", effectiveSniHost: "", identity: "home/local", circuitBreaker: directCircuitBreakerResponse));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeUpstreamResponse(routeName: "home", name: "local", scheme: "http", protocol: "http1", address: "127.0.0.1", port: 5000, weight: 1, tls: new RuntimeUpstreamTlsResponse(false, null), endpoint: "127.0.0.1:5000", uriEndpoint: "http://127.0.0.1:5000", effectiveSniHost: "", identity: "home/local", circuitBreaker: null!));
+        AssertEx.Equal(503, directCircuitBreakerResponse.FailureStatusCodes[0]);
+        AssertEx.Equal(503, directUpstreamResponse.CircuitBreaker.FailureStatusCodes[0]);
+        AssertEx.Equal("home/local", directUpstreamResponse.Identity);
+        AssertEx.False(directCircuitBreakerResponse.FailureStatusCodes is int[], "Direct configuration API circuit breaker status codes should not expose a mutable array.");
+        var directRouteUpstreams = new List<RuntimeUpstreamResponse>
         {
-            projection.Certificates[0]
+            directUpstreamResponse
         };
-        var directProjectionListeners = new List<RuntimeListenerProjection>
+        var directRouteResponse = new RuntimeRouteResponse(name: "home", host: routeResponses[0].Host, pathPrefix: routeResponses[0].PathPrefix, action: routeResponses[0].Action, loadBalancingPolicy: routeResponses[0].LoadBalancingPolicy, healthCheck: routeResponses[0].HealthCheck, upstreams: directRouteUpstreams, httpsRedirect: routeResponses[0].HttpsRedirect, canonicalHost: routeResponses[0].CanonicalHost, headerPolicy: routeResponses[0].HeaderPolicy, pathRewrite: routeResponses[0].PathRewrite, redirect: routeResponses[0].Redirect, staticResponse: routeResponses[0].StaticResponse, maintenance: routeResponses[0].Maintenance, cache: routeResponses[0].Cache, resolvedOptions: routeResponses[0].ResolvedOptions, siteName: "home", retry: routeResponses[0].Retry);
+        directRouteUpstreams[0] = routeResponses[0].Upstreams[0];
+        directRouteUpstreams.Clear();
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteResponse(name: "home", host: routeResponses[0].Host, pathPrefix: routeResponses[0].PathPrefix, action: routeResponses[0].Action, loadBalancingPolicy: routeResponses[0].LoadBalancingPolicy, healthCheck: routeResponses[0].HealthCheck, upstreams: null!, httpsRedirect: routeResponses[0].HttpsRedirect, canonicalHost: routeResponses[0].CanonicalHost, headerPolicy: routeResponses[0].HeaderPolicy, pathRewrite: routeResponses[0].PathRewrite, redirect: routeResponses[0].Redirect, staticResponse: routeResponses[0].StaticResponse, maintenance: routeResponses[0].Maintenance, cache: routeResponses[0].Cache, resolvedOptions: routeResponses[0].ResolvedOptions, siteName: "home", retry: routeResponses[0].Retry));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteResponse(name: "home", host: routeResponses[0].Host, pathPrefix: routeResponses[0].PathPrefix, action: routeResponses[0].Action, loadBalancingPolicy: routeResponses[0].LoadBalancingPolicy, healthCheck: routeResponses[0].HealthCheck, upstreams: [], httpsRedirect: routeResponses[0].HttpsRedirect, canonicalHost: routeResponses[0].CanonicalHost, headerPolicy: routeResponses[0].HeaderPolicy, pathRewrite: routeResponses[0].PathRewrite, redirect: routeResponses[0].Redirect, staticResponse: routeResponses[0].StaticResponse, maintenance: routeResponses[0].Maintenance, cache: routeResponses[0].Cache, resolvedOptions: routeResponses[0].ResolvedOptions, siteName: "home", retry: null!));
+        AssertEx.Equal("local", directRouteResponse.Upstreams[0].Name);
+        AssertEx.Equal("home", directRouteResponse.SiteName);
+        AssertEx.False(directRouteResponse.Upstreams is RuntimeUpstreamResponse[], "Direct configuration API route upstreams should not expose a mutable array.");
+    }
+
+    private static void AssertListenerApiCopies(ProxyConfigurationProjection projection)
+    {
+        var listenerResponses = RuntimeListenerResponseMapper.FromListeners(projection.Listeners);
+        AssertEx.False(listenerResponses is RuntimeListenerResponse[], "Configuration API listeners should not expose a mutable array.");
+        AssertEx.False(listenerResponses[0].SniCertificates is RuntimeSniCertificateBindingResponse[], "Configuration API listener SNI certificates should not expose a mutable array.");
+        var directSniCertificates = new List<RuntimeSniCertificateBindingResponse>
         {
-            projection.Listeners[0]
+            listenerResponses[0].SniCertificates[0]
         };
-        var directProjectionRoutes = new List<RuntimeRouteProjection>
-        {
-            projection.Routes[0]
-        };
-        var directProjection = CreateDirectProjection(sourceFiles: directProjectionSourceFiles, metrics: projection.Metrics, http3: projection.Http3, certificates: directProjectionCertificates, listeners: directProjectionListeners, routes: directProjectionRoutes);
-        directProjectionSourceFiles[0] = "sites/replacement.json";
-        directProjectionCertificates.Clear();
-        directProjectionListeners.Clear();
-        directProjectionRoutes.Clear();
-        AssertEx.Equal("sites/home.json", directProjection.SourceFiles[0]);
-        AssertEx.Equal("home-cert", directProjection.Certificates[0].Id);
-        AssertEx.Equal("web", directProjection.Listeners[0].Name);
-        AssertEx.Equal("home", directProjection.Routes[0].Name);
-        AssertEx.False(directProjection.SourceFiles is string[]);
-        AssertEx.False(directProjection.Certificates is RuntimeCertificateProjection[]);
-        AssertEx.False(directProjection.Listeners is RuntimeListenerProjection[]);
-        AssertEx.False(directProjection.Routes is RuntimeRouteProjection[]);
-        AssertEx.Throws<ArgumentNullException>(() => CreateDirectProjection(sourceFiles: null!, metrics: projection.Metrics, http3: projection.Http3, certificates: [], listeners: [], routes: []));
-        AssertEx.Throws<ArgumentNullException>(() => CreateDirectProjection(sourceFiles: [], metrics: null!, http3: projection.Http3, certificates: [], listeners: [], routes: []));
-        AssertEx.Throws<ArgumentNullException>(() => CreateDirectProjection(sourceFiles: [], metrics: projection.Metrics, http3: null!, certificates: [], listeners: [], routes: []));
-        AssertEx.Throws<ArgumentNullException>(() => CreateDirectProjection(sourceFiles: [], metrics: projection.Metrics, http3: projection.Http3, certificates: null!, listeners: [], routes: []));
+        var directListenerResponse = new RuntimeListenerResponse(name: "web", address: listenerResponses[0].Address, port: listenerResponses[0].Port, enabled: listenerResponses[0].Enabled, transport: listenerResponses[0].Transport, defaultCertificateId: listenerResponses[0].DefaultCertificateId, sniCertificates: directSniCertificates, backlog: listenerResponses[0].Backlog, maxRequestHeadBytes: listenerResponses[0].MaxRequestHeadBytes, maxResponseHeadBytes: listenerResponses[0].MaxResponseHeadBytes, maxChunkLineBytes: listenerResponses[0].MaxChunkLineBytes, forwardingBufferBytes: listenerResponses[0].ForwardingBufferBytes, identity: listenerResponses[0].Identity, protocols: listenerResponses[0].Protocols, http3Enablement: listenerResponses[0].Http3Enablement, http3AltSvc: listenerResponses[0].Http3AltSvc, http2Limits: listenerResponses[0].Http2Limits, tcpTrafficEnabled: listenerResponses[0].TcpTrafficEnabled, http3ProtocolConfigured: listenerResponses[0].Http3ProtocolConfigured, quicIdentity: listenerResponses[0].QuicIdentity, http3: listenerResponses[0].Http3);
+        directSniCertificates[0] = new RuntimeSniCertificateBindingResponse("replacement.test", "replacement-cert");
+        directSniCertificates.Clear();
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeListenerResponse(name: "web", address: listenerResponses[0].Address, port: listenerResponses[0].Port, enabled: listenerResponses[0].Enabled, transport: listenerResponses[0].Transport, defaultCertificateId: listenerResponses[0].DefaultCertificateId, sniCertificates: null!, backlog: listenerResponses[0].Backlog, maxRequestHeadBytes: listenerResponses[0].MaxRequestHeadBytes, maxResponseHeadBytes: listenerResponses[0].MaxResponseHeadBytes, maxChunkLineBytes: listenerResponses[0].MaxChunkLineBytes, forwardingBufferBytes: listenerResponses[0].ForwardingBufferBytes, identity: listenerResponses[0].Identity, protocols: listenerResponses[0].Protocols, http3Enablement: listenerResponses[0].Http3Enablement, http3AltSvc: listenerResponses[0].Http3AltSvc, http2Limits: listenerResponses[0].Http2Limits, tcpTrafficEnabled: listenerResponses[0].TcpTrafficEnabled, http3ProtocolConfigured: listenerResponses[0].Http3ProtocolConfigured, quicIdentity: listenerResponses[0].QuicIdentity, http3: listenerResponses[0].Http3));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeListenerResponse(name: "web", address: listenerResponses[0].Address, port: listenerResponses[0].Port, enabled: listenerResponses[0].Enabled, transport: listenerResponses[0].Transport, defaultCertificateId: listenerResponses[0].DefaultCertificateId, sniCertificates: [], backlog: listenerResponses[0].Backlog, maxRequestHeadBytes: listenerResponses[0].MaxRequestHeadBytes, maxResponseHeadBytes: listenerResponses[0].MaxResponseHeadBytes, maxChunkLineBytes: listenerResponses[0].MaxChunkLineBytes, forwardingBufferBytes: listenerResponses[0].ForwardingBufferBytes, identity: null!, protocols: listenerResponses[0].Protocols, http3Enablement: listenerResponses[0].Http3Enablement, http3AltSvc: listenerResponses[0].Http3AltSvc, http2Limits: listenerResponses[0].Http2Limits, tcpTrafficEnabled: listenerResponses[0].TcpTrafficEnabled, http3ProtocolConfigured: listenerResponses[0].Http3ProtocolConfigured, quicIdentity: listenerResponses[0].QuicIdentity, http3: listenerResponses[0].Http3));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeListenerResponse(name: "web", address: listenerResponses[0].Address, port: listenerResponses[0].Port, enabled: listenerResponses[0].Enabled, transport: listenerResponses[0].Transport, defaultCertificateId: listenerResponses[0].DefaultCertificateId, sniCertificates: [], backlog: listenerResponses[0].Backlog, maxRequestHeadBytes: listenerResponses[0].MaxRequestHeadBytes, maxResponseHeadBytes: listenerResponses[0].MaxResponseHeadBytes, maxChunkLineBytes: listenerResponses[0].MaxChunkLineBytes, forwardingBufferBytes: listenerResponses[0].ForwardingBufferBytes, identity: listenerResponses[0].Identity, protocols: listenerResponses[0].Protocols, http3Enablement: listenerResponses[0].Http3Enablement, http3AltSvc: listenerResponses[0].Http3AltSvc, http2Limits: listenerResponses[0].Http2Limits, tcpTrafficEnabled: listenerResponses[0].TcpTrafficEnabled, http3ProtocolConfigured: listenerResponses[0].Http3ProtocolConfigured, quicIdentity: listenerResponses[0].QuicIdentity, http3: null!));
+        AssertEx.Equal("home.test", directListenerResponse.SniCertificates[0].HostName);
+        AssertEx.Equal("web", directListenerResponse.Name);
+        AssertEx.False(directListenerResponse.SniCertificates is RuntimeSniCertificateBindingResponse[], "Direct configuration API listener SNI certificates should not expose a mutable array.");
+        var directListenerIdentityResponse = new RuntimeListenerIdentityResponse(name: "web", address: "127.0.0.1", port: 18080, transport: RuntimeListenerTransportResponse.Https, tlsEnabled: true, key: "web|127.0.0.1|18080|https", bindKey: "127.0.0.1|18080|https");
+        var directQuicIdentityResponse = new RuntimeQuicListenerIdentityResponse(name: "web", address: "127.0.0.1", port: 18080, tlsEnabled: true, key: "web|127.0.0.1|18080|udp|quic", bindKey: "127.0.0.1|18080|udp|quic");
+        AssertEx.Equal("web|127.0.0.1|18080|https", directListenerIdentityResponse.Key);
+        AssertEx.Equal("127.0.0.1|18080|https", directListenerIdentityResponse.BindKey);
+        AssertEx.Equal("web|127.0.0.1|18080|udp|quic", directQuicIdentityResponse.Key);
+        AssertEx.Equal("127.0.0.1|18080|udp|quic", directQuicIdentityResponse.BindKey);
+        AssertEx.Throws<ArgumentNullException>(() => RuntimeRouteResponseMapper.FromRoutes(null!));
+    }
+
+    private static void AssertConfigurationApiCopies(ProxyConfigurationProjection projection)
+    {
         var response = ProxyConfigurationResponseMapper.FromProjection(projection);
         AssertEx.False(response.SourceFiles is string[], "Configuration API source files should not expose a mutable array.");
         AssertEx.False(response.Certificates is RuntimeCertificateResponse[], "Configuration API certificates should not expose a mutable array.");
@@ -1281,96 +1418,132 @@ internal static class ConfigurationTests
         AssertEx.False(directResponse.Certificates is RuntimeCertificateResponse[], "Direct configuration API certificates should not expose a mutable array.");
         AssertEx.False(directResponse.Listeners is RuntimeListenerResponse[], "Direct configuration API listeners should not expose a mutable array.");
         AssertEx.False(directResponse.Routes is RuntimeRouteResponse[], "Direct configuration API routes should not expose a mutable array.");
-        ProxyConfigurationProjection CreateDirectProjection(IReadOnlyList<string> sourceFiles, RuntimeMetricsProjection metrics, RuntimeHttp3SupportProjection http3, IReadOnlyList<RuntimeCertificateProjection> certificates, IReadOnlyList<RuntimeListenerProjection> listeners, IReadOnlyList<RuntimeRouteProjection> routes)
-        {
-            return new ProxyConfigurationProjection(projection.Version, projection.LoadedAtUtc, projection.SourceDirectory, sourceFiles, projection.Discovery, projection.AdminSecurity, projection.Acme, projection.Timeouts, projection.ConnectionLimits, projection.Observability, projection.Limits, projection.ForwardedHeaders, metrics, http3, certificates, listeners, routes);
-        }
-
-        ProxyConfigurationSnapshot SnapshotWith(RuntimeAcmeOptions? acme = null, IReadOnlyDictionary<string, RuntimeCertificate>? certificates = null, IReadOnlyList<RuntimeListener>? listeners = null, IReadOnlyList<RuntimeRoute>? routes = null)
-        {
-            return new ProxyConfigurationSnapshot(snapshot.Version, snapshot.LoadedAtUtc, snapshot.SourceDirectory, snapshot.SourceFiles, snapshot.Discovery, snapshot.AdminSecurity, acme ?? snapshot.Acme, snapshot.Timeouts, snapshot.ConnectionLimits, snapshot.Observability, snapshot.Limits, snapshot.ForwardedHeaders, certificates ?? snapshot.Certificates, listeners ?? snapshot.Listeners, routes ?? snapshot.Routes, snapshot.Metrics);
-        }
-
-        RuntimeRoute RouteWithHeaderPolicy(RuntimeHeaderPolicy headerPolicy)
-        {
-            return new RuntimeRoute(route.Name, route.Host, route.PathPrefix, route.Action, route.LoadBalancingPolicy, route.HealthCheck, route.Upstreams, route.HttpsRedirect, route.CanonicalHost, headerPolicy, route.PathRewrite, route.Redirect, route.StaticResponse, route.Maintenance, route.Cache, route.ResolvedOptions, route.SiteName, route.Retry);
-        }
-
-        static void AssertConnectionLimitsRejects(int maxRequestsPerClientConnection = 100, int maxIdleUpstreamConnectionsPerUpstream = 16, int maxActiveUpgradedTunnels = 1024)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeConnectionLimits(maxRequestsPerClientConnection, maxIdleUpstreamConnectionsPerUpstream, maxActiveUpgradedTunnels));
-        }
-
-        static void AssertConnectionLimitsProjectionRejects(int maxRequestsPerClientConnection = 100, int maxIdleUpstreamConnectionsPerUpstream = 16, int maxActiveUpgradedTunnels = 1024)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeConnectionLimitsProjection(maxRequestsPerClientConnection, maxIdleUpstreamConnectionsPerUpstream, maxActiveUpgradedTunnels));
-        }
-
-        static void AssertLimitsRejects(int maxActiveClientConnections = 4096, int maxConcurrentTlsHandshakes = 128, int requestsPerMinutePerIp = 240, int upgradeRequestsPerMinutePerIp = 30, int maxRequestHeadBytes = 32768, int maxHeaderCount = 128, int maxHeaderLineBytes = 8192, long maxRequestBodyBytes = 104857600, int maxPathBytes = 8192, TimeSpan? shutdownGracePeriod = null)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeLimits(maxActiveClientConnections, maxConcurrentTlsHandshakes, requestsPerMinutePerIp, upgradeRequestsPerMinutePerIp, maxRequestHeadBytes, maxHeaderCount, maxHeaderLineBytes, maxRequestBodyBytes, maxPathBytes, shutdownGracePeriod ?? TimeSpan.FromSeconds(15)));
-        }
-
-        static void AssertLimitsProjectionRejects(int maxActiveClientConnections = 4096, int maxConcurrentTlsHandshakes = 128, int requestsPerMinutePerIp = 240, int upgradeRequestsPerMinutePerIp = 30, int maxRequestHeadBytes = 32768, int maxHeaderCount = 128, int maxHeaderLineBytes = 8192, long maxRequestBodyBytes = 104857600, int maxPathBytes = 8192, TimeSpan? shutdownGracePeriod = null)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeLimitsProjection(maxActiveClientConnections, maxConcurrentTlsHandshakes, requestsPerMinutePerIp, upgradeRequestsPerMinutePerIp, maxRequestHeadBytes, maxHeaderCount, maxHeaderLineBytes, maxRequestBodyBytes, maxPathBytes, shutdownGracePeriod ?? TimeSpan.FromSeconds(15)));
-        }
-
-        var listenerResponses = RuntimeListenerResponseMapper.FromListeners(projection.Listeners);
-        AssertEx.False(listenerResponses is RuntimeListenerResponse[], "Configuration API listeners should not expose a mutable array.");
-        AssertEx.False(listenerResponses[0].SniCertificates is RuntimeSniCertificateBindingResponse[], "Configuration API listener SNI certificates should not expose a mutable array.");
-        var directSniCertificates = new List<RuntimeSniCertificateBindingResponse>
-        {
-            listenerResponses[0].SniCertificates[0]
-        };
-        var directListenerResponse = new RuntimeListenerResponse(name: "web", address: listenerResponses[0].Address, port: listenerResponses[0].Port, enabled: listenerResponses[0].Enabled, transport: listenerResponses[0].Transport, defaultCertificateId: listenerResponses[0].DefaultCertificateId, sniCertificates: directSniCertificates, backlog: listenerResponses[0].Backlog, maxRequestHeadBytes: listenerResponses[0].MaxRequestHeadBytes, maxResponseHeadBytes: listenerResponses[0].MaxResponseHeadBytes, maxChunkLineBytes: listenerResponses[0].MaxChunkLineBytes, forwardingBufferBytes: listenerResponses[0].ForwardingBufferBytes, identity: listenerResponses[0].Identity, protocols: listenerResponses[0].Protocols, http3Enablement: listenerResponses[0].Http3Enablement, http3AltSvc: listenerResponses[0].Http3AltSvc, http2Limits: listenerResponses[0].Http2Limits, tcpTrafficEnabled: listenerResponses[0].TcpTrafficEnabled, http3ProtocolConfigured: listenerResponses[0].Http3ProtocolConfigured, quicIdentity: listenerResponses[0].QuicIdentity, http3: listenerResponses[0].Http3);
-        directSniCertificates[0] = new RuntimeSniCertificateBindingResponse("replacement.test", "replacement-cert");
-        directSniCertificates.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeListenerResponse(name: "web", address: listenerResponses[0].Address, port: listenerResponses[0].Port, enabled: listenerResponses[0].Enabled, transport: listenerResponses[0].Transport, defaultCertificateId: listenerResponses[0].DefaultCertificateId, sniCertificates: null!, backlog: listenerResponses[0].Backlog, maxRequestHeadBytes: listenerResponses[0].MaxRequestHeadBytes, maxResponseHeadBytes: listenerResponses[0].MaxResponseHeadBytes, maxChunkLineBytes: listenerResponses[0].MaxChunkLineBytes, forwardingBufferBytes: listenerResponses[0].ForwardingBufferBytes, identity: listenerResponses[0].Identity, protocols: listenerResponses[0].Protocols, http3Enablement: listenerResponses[0].Http3Enablement, http3AltSvc: listenerResponses[0].Http3AltSvc, http2Limits: listenerResponses[0].Http2Limits, tcpTrafficEnabled: listenerResponses[0].TcpTrafficEnabled, http3ProtocolConfigured: listenerResponses[0].Http3ProtocolConfigured, quicIdentity: listenerResponses[0].QuicIdentity, http3: listenerResponses[0].Http3));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeListenerResponse(name: "web", address: listenerResponses[0].Address, port: listenerResponses[0].Port, enabled: listenerResponses[0].Enabled, transport: listenerResponses[0].Transport, defaultCertificateId: listenerResponses[0].DefaultCertificateId, sniCertificates: [], backlog: listenerResponses[0].Backlog, maxRequestHeadBytes: listenerResponses[0].MaxRequestHeadBytes, maxResponseHeadBytes: listenerResponses[0].MaxResponseHeadBytes, maxChunkLineBytes: listenerResponses[0].MaxChunkLineBytes, forwardingBufferBytes: listenerResponses[0].ForwardingBufferBytes, identity: null!, protocols: listenerResponses[0].Protocols, http3Enablement: listenerResponses[0].Http3Enablement, http3AltSvc: listenerResponses[0].Http3AltSvc, http2Limits: listenerResponses[0].Http2Limits, tcpTrafficEnabled: listenerResponses[0].TcpTrafficEnabled, http3ProtocolConfigured: listenerResponses[0].Http3ProtocolConfigured, quicIdentity: listenerResponses[0].QuicIdentity, http3: listenerResponses[0].Http3));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeListenerResponse(name: "web", address: listenerResponses[0].Address, port: listenerResponses[0].Port, enabled: listenerResponses[0].Enabled, transport: listenerResponses[0].Transport, defaultCertificateId: listenerResponses[0].DefaultCertificateId, sniCertificates: [], backlog: listenerResponses[0].Backlog, maxRequestHeadBytes: listenerResponses[0].MaxRequestHeadBytes, maxResponseHeadBytes: listenerResponses[0].MaxResponseHeadBytes, maxChunkLineBytes: listenerResponses[0].MaxChunkLineBytes, forwardingBufferBytes: listenerResponses[0].ForwardingBufferBytes, identity: listenerResponses[0].Identity, protocols: listenerResponses[0].Protocols, http3Enablement: listenerResponses[0].Http3Enablement, http3AltSvc: listenerResponses[0].Http3AltSvc, http2Limits: listenerResponses[0].Http2Limits, tcpTrafficEnabled: listenerResponses[0].TcpTrafficEnabled, http3ProtocolConfigured: listenerResponses[0].Http3ProtocolConfigured, quicIdentity: listenerResponses[0].QuicIdentity, http3: null!));
-        AssertEx.Equal("home.test", directListenerResponse.SniCertificates[0].HostName);
-        AssertEx.Equal("web", directListenerResponse.Name);
-        AssertEx.False(directListenerResponse.SniCertificates is RuntimeSniCertificateBindingResponse[], "Direct configuration API listener SNI certificates should not expose a mutable array.");
-        var directListenerIdentityResponse = new RuntimeListenerIdentityResponse(name: "web", address: "127.0.0.1", port: 18080, transport: RuntimeListenerTransportResponse.Https, tlsEnabled: true, key: "web|127.0.0.1|18080|https", bindKey: "127.0.0.1|18080|https");
-        var directQuicIdentityResponse = new RuntimeQuicListenerIdentityResponse(name: "web", address: "127.0.0.1", port: 18080, tlsEnabled: true, key: "web|127.0.0.1|18080|udp|quic", bindKey: "127.0.0.1|18080|udp|quic");
-        AssertEx.Equal("web|127.0.0.1|18080|https", directListenerIdentityResponse.Key);
-        AssertEx.Equal("127.0.0.1|18080|https", directListenerIdentityResponse.BindKey);
-        AssertEx.Equal("web|127.0.0.1|18080|udp|quic", directQuicIdentityResponse.Key);
-        AssertEx.Equal("127.0.0.1|18080|udp|quic", directQuicIdentityResponse.BindKey);
-        AssertEx.Throws<ArgumentNullException>(() => RuntimeRouteResponseMapper.FromRoutes(null!));
-        var routeResponses = RuntimeRouteResponseMapper.FromRoutes(projection.Routes.Select(static route => route));
-        AssertEx.False(routeResponses is RuntimeRouteResponse[], "Configuration API routes should not expose a mutable array.");
-        AssertEx.False(routeResponses[0].Upstreams is RuntimeUpstreamResponse[], "Configuration API route upstreams should not expose a mutable array.");
-        AssertEx.False(routeResponses[0].Upstreams[0].CircuitBreaker.FailureStatusCodes is int[], "Configuration API circuit breaker status codes should not expose a mutable array.");
-        var failureStatusCodes = new List<int>
-        {
-            503
-        };
-        var directCircuitBreakerResponse = new RuntimeCircuitBreakerResponse(enabled: true, failureThreshold: 3, samplingWindow: TimeSpan.FromSeconds(30), openDuration: TimeSpan.FromSeconds(10), halfOpenMaxAttempts: 1, failureStatusCodes: failureStatusCodes);
-        var directUpstreamResponse = new RuntimeUpstreamResponse(routeName: "home", name: "local", scheme: "http", protocol: "http1", address: "127.0.0.1", port: 5000, weight: 1, tls: new RuntimeUpstreamTlsResponse(false, null), endpoint: "127.0.0.1:5000", uriEndpoint: "http://127.0.0.1:5000", effectiveSniHost: "", identity: "home/local", circuitBreaker: directCircuitBreakerResponse);
-        failureStatusCodes[0] = 502;
-        failureStatusCodes.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeCircuitBreakerResponse(enabled: true, failureThreshold: 3, samplingWindow: TimeSpan.FromSeconds(30), openDuration: TimeSpan.FromSeconds(10), halfOpenMaxAttempts: 1, failureStatusCodes: null!));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeUpstreamResponse(routeName: "home", name: "local", scheme: "http", protocol: "http1", address: "127.0.0.1", port: 5000, weight: 1, tls: null!, endpoint: "127.0.0.1:5000", uriEndpoint: "http://127.0.0.1:5000", effectiveSniHost: "", identity: "home/local", circuitBreaker: directCircuitBreakerResponse));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeUpstreamResponse(routeName: "home", name: "local", scheme: "http", protocol: "http1", address: "127.0.0.1", port: 5000, weight: 1, tls: new RuntimeUpstreamTlsResponse(false, null), endpoint: "127.0.0.1:5000", uriEndpoint: "http://127.0.0.1:5000", effectiveSniHost: "", identity: "home/local", circuitBreaker: null!));
-        AssertEx.Equal(503, directCircuitBreakerResponse.FailureStatusCodes[0]);
-        AssertEx.Equal(503, directUpstreamResponse.CircuitBreaker.FailureStatusCodes[0]);
-        AssertEx.Equal("home/local", directUpstreamResponse.Identity);
-        AssertEx.False(directCircuitBreakerResponse.FailureStatusCodes is int[], "Direct configuration API circuit breaker status codes should not expose a mutable array.");
-        var directRouteUpstreams = new List<RuntimeUpstreamResponse>
-        {
-            directUpstreamResponse
-        };
-        var directRouteResponse = new RuntimeRouteResponse(name: "home", host: routeResponses[0].Host, pathPrefix: routeResponses[0].PathPrefix, action: routeResponses[0].Action, loadBalancingPolicy: routeResponses[0].LoadBalancingPolicy, healthCheck: routeResponses[0].HealthCheck, upstreams: directRouteUpstreams, httpsRedirect: routeResponses[0].HttpsRedirect, canonicalHost: routeResponses[0].CanonicalHost, headerPolicy: routeResponses[0].HeaderPolicy, pathRewrite: routeResponses[0].PathRewrite, redirect: routeResponses[0].Redirect, staticResponse: routeResponses[0].StaticResponse, maintenance: routeResponses[0].Maintenance, cache: routeResponses[0].Cache, resolvedOptions: routeResponses[0].ResolvedOptions, siteName: "home", retry: routeResponses[0].Retry);
-        directRouteUpstreams[0] = routeResponses[0].Upstreams[0];
-        directRouteUpstreams.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteResponse(name: "home", host: routeResponses[0].Host, pathPrefix: routeResponses[0].PathPrefix, action: routeResponses[0].Action, loadBalancingPolicy: routeResponses[0].LoadBalancingPolicy, healthCheck: routeResponses[0].HealthCheck, upstreams: null!, httpsRedirect: routeResponses[0].HttpsRedirect, canonicalHost: routeResponses[0].CanonicalHost, headerPolicy: routeResponses[0].HeaderPolicy, pathRewrite: routeResponses[0].PathRewrite, redirect: routeResponses[0].Redirect, staticResponse: routeResponses[0].StaticResponse, maintenance: routeResponses[0].Maintenance, cache: routeResponses[0].Cache, resolvedOptions: routeResponses[0].ResolvedOptions, siteName: "home", retry: routeResponses[0].Retry));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeRouteResponse(name: "home", host: routeResponses[0].Host, pathPrefix: routeResponses[0].PathPrefix, action: routeResponses[0].Action, loadBalancingPolicy: routeResponses[0].LoadBalancingPolicy, healthCheck: routeResponses[0].HealthCheck, upstreams: [], httpsRedirect: routeResponses[0].HttpsRedirect, canonicalHost: routeResponses[0].CanonicalHost, headerPolicy: routeResponses[0].HeaderPolicy, pathRewrite: routeResponses[0].PathRewrite, redirect: routeResponses[0].Redirect, staticResponse: routeResponses[0].StaticResponse, maintenance: routeResponses[0].Maintenance, cache: routeResponses[0].Cache, resolvedOptions: routeResponses[0].ResolvedOptions, siteName: "home", retry: null!));
-        AssertEx.Equal("local", directRouteResponse.Upstreams[0].Name);
-        AssertEx.Equal("home", directRouteResponse.SiteName);
-        AssertEx.False(directRouteResponse.Upstreams is RuntimeUpstreamResponse[], "Direct configuration API route upstreams should not expose a mutable array.");
     }
+
+    private static void AssertDirectConfigurationProjectionCopies(ProxyConfigurationProjection projection)
+    {
+        var directProjectionSourceFiles = new List<string>
+        {
+            projection.SourceFiles[0]
+        };
+        var directProjectionCertificates = new List<RuntimeCertificateProjection>
+        {
+            projection.Certificates[0]
+        };
+        var directProjectionListeners = new List<RuntimeListenerProjection>
+        {
+            projection.Listeners[0]
+        };
+        var directProjectionRoutes = new List<RuntimeRouteProjection>
+        {
+            projection.Routes[0]
+        };
+        var directProjection = CreateDirectProjection(projection, sourceFiles: directProjectionSourceFiles, metrics: projection.Metrics, http3: projection.Http3, certificates: directProjectionCertificates, listeners: directProjectionListeners, routes: directProjectionRoutes);
+        directProjectionSourceFiles[0] = "sites/replacement.json";
+        directProjectionCertificates.Clear();
+        directProjectionListeners.Clear();
+        directProjectionRoutes.Clear();
+        AssertEx.Equal("sites/home.json", directProjection.SourceFiles[0]);
+        AssertEx.Equal("home-cert", directProjection.Certificates[0].Id);
+        AssertEx.Equal("web", directProjection.Listeners[0].Name);
+        AssertEx.Equal("home", directProjection.Routes[0].Name);
+        AssertEx.False(directProjection.SourceFiles is string[]);
+        AssertEx.False(directProjection.Certificates is RuntimeCertificateProjection[]);
+        AssertEx.False(directProjection.Listeners is RuntimeListenerProjection[]);
+        AssertEx.False(directProjection.Routes is RuntimeRouteProjection[]);
+        AssertEx.Throws<ArgumentNullException>(() => CreateDirectProjection(projection, sourceFiles: null!, metrics: projection.Metrics, http3: projection.Http3, certificates: [], listeners: [], routes: []));
+        AssertEx.Throws<ArgumentNullException>(() => CreateDirectProjection(projection, sourceFiles: [], metrics: null!, http3: projection.Http3, certificates: [], listeners: [], routes: []));
+        AssertEx.Throws<ArgumentNullException>(() => CreateDirectProjection(projection, sourceFiles: [], metrics: projection.Metrics, http3: null!, certificates: [], listeners: [], routes: []));
+        AssertEx.Throws<ArgumentNullException>(() => CreateDirectProjection(projection, sourceFiles: [], metrics: projection.Metrics, http3: projection.Http3, certificates: null!, listeners: [], routes: []));
+    }
+
+    private static void AssertConfigurationGraphGuards(ProxyConfigurationSnapshot snapshot, RuntimeListener listener, RuntimeRoute route)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyConfigurationSnapshot(0, snapshot.LoadedAtUtc, snapshot.SourceDirectory, snapshot.SourceFiles, snapshot.Discovery, snapshot.AdminSecurity, snapshot.Acme, snapshot.Timeouts, snapshot.ConnectionLimits, snapshot.Observability, snapshot.Limits, snapshot.ForwardedHeaders, snapshot.Certificates, snapshot.Listeners, snapshot.Routes, snapshot.Metrics));
+        AssertConnectionLimitsRejects(maxRequestsPerClientConnection: 0);
+        AssertConnectionLimitsRejects(maxIdleUpstreamConnectionsPerUpstream: -1);
+        AssertConnectionLimitsRejects(maxActiveUpgradedTunnels: 0);
+        AssertConnectionLimitsProjectionRejects(maxRequestsPerClientConnection: 0);
+        AssertConnectionLimitsProjectionRejects(maxIdleUpstreamConnectionsPerUpstream: -1);
+        AssertConnectionLimitsProjectionRejects(maxActiveUpgradedTunnels: 0);
+        AssertLimitsRejects(maxActiveClientConnections: 0);
+        AssertLimitsRejects(maxConcurrentTlsHandshakes: 0);
+        AssertLimitsRejects(requestsPerMinutePerIp: 0);
+        AssertLimitsRejects(upgradeRequestsPerMinutePerIp: 0);
+        AssertLimitsRejects(maxRequestHeadBytes: 0);
+        AssertLimitsRejects(maxHeaderCount: 0);
+        AssertLimitsRejects(maxHeaderLineBytes: 0);
+        AssertLimitsRejects(maxRequestBodyBytes: -1);
+        AssertLimitsRejects(maxPathBytes: 0);
+        AssertLimitsRejects(shutdownGracePeriod: TimeSpan.Zero);
+        AssertLimitsProjectionRejects(maxActiveClientConnections: 0);
+        AssertLimitsProjectionRejects(maxConcurrentTlsHandshakes: 0);
+        AssertLimitsProjectionRejects(requestsPerMinutePerIp: 0);
+        AssertLimitsProjectionRejects(upgradeRequestsPerMinutePerIp: 0);
+        AssertLimitsProjectionRejects(maxRequestHeadBytes: 0);
+        AssertLimitsProjectionRejects(maxHeaderCount: 0);
+        AssertLimitsProjectionRejects(maxHeaderLineBytes: 0);
+        AssertLimitsProjectionRejects(maxRequestBodyBytes: -1);
+        AssertLimitsProjectionRejects(maxPathBytes: 0);
+        AssertLimitsProjectionRejects(shutdownGracePeriod: TimeSpan.Zero);
+        AssertEx.Throws<ArgumentNullException>(() => listener.WithSniCertificates([null!]));
+        AssertEx.Throws<ArgumentNullException>(() => route.WithUpstreams([null!]));
+        AssertEx.Throws<ArgumentNullException>(() => snapshot.WithListenersAndRoutes([null!], snapshot.Routes));
+        AssertEx.Throws<ArgumentNullException>(() => snapshot.WithListenersAndRoutes(snapshot.Listeners, [null!]));
+    }
+
+    private static void AssertConfigurationGraphCopies(RuntimeListener listener, RuntimeRoute route, ProxyConfigurationSnapshot snapshot)
+    {
+        AssertEx.Equal("home.test", listener.SniCertificates[0].HostName);
+        AssertEx.Equal("local", route.Upstreams[0].Name);
+        AssertEx.Equal("sites/home.json", snapshot.SourceFiles[0]);
+        AssertEx.True(snapshot.Certificates.ContainsKey("HOME-CERT"));
+        AssertEx.Equal("home-cert", snapshot.Certificates["HOME-CERT"].Id);
+        AssertEx.Equal("web", snapshot.Listeners[0].Name);
+        AssertEx.Equal("home", snapshot.Routes[0].Name);
+        AssertEx.False(listener.SniCertificates is RuntimeSniCertificateBinding[]);
+        AssertEx.False(route.Upstreams is RuntimeUpstream[]);
+        AssertEx.False(snapshot.SourceFiles is string[]);
+        AssertEx.False(snapshot.Certificates is Dictionary<string, RuntimeCertificate>);
+        AssertEx.False(snapshot.Listeners is RuntimeListener[]);
+        AssertEx.False(snapshot.Routes is RuntimeRoute[]);
+    }
+
+    private static ProxyConfigurationProjection CreateDirectProjection(ProxyConfigurationProjection projection, IReadOnlyList<string> sourceFiles, RuntimeMetricsProjection metrics, RuntimeHttp3SupportProjection http3, IReadOnlyList<RuntimeCertificateProjection> certificates, IReadOnlyList<RuntimeListenerProjection> listeners, IReadOnlyList<RuntimeRouteProjection> routes)
+    {
+        return new ProxyConfigurationProjection(projection.Version, projection.LoadedAtUtc, projection.SourceDirectory, sourceFiles, projection.Discovery, projection.AdminSecurity, projection.Acme, projection.Timeouts, projection.ConnectionLimits, projection.Observability, projection.Limits, projection.ForwardedHeaders, metrics, http3, certificates, listeners, routes);
+    }
+
+    private static ProxyConfigurationSnapshot SnapshotWith(ProxyConfigurationSnapshot snapshot, RuntimeAcmeOptions? acme = null, IReadOnlyDictionary<string, RuntimeCertificate>? certificates = null, IReadOnlyList<RuntimeListener>? listeners = null, IReadOnlyList<RuntimeRoute>? routes = null)
+    {
+        return new ProxyConfigurationSnapshot(snapshot.Version, snapshot.LoadedAtUtc, snapshot.SourceDirectory, snapshot.SourceFiles, snapshot.Discovery, snapshot.AdminSecurity, acme ?? snapshot.Acme, snapshot.Timeouts, snapshot.ConnectionLimits, snapshot.Observability, snapshot.Limits, snapshot.ForwardedHeaders, certificates ?? snapshot.Certificates, listeners ?? snapshot.Listeners, routes ?? snapshot.Routes, snapshot.Metrics);
+    }
+
+    private static RuntimeRoute RouteWithHeaderPolicy(RuntimeRoute route, RuntimeHeaderPolicy headerPolicy)
+    {
+        return new RuntimeRoute(route.Name, route.Host, route.PathPrefix, route.Action, route.LoadBalancingPolicy, route.HealthCheck, route.Upstreams, route.HttpsRedirect, route.CanonicalHost, headerPolicy, route.PathRewrite, route.Redirect, route.StaticResponse, route.Maintenance, route.Cache, route.ResolvedOptions, route.SiteName, route.Retry);
+    }
+
+    private static void AssertConnectionLimitsRejects(int maxRequestsPerClientConnection = 100, int maxIdleUpstreamConnectionsPerUpstream = 16, int maxActiveUpgradedTunnels = 1024)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeConnectionLimits(maxRequestsPerClientConnection, maxIdleUpstreamConnectionsPerUpstream, maxActiveUpgradedTunnels));
+    }
+
+    private static void AssertConnectionLimitsProjectionRejects(int maxRequestsPerClientConnection = 100, int maxIdleUpstreamConnectionsPerUpstream = 16, int maxActiveUpgradedTunnels = 1024)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeConnectionLimitsProjection(maxRequestsPerClientConnection, maxIdleUpstreamConnectionsPerUpstream, maxActiveUpgradedTunnels));
+    }
+
+    private static void AssertLimitsRejects(int maxActiveClientConnections = 4096, int maxConcurrentTlsHandshakes = 128, int requestsPerMinutePerIp = 240, int upgradeRequestsPerMinutePerIp = 30, int maxRequestHeadBytes = 32768, int maxHeaderCount = 128, int maxHeaderLineBytes = 8192, long maxRequestBodyBytes = 104857600, int maxPathBytes = 8192, TimeSpan? shutdownGracePeriod = null)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeLimits(maxActiveClientConnections, maxConcurrentTlsHandshakes, requestsPerMinutePerIp, upgradeRequestsPerMinutePerIp, maxRequestHeadBytes, maxHeaderCount, maxHeaderLineBytes, maxRequestBodyBytes, maxPathBytes, shutdownGracePeriod ?? TimeSpan.FromSeconds(15)));
+    }
+
+    private static void AssertLimitsProjectionRejects(int maxActiveClientConnections = 4096, int maxConcurrentTlsHandshakes = 128, int requestsPerMinutePerIp = 240, int upgradeRequestsPerMinutePerIp = 30, int maxRequestHeadBytes = 32768, int maxHeaderCount = 128, int maxHeaderLineBytes = 8192, long maxRequestBodyBytes = 104857600, int maxPathBytes = 8192, TimeSpan? shutdownGracePeriod = null)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new RuntimeLimitsProjection(maxActiveClientConnections, maxConcurrentTlsHandshakes, requestsPerMinutePerIp, upgradeRequestsPerMinutePerIp, maxRequestHeadBytes, maxHeaderCount, maxHeaderLineBytes, maxRequestBodyBytes, maxPathBytes, shutdownGracePeriod ?? TimeSpan.FromSeconds(15)));
+    }
+
 
     public static void ConfigurationValidationResultNamesValidationOutcomes()
     {

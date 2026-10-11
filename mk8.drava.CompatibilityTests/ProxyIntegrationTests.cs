@@ -1521,17 +1521,7 @@ internal static class ProxyIntegrationTests
         var dataDirectory = Path.Combine(Path.GetTempPath(), $"mdrava-upgrade-{Guid.NewGuid():N}");
         try
         {
-            if (https)
-            {
-                TestCertificates.WriteSelfSignedPfx(Path.Combine(dataDirectory, "certs", "home.pfx"), "home.test");
-                ConfigurationTests.WriteHttpsSite(dataDirectory, "upgrade.json", proxyPort, upstreamPort, "home-cert");
-                ConfigurationTests.WriteOperationalConfig(dataDirectory, tunnelIdleTimeoutMs: tunnelIdleTimeoutMs, maxActiveUpgradedTunnels: maxActiveUpgradedTunnels, certificateId: "home-cert", certificatePath: "certs/home.pfx");
-            }
-            else
-            {
-                ConfigurationTests.WriteSite(dataDirectory, "upgrade.json", proxyPort, upstreamPort);
-                ConfigurationTests.WriteOperationalConfig(dataDirectory, tunnelIdleTimeoutMs: tunnelIdleTimeoutMs, maxActiveUpgradedTunnels: maxActiveUpgradedTunnels);
-            }
+            WriteUpgradeScenarioConfiguration(dataDirectory, proxyPort, upstreamPort, https, tunnelIdleTimeoutMs, maxActiveUpgradedTunnels);
 
             var upstreamTask = RunUpgradeUpstreamAsync(upstreamPort, upstreamHandler, timeout.Token);
             using var host = BuildProxyHost(dataDirectory);
@@ -1577,6 +1567,21 @@ internal static class ProxyIntegrationTests
         finally
         {
             DeleteDirectory(dataDirectory);
+        }
+    }
+
+    private static void WriteUpgradeScenarioConfiguration(string dataDirectory, int proxyPort, int upstreamPort, bool https, int tunnelIdleTimeoutMs, int maxActiveUpgradedTunnels)
+    {
+        if (https)
+        {
+            TestCertificates.WriteSelfSignedPfx(Path.Combine(dataDirectory, "certs", "home.pfx"), "home.test");
+            ConfigurationTests.WriteHttpsSite(dataDirectory, "upgrade.json", proxyPort, upstreamPort, "home-cert");
+            ConfigurationTests.WriteOperationalConfig(dataDirectory, tunnelIdleTimeoutMs: tunnelIdleTimeoutMs, maxActiveUpgradedTunnels: maxActiveUpgradedTunnels, certificateId: "home-cert", certificatePath: "certs/home.pfx");
+        }
+        else
+        {
+            ConfigurationTests.WriteSite(dataDirectory, "upgrade.json", proxyPort, upstreamPort);
+            ConfigurationTests.WriteOperationalConfig(dataDirectory, tunnelIdleTimeoutMs: tunnelIdleTimeoutMs, maxActiveUpgradedTunnels: maxActiveUpgradedTunnels);
         }
     }
 
