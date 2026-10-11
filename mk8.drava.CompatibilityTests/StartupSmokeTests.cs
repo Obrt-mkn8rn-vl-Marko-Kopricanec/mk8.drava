@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Net;
 using System.Net.Sockets;
 using Mk8.Drava.Application.DAL.Configuration.Paths;
@@ -39,26 +40,121 @@ internal static class StartupSmokeTests
         await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
-    public static async Task FailsStartupWhenExistingSiteConfigIsInvalidAsync()
+    public static Task FailsStartupWhenExistingSiteConfigIsInvalidAsync()
+    {
+        return RunInvalidStartupScenarioAsync();
+    }
+
+    public static async Task InvalidStartupExposesShutdownFailureAsync()
+    {
+        var failure = new IOException("Controlled invalid-startup shutdown failure.");
+        var probe = new ShutdownFaultProbe(failure);
+        IOException? observed = null;
+        try
+        {
+            await RunInvalidStartupScenarioAsync(probe).ConfigureAwait(false);
+        }
+        catch (IOException exception)
+        {
+            observed = exception;
+        }
+
+        AssertEx.True(ReferenceEquals(failure, observed), "Shutdown fault was swallowed or replaced.");
+        AssertEx.Equal(0, probe.StartCalls);
+        AssertEx.Equal(1, probe.StopCalls);
+    }
+
+    public static async Task InvalidStartupRetainsAssertionAndShutdownFailuresAsync()
+    {
+        var assertionFailure = new FormatException("Controlled invalid-startup assertion failure.");
+        var shutdownFailure = new IOException("Controlled invalid-startup shutdown failure.");
+        var probe = new ShutdownFaultProbe(shutdownFailure);
+        AggregateException? observed = null;
+        try
+        {
+            await RunInvalidStartupScenarioAsync(probe, async host =>
+            {
+                await AssertEx.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(CancellationToken.None)).ConfigureAwait(false);
+                throw assertionFailure;
+            }).ConfigureAwait(false);
+        }
+        catch (AggregateException exception)
+        {
+            observed = exception;
+        }
+
+        var failures = AssertEx.NotNull(observed).InnerExceptions;
+        AssertEx.Equal(2, failures.Count);
+        AssertEx.True(ReferenceEquals(assertionFailure, failures[0]));
+        AssertEx.True(ReferenceEquals(shutdownFailure, failures[1]));
+        AssertEx.Equal(0, probe.StartCalls);
+        AssertEx.Equal(1, probe.StopCalls);
+    }
+
+    public static async Task InvalidStartupRethrowsAssertionAfterSuccessfulShutdownAsync()
+    {
+        var failure = new FormatException("Controlled invalid-startup assertion failure.");
+        var probe = new ShutdownFaultProbe(failure: null);
+        FormatException? observed = null;
+        try
+        {
+            await RunInvalidStartupScenarioAsync(probe, async host =>
+            {
+                await AssertEx.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(CancellationToken.None)).ConfigureAwait(false);
+                throw failure;
+            }).ConfigureAwait(false);
+        }
+        catch (FormatException exception)
+        {
+            observed = exception;
+        }
+
+        AssertEx.True(ReferenceEquals(failure, observed));
+        AssertEx.Equal(0, probe.StartCalls);
+        AssertEx.Equal(1, probe.StopCalls);
+    }
+
+    private static async Task RunInvalidStartupScenarioAsync(IHostedService? shutdownProbe = null, Func<IHost, Task>? startupAssertion = null)
     {
         using var temp = TemporaryDirectory.Create();
         var sites = Directory.CreateDirectory(Path.Combine(temp.Path, "config", "sites")).FullName;
         await File.WriteAllTextAsync(Path.Combine(sites, "broken.json"), "{ nope").ConfigureAwait(false);
-        using var host = BuildProxyHost(temp.Path);
+        using var host = BuildProxyHost(temp.Path, shutdownProbe);
+        ExceptionDispatchInfo? assertionFailure = null;
         try
         {
-            await AssertEx.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(CancellationToken.None)).ConfigureAwait(false);
+            if (startupAssertion is null)
+            {
+                await AssertEx.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(CancellationToken.None)).ConfigureAwait(false);
+            }
+            else
+            {
+                await startupAssertion(host).ConfigureAwait(false);
+            }
         }
-        finally
+        #pragma warning disable CA1031 // Capture only until the owned host stop is awaited; rethrow the original stack afterward.
+        catch (Exception exception)
         {
-            try
-            {
-                await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
+            assertionFailure = ExceptionDispatchInfo.Capture(exception);
         }
+        #pragma warning restore CA1031
+
+        await StopInvalidStartupHostAsync(host, assertionFailure?.SourceException).ConfigureAwait(false);
+        assertionFailure?.Throw();
+    }
+
+    private static async Task StopInvalidStartupHostAsync(IHost host, Exception? assertionFailure)
+    {
+        try
+        {
+            await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        #pragma warning disable CA1031 // Preserve both exact owned-operation failures when assertion and host stop both fail.
+        catch (Exception exception) when (assertionFailure is not null)
+        {
+            throw new AggregateException("Invalid-startup assertion and cleanup failed.", assertionFailure, exception);
+        }
+        #pragma warning restore CA1031
     }
 
     public static async Task StartsWithValidSiteConfigAsync()
@@ -78,7 +174,7 @@ internal static class StartupSmokeTests
         await host.StopAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
-    private static IHost BuildProxyHost(string dataDirectory)
+    private static IHost BuildProxyHost(string dataDirectory, IHostedService? shutdownProbe = null)
     {
         return Host.CreateDefaultBuilder().ConfigureAppConfiguration(builder =>
         {
@@ -87,7 +183,26 @@ internal static class StartupSmokeTests
         }).ConfigureLogging(logging => logging.ClearProviders()).ConfigureServices((context, services) =>
         {
             services.AddProxyDataPlane(context.Configuration);
+            if (shutdownProbe is not null) services.AddSingleton(shutdownProbe);
         }).Build();
+    }
+
+    private sealed class ShutdownFaultProbe(IOException? failure) : IHostedService
+    {
+        public int StartCalls { get; private set; }
+        public int StopCalls { get; private set; }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            StartCalls++;
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            StopCalls++;
+            return failure is null ? Task.CompletedTask : Task.FromException(failure);
+        }
     }
 
     private static int GetFreeTcpPort()
