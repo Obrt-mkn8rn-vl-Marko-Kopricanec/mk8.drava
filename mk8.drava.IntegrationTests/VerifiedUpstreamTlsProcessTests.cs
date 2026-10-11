@@ -1,10 +1,13 @@
 using System.Diagnostics;
+using System.Text;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Mk8.Drava.Application.BLL.Configuration;
+using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
+using Mk8.Drava.Application.INF.Proxy.Connections;
 using Mk8.Drava.UnitTests;
 using Xunit;
 using Xunit.Abstractions;
@@ -14,6 +17,8 @@ namespace Mk8.Drava.IntegrationTests;
 [Collection(DevelopmentSubprocessTests.Name)]
 public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
 {
+    private readonly ITestOutputHelper _output = output ?? throw new ArgumentNullException(nameof(output));
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -26,9 +31,12 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
     public Task GatewayAndApplicationPreserveSignedFieldsWithFrameworkTcpNoDelayAsync(bool expectContinue) =>
         RunVerifiedUploadAsync(expectContinue, tcpNoDelay: true);
 
-    private async Task RunVerifiedUploadAsync(bool expectContinue, bool? tcpNoDelay)
+    [Fact]
+    public Task PlainFrontendToVerifiedTlsOriginIsolatesIncomingTlsAsync() =>
+        RunVerifiedUploadAsync(expectContinue: false, tcpNoDelay: null, frontTls: false);
+
+    private async Task RunVerifiedUploadAsync(bool expectContinue, bool? tcpNoDelay, bool frontTls = true)
     {
-        ArgumentNullException.ThrowIfNull(output);
         const long bodyBytes = 30L * 1024 * 1024;
         const string rawTarget = "/container/mail/a%2Fb.bin?sig=a%2Bb%2Fc%3D&spr=https";
         using var directory = new RegistryStateDirectory();
@@ -55,10 +63,12 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         request.Headers.Add("Authorization", "SharedKey synthetic:development-signature");
         request.Headers.Add("x-ms-version", "2026-06-06");
         request.Headers.IfNoneMatch.ParseAdd("*");
+        var selectedClient = frontTls ? client.Client : proxy.Client;
+        selectedClient.Timeout = TimeSpan.FromSeconds(10);
         var watch = Stopwatch.StartNew();
         try
         {
-            using var response = await client.Client.SendAsync(request).ConfigureAwait(true);
+            using var response = await selectedClient.SendAsync(request).ConfigureAwait(true);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
             Assert.Equal("\"development-etag\"", response.Headers.ETag?.Tag);
             Assert.Equal(1, Volatile.Read(ref completed));
@@ -67,9 +77,64 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         finally
         {
             // This is a bounded counter snapshot before fixture teardown, not a settled-origin completion claim.
-            output.WriteLine("expect_continue={0}; expected_bytes={1}; client_written_bytes={2}; origin_read_bytes={3}; origin_headers_validated={4}; origin_completed={5}; sni_observations={6}; send_elapsed_ms={7}; actual_tcp_no_delay={8}",
+            _output.WriteLine("expect_continue={0}; expected_bytes={1}; client_written_bytes={2}; origin_read_bytes={3}; origin_headers_validated={4}; origin_completed={5}; sni_observations={6}; send_elapsed_ms={7}; actual_tcp_no_delay={8}; front_tls={9}",
                 expectContinue, bodyBytes, content.SerializedBytes, Interlocked.Read(ref receivedBytes), Volatile.Read(ref headersValidated),
-                Volatile.Read(ref completed), names.Count, watch.Elapsed.TotalMilliseconds, client.ObservedTcpNoDelay);
+                Volatile.Read(ref completed), names.Count, watch.Elapsed.TotalMilliseconds, client.ObservedTcpNoDelay, frontTls);
+        }
+    }
+
+    [Fact]
+    public async Task NativeVerifiedTlsUploadControlPreservesTheOriginalTenSecondBudgetAsync()
+    {
+        // Diagnostic isolation: same finite origin/payload, native TLS path, no Gateway or RPC.
+        const long bodyBytes = 30L * 1024 * 1024;
+        const string rawTarget = "/container/mail/a%2Fb.bin?sig=a%2Bb%2Fc%3D&spr=https";
+        using var directory = new RegistryStateDirectory();
+        using var certificates = DevelopmentUpstreamTrustCertificates.Create();
+        var tls = await PreparePolicyAsync(directory.Path, certificates).ConfigureAwait(true);
+        var root = tls.TrustedRoot ?? throw new InvalidOperationException("The control requires verified root identity.");
+        var names = new ConcurrentQueue<string?>();
+        long received = 0;
+        var completed = 0;
+        var upstream = await DevelopmentHttpUpstream.StartAsync(async context =>
+        {
+            await ValidateUploadAsync(context, bodyBytes, rawTarget, count => Interlocked.Exchange(ref received, count), static () => { }).ConfigureAwait(false);
+            Interlocked.Increment(ref completed);
+        }, certificates.Leaf, names.Enqueue).ConfigureAwait(true);
+        await using var lifetime = upstream.ConfigureAwait(true);
+        var endpoint = new UpstreamTransportEndpoint("native-control", "https", "http1", "127.0.0.1", upstream.Port, ValidateCertificate: true, "backend.drava.invalid")
+        {
+            TrustedRoot = new RuntimeTrustedRootCertificate(root.CertificatePath, root.Sha256),
+        };
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var content = new DevelopmentRepeatedBodyContent(bodyBytes);
+        var watch = Stopwatch.StartNew();
+        try
+        {
+            using var connection = await new UpstreamConnectionFactory().ConnectAsync(endpoint, TimeSpan.FromSeconds(3), deadline.Token).ConfigureAwait(true);
+            var header = $"PUT {rawTarget} HTTP/1.1\r\nHost: svc.site.test\r\nContent-Length: 31457280\r\nAuthorization: SharedKey synthetic:development-signature\r\nx-ms-version: 2026-06-06\r\nIf-None-Match: *\r\nConnection: close\r\n\r\n";
+            await connection.Stream.WriteAsync(Encoding.ASCII.GetBytes(header), deadline.Token).ConfigureAwait(true);
+            await content.CopyToAsync(connection.Stream, deadline.Token).ConfigureAwait(true);
+            var buffer = new byte[16384];
+            var length = 0;
+            while (length < buffer.Length)
+            {
+                var count = await connection.Stream.ReadAsync(buffer.AsMemory(length), deadline.Token).ConfigureAwait(true);
+                if (count == 0) break;
+                length += count;
+                if (Encoding.ASCII.GetString(buffer, 0, length).Contains("\r\n\r\n", StringComparison.Ordinal)) break;
+            }
+            var response = Encoding.ASCII.GetString(buffer, 0, length);
+            Assert.StartsWith("HTTP/1.1 201 ", response, StringComparison.Ordinal);
+            Assert.Contains("ETag: \"development-etag\"", response, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(bodyBytes, Interlocked.Read(ref received));
+            Assert.Equal(1, Volatile.Read(ref completed));
+            Assert.Contains("backend.drava.invalid", names, StringComparer.Ordinal);
+        }
+        finally
+        {
+            _output.WriteLine("native_only_control=true; expected_bytes={0}; client_written_bytes={1}; origin_read_bytes={2}; origin_completed={3}; elapsed_ms={4}",
+                bodyBytes, content.SerializedBytes, Interlocked.Read(ref received), Volatile.Read(ref completed), watch.Elapsed.TotalMilliseconds);
         }
     }
 
