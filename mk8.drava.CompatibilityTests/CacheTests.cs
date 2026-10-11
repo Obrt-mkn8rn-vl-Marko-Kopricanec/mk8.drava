@@ -268,77 +268,15 @@ internal static class CacheTests
         var runtime = new ProxyCacheRuntimeStatusSnapshot(EntryCount: 1, ApproximateBytes: 11, HitCount: 2, MissCount: 3, StoreCount: 4, EvictionCount: 5, StoreRejectionCount: 6, LastClearedAtUtc: null, LastClearReason: null, Rejections: runtimeRejections, Entries: runtimeEntries);
         var response = new CachedProxyResponse(200, "OK", headers, body, storedAtUtc, storedAtUtc.AddMinutes(1));
         var status = ProxyCacheStatus.FromSources(runtime.EntryCount, runtime.ApproximateBytes, runtime.HitCount, runtime.MissCount, runtime.StoreCount, runtime.EvictionCount, runtime.StoreRejectionCount, runtime.LastClearedAtUtc, runtime.LastClearReason, rejections, routes);
-        varyByHeaders[0] = "X-Replacement";
-        cacheableStatusCodes[0] = 500;
-        methods[0] = "POST";
-        headers.Clear();
-        body[0] = (byte)'X';
-        var returnedBody = response.Body;
-        returnedBody[0] = (byte)'Y';
-        runtimeRejections[0] = new ProxyCacheRuntimeRejectionSnapshot("replacement", 9);
-        runtimeEntries[0] = new ProxyCacheRuntimeEntrySnapshot("replacement", 99);
-        rejections.Clear();
-        routes.Clear();
-        varyByHeaders.Clear();
-        cacheableStatusCodes.Clear();
-        methods.Clear();
-        runtimeRejections.Clear();
-        runtimeEntries.Clear();
-        AssertEx.Equal("X-Tenant", policy.VaryByHeaders[0]);
-        AssertEx.Equal(200, policy.CacheableStatusCodes[0]);
-        AssertEx.Equal("GET", policy.Methods[0]);
-        AssertEx.Equal("Content-Type", response.Headers[0].Name);
-        AssertEx.Equal((byte)'c', response.Body[0]);
-        AssertEx.Equal("authorization", runtime.Rejections[0].Reason);
-        AssertEx.Equal("api", runtime.Entries[0].RouteName);
-        AssertEx.Equal("authorization", status.Rejections[0].Reason);
-        AssertEx.Equal("api", status.Routes[0].RouteName);
-        AssertEx.False(policy.VaryByHeaders is string[], "Cache policy vary headers should not expose a mutable array.");
-        AssertEx.False(response.Headers is ProxyHeaderField[], "Cached response headers should not expose a mutable array.");
-        AssertEx.False(runtime.Rejections is ProxyCacheRuntimeRejectionSnapshot[], "Cache runtime rejections should not expose a mutable array.");
-        AssertEx.False(status.Rejections is ProxyCacheRejectionStatus[], "Cache status rejections should not expose a mutable array.");
-        AssertEx.False(status.Routes is ProxyCacheRouteStatus[], "Cache status routes should not expose a mutable array.");
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCachePolicyFacts(Enabled: true, MaxEntryBytes: -1, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCachePolicyFacts(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: -1, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCachePolicyFacts(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromTicks(-1), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
-        AssertEx.Throws<ArgumentNullException>(() => new CachedProxyResponse(200, "OK", [null!], body, storedAtUtc, storedAtUtc.AddMinutes(1)));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyCacheRuntimeStatusSnapshot(EntryCount: 0, ApproximateBytes: 0, HitCount: 0, MissCount: 0, StoreCount: 0, EvictionCount: 0, StoreRejectionCount: 0, LastClearedAtUtc: null, LastClearReason: null, Rejections: [null!], Entries: []));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyCacheRuntimeStatusSnapshot(EntryCount: 0, ApproximateBytes: 0, HitCount: 0, MissCount: 0, StoreCount: 0, EvictionCount: 0, StoreRejectionCount: 0, LastClearedAtUtc: null, LastClearReason: null, Rejections: [], Entries: [null!]));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyCacheStatus.FromSources(entryCount: 0, approximateBytes: 0, hitCount: 0, missCount: 0, storeCount: 0, evictionCount: 0, storeRejectionCount: 0, lastClearedAtUtc: null, lastClearReason: null, rejections: [null!], routes: []));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyCacheStatus.FromSources(entryCount: 0, approximateBytes: 0, hitCount: 0, missCount: 0, storeCount: 0, evictionCount: 0, storeRejectionCount: 0, lastClearedAtUtc: null, lastClearReason: null, rejections: [], routes: [null!]));
-        AssertEx.Throws<ArgumentException>(() => new ProxyCacheStatusRouteSource(null!, true, 1024, 4096));
-        AssertEx.Throws<ArgumentException>(() => new ProxyCacheStatusRouteSource(" ", true, 1024, 4096));
-        AssertEx.Throws<ArgumentException>(() => new ProxyCacheRuntimeRejectionSnapshot(null!, 1));
-        AssertEx.Throws<ArgumentException>(() => new ProxyCacheRuntimeRejectionSnapshot(" ", 1));
-        AssertEx.Throws<ArgumentException>(() => new ProxyCacheRuntimeEntrySnapshot(null!, 11));
-        AssertEx.Throws<ArgumentException>(() => new ProxyCacheRuntimeEntrySnapshot(" ", 11));
-        AssertEx.Throws<ArgumentException>(() => ProxyCacheRejectionStatus.FromSources(null!, 1));
-        AssertEx.Throws<ArgumentException>(() => ProxyCacheRejectionStatus.FromSources(" ", 1));
-        AssertEx.Throws<ArgumentException>(() => ProxyCacheRouteStatus.FromSources(null!, enabled: true, maxEntryBytes: 1024, maxTotalBytes: 4096, currentEntryCount: 1, currentBytes: 11));
-        AssertEx.Throws<ArgumentException>(() => ProxyCacheRouteStatus.FromSources(" ", enabled: true, maxEntryBytes: 1024, maxTotalBytes: 4096, currentEntryCount: 1, currentBytes: 11));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheStatusRouteSource("api", true, -1, 4096));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheStatusRouteSource("api", true, 1024, -1));
-        AssertRuntimeSnapshotRejects(entryCount: -1);
-        AssertRuntimeSnapshotRejects(approximateBytes: -1);
-        AssertRuntimeSnapshotRejects(hitCount: -1);
-        AssertRuntimeSnapshotRejects(missCount: -1);
-        AssertRuntimeSnapshotRejects(storeCount: -1);
-        AssertRuntimeSnapshotRejects(evictionCount: -1);
-        AssertRuntimeSnapshotRejects(storeRejectionCount: -1);
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheRuntimeRejectionSnapshot("authorization", -1));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheRuntimeEntrySnapshot("api", -1));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRejectionStatus.FromSources("authorization", -1));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRouteStatus.FromSources("api", enabled: true, maxEntryBytes: -1, maxTotalBytes: 4096, currentEntryCount: 1, currentBytes: 11));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRouteStatus.FromSources("api", enabled: true, maxEntryBytes: 1024, maxTotalBytes: -1, currentEntryCount: 1, currentBytes: 11));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRouteStatus.FromSources("api", enabled: true, maxEntryBytes: 1024, maxTotalBytes: 4096, currentEntryCount: -1, currentBytes: 11));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRouteStatus.FromSources("api", enabled: true, maxEntryBytes: 1024, maxTotalBytes: 4096, currentEntryCount: 1, currentBytes: -1));
-        AssertCacheStatusRejects(entryCount: -1);
-        AssertCacheStatusRejects(approximateBytes: -1);
-        AssertCacheStatusRejects(hitCount: -1);
-        AssertCacheStatusRejects(missCount: -1);
-        AssertCacheStatusRejects(storeCount: -1);
-        AssertCacheStatusRejects(evictionCount: -1);
-        AssertCacheStatusRejects(storeRejectionCount: -1);
+        MutateOriginalCacheInputs(varyByHeaders, cacheableStatusCodes, methods, headers, body, response, runtimeRejections, runtimeEntries, rejections, routes);
+        AssertCopiedCacheCollections(policy, response, runtime, status);
+        AssertCacheConstructorGuards(body, storedAtUtc);
+        AssertCacheNegativeCounts();
+        AssertCacheStatusResponseCopies(status);
+    }
+
+    private static void AssertCacheStatusResponseCopies(ProxyCacheStatus status)
+    {
         var statusResponse = ProxyCacheStatusResponseMapper.FromStatus(status);
         AssertEx.False(statusResponse.Rejections is ProxyCacheRejectionStatusResponse[], "Cache API rejections should not expose a mutable array.");
         AssertEx.False(statusResponse.Routes is ProxyCacheRouteStatusResponse[], "Cache API routes should not expose a mutable array.");
@@ -367,15 +305,103 @@ internal static class CacheTests
         AssertEx.Equal("api", directStatusResponse.Routes[0].RouteName);
         AssertEx.False(directStatusResponse.Rejections is ProxyCacheRejectionStatusResponse[], "Direct cache API rejections should not expose a mutable array.");
         AssertEx.False(directStatusResponse.Routes is ProxyCacheRouteStatusResponse[], "Direct cache API routes should not expose a mutable array.");
-        static void AssertRuntimeSnapshotRejects(int entryCount = 0, long approximateBytes = 0, long hitCount = 0, long missCount = 0, long storeCount = 0, long evictionCount = 0, long storeRejectionCount = 0)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheRuntimeStatusSnapshot(entryCount, approximateBytes, hitCount, missCount, storeCount, evictionCount, storeRejectionCount, LastClearedAtUtc: null, LastClearReason: null, Rejections: [], Entries: []));
-        }
+    }
 
-        static void AssertCacheStatusRejects(int entryCount = 0, long approximateBytes = 0, long hitCount = 0, long missCount = 0, long storeCount = 0, long evictionCount = 0, long storeRejectionCount = 0)
-        {
-            AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheStatus.FromSources(entryCount, approximateBytes, hitCount, missCount, storeCount, evictionCount, storeRejectionCount, lastClearedAtUtc: null, lastClearReason: null, rejections: [], routes: []));
-        }
+    private static void AssertCacheNegativeCounts()
+    {
+        AssertRuntimeSnapshotRejects(entryCount: -1);
+        AssertRuntimeSnapshotRejects(approximateBytes: -1);
+        AssertRuntimeSnapshotRejects(hitCount: -1);
+        AssertRuntimeSnapshotRejects(missCount: -1);
+        AssertRuntimeSnapshotRejects(storeCount: -1);
+        AssertRuntimeSnapshotRejects(evictionCount: -1);
+        AssertRuntimeSnapshotRejects(storeRejectionCount: -1);
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheRuntimeRejectionSnapshot("authorization", -1));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheRuntimeEntrySnapshot("api", -1));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRejectionStatus.FromSources("authorization", -1));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRouteStatus.FromSources("api", enabled: true, maxEntryBytes: -1, maxTotalBytes: 4096, currentEntryCount: 1, currentBytes: 11));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRouteStatus.FromSources("api", enabled: true, maxEntryBytes: 1024, maxTotalBytes: -1, currentEntryCount: 1, currentBytes: 11));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRouteStatus.FromSources("api", enabled: true, maxEntryBytes: 1024, maxTotalBytes: 4096, currentEntryCount: -1, currentBytes: 11));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheRouteStatus.FromSources("api", enabled: true, maxEntryBytes: 1024, maxTotalBytes: 4096, currentEntryCount: 1, currentBytes: -1));
+        AssertCacheStatusRejects(entryCount: -1);
+        AssertCacheStatusRejects(approximateBytes: -1);
+        AssertCacheStatusRejects(hitCount: -1);
+        AssertCacheStatusRejects(missCount: -1);
+        AssertCacheStatusRejects(storeCount: -1);
+        AssertCacheStatusRejects(evictionCount: -1);
+        AssertCacheStatusRejects(storeRejectionCount: -1);
+    }
+
+    private static void AssertCacheConstructorGuards(byte[] body, DateTimeOffset storedAtUtc)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCachePolicyFacts(Enabled: true, MaxEntryBytes: -1, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCachePolicyFacts(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: -1, DefaultTtl: TimeSpan.FromSeconds(60), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCachePolicyFacts(Enabled: true, MaxEntryBytes: 1024, MaxTotalBytes: 4096, DefaultTtl: TimeSpan.FromTicks(-1), RespectOriginCacheControl: true, VaryByHeaders: [], CacheableStatusCodes: [], Methods: []));
+        AssertEx.Throws<ArgumentNullException>(() => new CachedProxyResponse(200, "OK", [null!], body, storedAtUtc, storedAtUtc.AddMinutes(1)));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyCacheRuntimeStatusSnapshot(EntryCount: 0, ApproximateBytes: 0, HitCount: 0, MissCount: 0, StoreCount: 0, EvictionCount: 0, StoreRejectionCount: 0, LastClearedAtUtc: null, LastClearReason: null, Rejections: [null!], Entries: []));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyCacheRuntimeStatusSnapshot(EntryCount: 0, ApproximateBytes: 0, HitCount: 0, MissCount: 0, StoreCount: 0, EvictionCount: 0, StoreRejectionCount: 0, LastClearedAtUtc: null, LastClearReason: null, Rejections: [], Entries: [null!]));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyCacheStatus.FromSources(entryCount: 0, approximateBytes: 0, hitCount: 0, missCount: 0, storeCount: 0, evictionCount: 0, storeRejectionCount: 0, lastClearedAtUtc: null, lastClearReason: null, rejections: [null!], routes: []));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyCacheStatus.FromSources(entryCount: 0, approximateBytes: 0, hitCount: 0, missCount: 0, storeCount: 0, evictionCount: 0, storeRejectionCount: 0, lastClearedAtUtc: null, lastClearReason: null, rejections: [], routes: [null!]));
+        AssertEx.Throws<ArgumentException>(() => new ProxyCacheStatusRouteSource(null!, true, 1024, 4096));
+        AssertEx.Throws<ArgumentException>(() => new ProxyCacheStatusRouteSource(" ", true, 1024, 4096));
+        AssertEx.Throws<ArgumentException>(() => new ProxyCacheRuntimeRejectionSnapshot(null!, 1));
+        AssertEx.Throws<ArgumentException>(() => new ProxyCacheRuntimeRejectionSnapshot(" ", 1));
+        AssertEx.Throws<ArgumentException>(() => new ProxyCacheRuntimeEntrySnapshot(null!, 11));
+        AssertEx.Throws<ArgumentException>(() => new ProxyCacheRuntimeEntrySnapshot(" ", 11));
+        AssertEx.Throws<ArgumentException>(() => ProxyCacheRejectionStatus.FromSources(null!, 1));
+        AssertEx.Throws<ArgumentException>(() => ProxyCacheRejectionStatus.FromSources(" ", 1));
+        AssertEx.Throws<ArgumentException>(() => ProxyCacheRouteStatus.FromSources(null!, enabled: true, maxEntryBytes: 1024, maxTotalBytes: 4096, currentEntryCount: 1, currentBytes: 11));
+        AssertEx.Throws<ArgumentException>(() => ProxyCacheRouteStatus.FromSources(" ", enabled: true, maxEntryBytes: 1024, maxTotalBytes: 4096, currentEntryCount: 1, currentBytes: 11));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheStatusRouteSource("api", true, -1, 4096));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheStatusRouteSource("api", true, 1024, -1));
+    }
+
+    private static void AssertCopiedCacheCollections(ProxyCachePolicyFacts policy, CachedProxyResponse response, ProxyCacheRuntimeStatusSnapshot runtime, ProxyCacheStatus status)
+    {
+        AssertEx.Equal("X-Tenant", policy.VaryByHeaders[0]);
+        AssertEx.Equal(200, policy.CacheableStatusCodes[0]);
+        AssertEx.Equal("GET", policy.Methods[0]);
+        AssertEx.Equal("Content-Type", response.Headers[0].Name);
+        AssertEx.Equal((byte)'c', response.Body[0]);
+        AssertEx.Equal("authorization", runtime.Rejections[0].Reason);
+        AssertEx.Equal("api", runtime.Entries[0].RouteName);
+        AssertEx.Equal("authorization", status.Rejections[0].Reason);
+        AssertEx.Equal("api", status.Routes[0].RouteName);
+        AssertEx.False(policy.VaryByHeaders is string[], "Cache policy vary headers should not expose a mutable array.");
+        AssertEx.False(response.Headers is ProxyHeaderField[], "Cached response headers should not expose a mutable array.");
+        AssertEx.False(runtime.Rejections is ProxyCacheRuntimeRejectionSnapshot[], "Cache runtime rejections should not expose a mutable array.");
+        AssertEx.False(status.Rejections is ProxyCacheRejectionStatus[], "Cache status rejections should not expose a mutable array.");
+        AssertEx.False(status.Routes is ProxyCacheRouteStatus[], "Cache status routes should not expose a mutable array.");
+    }
+
+    private static void MutateOriginalCacheInputs(List<string> varyByHeaders, List<int> cacheableStatusCodes, List<string> methods, List<ProxyHeaderField> headers, byte[] body, CachedProxyResponse response, List<ProxyCacheRuntimeRejectionSnapshot> runtimeRejections, List<ProxyCacheRuntimeEntrySnapshot> runtimeEntries, List<ProxyCacheRejectionStatus> rejections, List<ProxyCacheRouteStatus> routes)
+    {
+        varyByHeaders[0] = "X-Replacement";
+        cacheableStatusCodes[0] = 500;
+        methods[0] = "POST";
+        headers.Clear();
+        body[0] = (byte)'X';
+        var returnedBody = response.Body;
+        returnedBody[0] = (byte)'Y';
+        runtimeRejections[0] = new ProxyCacheRuntimeRejectionSnapshot("replacement", 9);
+        runtimeEntries[0] = new ProxyCacheRuntimeEntrySnapshot("replacement", 99);
+        rejections.Clear();
+        routes.Clear();
+        varyByHeaders.Clear();
+        cacheableStatusCodes.Clear();
+        methods.Clear();
+        runtimeRejections.Clear();
+        runtimeEntries.Clear();
+    }
+
+    private static void AssertRuntimeSnapshotRejects(int entryCount = 0, long approximateBytes = 0, long hitCount = 0, long missCount = 0, long storeCount = 0, long evictionCount = 0, long storeRejectionCount = 0)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => new ProxyCacheRuntimeStatusSnapshot(entryCount, approximateBytes, hitCount, missCount, storeCount, evictionCount, storeRejectionCount, LastClearedAtUtc: null, LastClearReason: null, Rejections: [], Entries: []));
+    }
+
+    private static void AssertCacheStatusRejects(int entryCount = 0, long approximateBytes = 0, long hitCount = 0, long missCount = 0, long storeCount = 0, long evictionCount = 0, long storeRejectionCount = 0)
+    {
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => ProxyCacheStatus.FromSources(entryCount, approximateBytes, hitCount, missCount, storeCount, evictionCount, storeRejectionCount, lastClearedAtUtc: null, lastClearReason: null, rejections: [], routes: []));
     }
 
     public static async Task OversizedResponseIsStreamedButNotCachedAsync()

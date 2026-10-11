@@ -326,20 +326,10 @@ internal static class Http3InfrastructureTests
 
     public static void Http3SupportSourcesAndProjectionCopyInputLists()
     {
-        AssertEx.Throws<ArgumentNullException>(() => _ = new Http3SupportConfigurationSource(null!, UpstreamHttp3Configured: false));
-        AssertEx.Throws<ArgumentNullException>(() => _ = new Http3SupportConfigurationSource([null!], UpstreamHttp3Configured: false));
-        AssertEx.Throws<ArgumentNullException>(() => Http3RuntimeSupport.ProjectConfiguration(null!, TestHttp3PlatformSupport.Supported));
-        AssertEx.Throws<ArgumentNullException>(() => Http3RuntimeSupport.ProjectConfiguration(Http3SupportConfigurationSource.Empty, null!));
-        AssertEx.Throws<ArgumentNullException>(() => Http3RuntimeSupport.ProjectRuntime(Http3SupportConfigurationSource.Empty, TestHttp3PlatformSupport.Supported, null!));
-        AssertEx.Throws<ArgumentNullException>(() => Http3RuntimeSupport.ProjectRuntime(Http3SupportConfigurationSource.Empty, TestHttp3PlatformSupport.Supported, [null!]));
-        AssertEx.Throws<ArgumentNullException>(() => Http3SupportSourceMapper.FromListenerStatuses([null!]));
+        AssertHttp3SourceGuards();
         var operationalOptions = new ProxyOperationalOptions();
         var snapshot = ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(ValidProxyOptions(Http3Listener("source", "http1AndHttp3")), operationalOptions, ProxyAdminSecurityTokenPolicy.Resolve(operationalOptions.Admin, static _ => null), new Dictionary<string, RuntimeCertificate>(StringComparer.OrdinalIgnoreCase), 1, DateTimeOffset.UtcNow, "memory", [], Discovery());
-        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources(null!, snapshot.Routes));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources(snapshot.Listeners, null!));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources([null!], snapshot.Routes));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources(snapshot.Listeners, [null!]));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources(snapshot.Listeners, [snapshot.Routes[0].WithUpstreams([null!])]));
+        AssertHttp3SourceMapperGuards(snapshot);
         var listener = new Http3SupportListenerSource(Configured: true, EnabledForTraffic: true, EnablementLevel: "default", AltSvcEnabled: true, AltSvcMaxAgeSeconds: 3600, QuicListenerIdentity: "main|quic");
         var listeners = new List<Http3SupportListenerSource>
         {
@@ -374,51 +364,15 @@ internal static class Http3InfrastructureTests
             "webtransport_over_http3"
         };
         var projection = new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: blockers, AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: clientProtocols, UpstreamProtocols: upstreamProtocols, SupportedRouteActions: routeActions, SupportedPolicyFeatures: policyFeatures, UnsupportedFeatures: unsupported, UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: "");
-        listeners[0] = listener with
-        {
-            QuicListenerIdentity = "replacement|quic"
-        };
-        blockers[0] = "replacement_blocker";
-        clientProtocols[0] = "replacement_client";
-        upstreamProtocols[0] = "replacement_upstream";
-        routeActions[0] = "replacement_action";
-        policyFeatures[0] = "replacement_policy";
-        unsupported[0] = "replacement_unsupported";
-        listeners.Clear();
-        blockers.Clear();
-        clientProtocols.Clear();
-        upstreamProtocols.Clear();
-        routeActions.Clear();
-        policyFeatures.Clear();
-        unsupported.Clear();
-        AssertEx.Equal(1, source.Listeners.Count);
-        AssertEx.Equal("main|quic", source.Listeners[0].QuicListenerIdentity);
-        AssertEx.Equal("runtime_quic_unsupported", projection.DefaultReadinessBlockers[0]);
-        AssertEx.Equal("http1", projection.ClientProtocols[0]);
-        AssertEx.Equal("http1", projection.UpstreamProtocols[0]);
-        AssertEx.Equal("proxy", projection.SupportedRouteActions[0]);
-        AssertEx.Equal("cache_get_head", projection.SupportedPolicyFeatures[0]);
-        AssertEx.Equal("webtransport_over_http3", projection.UnsupportedFeatures[0]);
-        AssertEx.False(source.Listeners is Http3SupportListenerSource[], "HTTP/3 configuration source listeners should not expose a mutable array.");
-        AssertEx.False(projection.ClientProtocols is string[], "HTTP/3 projection protocol lists should not expose mutable arrays.");
-        AssertEx.False(projection.UnsupportedFeatures is string[], "HTTP/3 projection unsupported-feature lists should not expose mutable arrays.");
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: null!, QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: null!, AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: null!, UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: null!, UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [null!], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
-        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [null!], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
-        var response = RuntimeHttp3SupportResponseMapper.FromProjection(projection);
-        AssertEx.Equal("runtime_quic_unsupported", response.DefaultReadinessBlockers[0]);
-        AssertEx.Equal("http1", response.ClientProtocols[0]);
-        AssertEx.Equal("http1", response.UpstreamProtocols[0]);
-        AssertEx.Equal("proxy", response.SupportedRouteActions[0]);
-        AssertEx.Equal("cache_get_head", response.SupportedPolicyFeatures[0]);
-        AssertEx.Equal("webtransport_over_http3", response.UnsupportedFeatures[0]);
-        AssertEx.False(ReferenceEquals(projection.DefaultReadinessBlockers, response.DefaultReadinessBlockers), "HTTP/3 API blockers should not reuse the BLL projection list.");
-        AssertEx.False(ReferenceEquals(projection.ClientProtocols, response.ClientProtocols), "HTTP/3 API client protocols should not reuse the BLL projection list.");
-        AssertEx.False(response.ClientProtocols is string[], "HTTP/3 API protocol lists should not expose mutable arrays.");
-        AssertEx.False(response.UnsupportedFeatures is string[], "HTTP/3 API unsupported-feature lists should not expose mutable arrays.");
+        MutateOriginalHttp3Inputs(listener, listeners, blockers, clientProtocols, upstreamProtocols, routeActions, policyFeatures, unsupported);
+        AssertCopiedHttp3Collections(source, projection);
+        AssertHttp3ProjectionGuards();
+        AssertMappedHttp3ResponseCopies(projection);
+        AssertDirectHttp3ResponseCopies();
+    }
+
+    private static void AssertDirectHttp3ResponseCopies()
+    {
         var directBlockers = new List<string>
         {
             "direct_blocker"
@@ -465,6 +419,87 @@ internal static class Http3InfrastructureTests
         AssertEx.Equal("direct_webtransport", directResponse.UnsupportedFeatures[0]);
         AssertEx.False(directResponse.ClientProtocols is string[], "Direct HTTP/3 API protocol lists should not expose mutable arrays.");
         AssertEx.False(directResponse.UnsupportedFeatures is string[], "Direct HTTP/3 API unsupported-feature lists should not expose mutable arrays.");
+    }
+
+    private static void AssertMappedHttp3ResponseCopies(RuntimeHttp3SupportProjection projection)
+    {
+        var response = RuntimeHttp3SupportResponseMapper.FromProjection(projection);
+        AssertEx.Equal("runtime_quic_unsupported", response.DefaultReadinessBlockers[0]);
+        AssertEx.Equal("http1", response.ClientProtocols[0]);
+        AssertEx.Equal("http1", response.UpstreamProtocols[0]);
+        AssertEx.Equal("proxy", response.SupportedRouteActions[0]);
+        AssertEx.Equal("cache_get_head", response.SupportedPolicyFeatures[0]);
+        AssertEx.Equal("webtransport_over_http3", response.UnsupportedFeatures[0]);
+        AssertEx.False(ReferenceEquals(projection.DefaultReadinessBlockers, response.DefaultReadinessBlockers), "HTTP/3 API blockers should not reuse the BLL projection list.");
+        AssertEx.False(ReferenceEquals(projection.ClientProtocols, response.ClientProtocols), "HTTP/3 API client protocols should not reuse the BLL projection list.");
+        AssertEx.False(response.ClientProtocols is string[], "HTTP/3 API protocol lists should not expose mutable arrays.");
+        AssertEx.False(response.UnsupportedFeatures is string[], "HTTP/3 API unsupported-feature lists should not expose mutable arrays.");
+    }
+
+    private static void AssertHttp3ProjectionGuards()
+    {
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: null!, QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: null!, AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: null!, UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: null!, UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [null!], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
+        AssertEx.Throws<ArgumentNullException>(() => new RuntimeHttp3SupportProjection(RuntimeSupport: "supported", QuicListenerSupported: true, QuicConnectionSupported: true, Configured: "default", EnablementLevel: "default", EnabledForTraffic: true, QuicListenerReady: true, AltSvcConfigured: true, AltSvcActive: true, AltSvcMaxAgeSeconds: 3600, DisabledReason: "quic_listener_ready", UdpQuicListenerIdentityModeled: true, ReadinessConclusion: "default_enabled_for_eligible_tls_proxy_listeners", DefaultEnablementState: "default-enabled", DefaultReadinessBlockers: [], AltSvcStateReason: "active", QpackMode: "static_with_zero_dynamic_table", QpackDynamicTableCapacity: 0, QpackBlockedStreams: 0, RequestBodyMode: "streaming", ClientHttp3SupportLevel: "default_enabled_for_eligible_tls_proxy_listeners", UpstreamHttp3SupportLevel: "opt_in_https_quic_reused_multiplexed", ClientProtocols: [null!], UpstreamProtocols: [], SupportedRouteActions: [], SupportedPolicyFeatures: [], UnsupportedFeatures: [], UpstreamHttp3Configured: true, UpstreamPoolingMode: "reused_multiplexed", UpstreamMultiplexingEnabled: true, UpstreamMaxStreamsPerConnection: 8, UpstreamQpackMode: "static_with_zero_dynamic_table", UpstreamPoolingLimitationReason: ""));
+    }
+
+    private static void AssertCopiedHttp3Collections(Http3SupportConfigurationSource source, RuntimeHttp3SupportProjection projection)
+    {
+        AssertEx.Equal(1, source.Listeners.Count);
+        AssertEx.Equal("main|quic", source.Listeners[0].QuicListenerIdentity);
+        AssertEx.Equal("runtime_quic_unsupported", projection.DefaultReadinessBlockers[0]);
+        AssertEx.Equal("http1", projection.ClientProtocols[0]);
+        AssertEx.Equal("http1", projection.UpstreamProtocols[0]);
+        AssertEx.Equal("proxy", projection.SupportedRouteActions[0]);
+        AssertEx.Equal("cache_get_head", projection.SupportedPolicyFeatures[0]);
+        AssertEx.Equal("webtransport_over_http3", projection.UnsupportedFeatures[0]);
+        AssertEx.False(source.Listeners is Http3SupportListenerSource[], "HTTP/3 configuration source listeners should not expose a mutable array.");
+        AssertEx.False(projection.ClientProtocols is string[], "HTTP/3 projection protocol lists should not expose mutable arrays.");
+        AssertEx.False(projection.UnsupportedFeatures is string[], "HTTP/3 projection unsupported-feature lists should not expose mutable arrays.");
+    }
+
+    private static void MutateOriginalHttp3Inputs(Http3SupportListenerSource listener, List<Http3SupportListenerSource> listeners, List<string> blockers, List<string> clientProtocols, List<string> upstreamProtocols, List<string> routeActions, List<string> policyFeatures, List<string> unsupported)
+    {
+        listeners[0] = listener with
+        {
+            QuicListenerIdentity = "replacement|quic"
+        };
+        blockers[0] = "replacement_blocker";
+        clientProtocols[0] = "replacement_client";
+        upstreamProtocols[0] = "replacement_upstream";
+        routeActions[0] = "replacement_action";
+        policyFeatures[0] = "replacement_policy";
+        unsupported[0] = "replacement_unsupported";
+        listeners.Clear();
+        blockers.Clear();
+        clientProtocols.Clear();
+        upstreamProtocols.Clear();
+        routeActions.Clear();
+        policyFeatures.Clear();
+        unsupported.Clear();
+    }
+
+    private static void AssertHttp3SourceMapperGuards(ProxyConfigurationSnapshot snapshot)
+    {
+        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources(null!, snapshot.Routes));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources(snapshot.Listeners, null!));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources([null!], snapshot.Routes));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources(snapshot.Listeners, [null!]));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyHttp3SupportConfigurationSourceMapper.FromSources(snapshot.Listeners, [snapshot.Routes[0].WithUpstreams([null!])]));
+    }
+
+    private static void AssertHttp3SourceGuards()
+    {
+        AssertEx.Throws<ArgumentNullException>(() => _ = new Http3SupportConfigurationSource(null!, UpstreamHttp3Configured: false));
+        AssertEx.Throws<ArgumentNullException>(() => _ = new Http3SupportConfigurationSource([null!], UpstreamHttp3Configured: false));
+        AssertEx.Throws<ArgumentNullException>(() => Http3RuntimeSupport.ProjectConfiguration(null!, TestHttp3PlatformSupport.Supported));
+        AssertEx.Throws<ArgumentNullException>(() => Http3RuntimeSupport.ProjectConfiguration(Http3SupportConfigurationSource.Empty, null!));
+        AssertEx.Throws<ArgumentNullException>(() => Http3RuntimeSupport.ProjectRuntime(Http3SupportConfigurationSource.Empty, TestHttp3PlatformSupport.Supported, null!));
+        AssertEx.Throws<ArgumentNullException>(() => Http3RuntimeSupport.ProjectRuntime(Http3SupportConfigurationSource.Empty, TestHttp3PlatformSupport.Supported, [null!]));
+        AssertEx.Throws<ArgumentNullException>(() => Http3SupportSourceMapper.FromListenerStatuses([null!]));
     }
 
     public static void UpstreamProtocolAcceptsExplicitHttp3()

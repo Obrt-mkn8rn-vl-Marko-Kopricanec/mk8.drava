@@ -417,37 +417,13 @@ internal static class OperatorStatusTests
 
     public static void StatusReadinessInputsCopySourceLists()
     {
-        var configured = new ProxyConfiguredListenerSummarySource(Enabled: true, Http1Enabled: true, Http2Enabled: false, Http3EnabledForTraffic: false);
-        var configuredReplacement = configured with
-        {
-            Enabled = false
-        };
-        var configuredListeners = new List<ProxyConfiguredListenerSummarySource>
-        {
-            configured
-        };
-        var runtime = new ProxyRuntimeListenerSummarySource(IsQuic: false, ProxyListenerState.Active);
-        var runtimeReplacement = runtime with
-        {
-            State = ProxyListenerState.Failed
-        };
-        var runtimeListeners = new List<ProxyRuntimeListenerSummarySource>
-        {
-            runtime
-        };
+        var (configuredListeners, configuredReplacement, runtimeListeners, runtimeReplacement) = CreateReadinessListenerInputs();
         var route = new ProxyRouteSummarySource(SiteName: "main", IsProxyRoute: true, CacheEnabled: true, HasHttp3Upstream: false);
         var routeReplacement = route with
         {
             SiteName = "replacement"
         };
-        AssertEx.Throws<ArgumentException>(() => new ProxyRouteSummarySource(SiteName: " ", IsProxyRoute: true, CacheEnabled: true, HasHttp3Upstream: false));
-        AssertEx.Throws<ArgumentException>(() =>
-        {
-            _ = route with
-            {
-                SiteName = " "
-            };
-        });
+        AssertReadinessRouteGuards(route);
         var routes = new List<ProxyRouteSummarySource>
         {
             route
@@ -476,23 +452,83 @@ internal static class OperatorStatusTests
         {
             loadedCertificate
         };
-        AssertEx.Throws<ArgumentException>(() => new ProxyCertificateSummarySource([" "], loadedCertificates));
-        AssertEx.Throws<ArgumentException>(() => new ProxyCertificateValiditySource(" ", DateTime.UnixEpoch, DateTime.UnixEpoch.AddDays(30)));
-        AssertEx.Throws<ArgumentException>(() =>
-        {
-            _ = loadedCertificate with
-            {
-                Id = " "
-            };
-        });
+        AssertReadinessCertificateGuards(loadedCertificates, loadedCertificate);
         var certificates = new ProxyCertificateSummarySource(referencedCertificates, loadedCertificates);
         var configuration = new ProxyStatusReadinessConfigurationSourceSet(HasActiveConfiguration: true, ConfigGeneration: 42, ConfigurationLoadedAtUtc: DateTimeOffset.UnixEpoch, ConfiguredListeners: configuredListeners, Routes: routes, Certificates: certificates, Acme: new ProxyAcmeSummaryConfigurationSource(Enabled: true, ConfiguredCertificates: 1), LimitConfiguration: new ProxyLimitConfigurationSummarySource(MaxActiveClientConnections: 4096, MaxConcurrentTlsHandshakes: 16, RequestsPerMinutePerIp: 30));
         var sources = new ProxyStatusReadinessSourceSet(HasActiveConfiguration: true, ConfigGeneration: 42, ConfigurationLoadedAtUtc: DateTimeOffset.UnixEpoch, LastListenerReloadSucceeded: true, LastListenerReloadFailed: false, ConfiguredListeners: configuredListeners, RuntimeListeners: runtimeListeners, Routes: routes, Certificates: certificates, Acme: new ProxyAcmeSummaryConfigurationSource(Enabled: true, ConfiguredCertificates: 1), Upstreams: upstreams, LimitConfiguration: new ProxyLimitConfigurationSummarySource(MaxActiveClientConnections: 4096, MaxConcurrentTlsHandshakes: 16, RequestsPerMinutePerIp: 30), LimitRuntime: new ProxyLimitRuntimeSummarySource(ActiveConnections: 1, ActiveTlsHandshakes: 0, ActiveHttp2Streams: 0, ActiveHttp3Streams: 0, ActiveUpstreamHttp3Streams: 0), ClientHttp3Enabled: false, ClientHttp3Ready: false, Log: new ProxyLogSummarySource(AccessLogPersistenceEnabled: true, AdminAuditPersistenceEnabled: true, State: ProxyStatusText.Healthy, Reason: "ok"), Shutdown: new ProxyShutdownSummarySource(IsRunning: true, IsShuttingDown: false, ShutdownStartedAtUtc: null, ShutdownDeadlineUtc: null));
         var input = new ProxyStatusReadinessInput(HasActiveConfiguration: true, ConfigGeneration: 42, ConfigurationLoadedAtUtc: DateTimeOffset.UnixEpoch, LastListenerReloadSucceeded: true, LastListenerReloadFailed: false, ConfiguredListeners: configuredListeners, RuntimeListeners: runtimeListeners, Routes: routes, Certificates: certificates, Acme: new ProxyAcmeSummaryConfigurationSource(Enabled: true, ConfiguredCertificates: 1), Upstreams: upstreams, LimitConfiguration: new ProxyLimitConfigurationSummarySource(MaxActiveClientConnections: 4096, MaxConcurrentTlsHandshakes: 16, RequestsPerMinutePerIp: 30), LimitRuntime: new ProxyLimitRuntimeSummarySource(ActiveConnections: 1, ActiveTlsHandshakes: 0, ActiveHttp2Streams: 0, ActiveHttp3Streams: 0, ActiveUpstreamHttp3Streams: 0), ClientHttp3Enabled: false, ClientHttp3Ready: false, Log: new ProxyLogSummarySource(AccessLogPersistenceEnabled: true, AdminAuditPersistenceEnabled: true, State: ProxyStatusText.Healthy, Reason: "ok"), Shutdown: new ProxyShutdownSummarySource(IsRunning: true, IsShuttingDown: false, ShutdownStartedAtUtc: null, ShutdownDeadlineUtc: null), CacheStatus: null, AcmeStatuses: acmeStatuses, RuntimePreflight: ProxyRuntimePreflightStatus.Unknown, ObservedAtUtc: DateTimeOffset.UnixEpoch);
-        AssertEx.Throws<ArgumentException>(() => new ProxyLogSummarySource(AccessLogPersistenceEnabled: true, AdminAuditPersistenceEnabled: true, State: " ", Reason: "ok"));
-        AssertEx.Throws<ArgumentException>(() => new ProxyLogSummarySource(AccessLogPersistenceEnabled: true, AdminAuditPersistenceEnabled: true, State: ProxyStatusText.Healthy, Reason: " "));
-        AssertEx.Throws<ArgumentException>(() => new ProxyLogPersistenceFailureStatus(TimestampUtc: DateTimeOffset.UnixEpoch, Category: " ", Reason: "write_failed"));
-        AssertEx.Throws<ArgumentException>(() => new ProxyLogPersistenceFailureStatus(TimestampUtc: DateTimeOffset.UnixEpoch, Category: "io", Reason: " "));
+        AssertReadinessLogGuards();
+        MutateOriginalReadinessInputs(configuredListeners, runtimeListeners, routes, upstreams, acmeStatuses, referencedCertificates, loadedCertificates, configuredReplacement, runtimeReplacement, routeReplacement, upstreamReplacement, acmeReplacement, loadedCertificate);
+        AssertCopiedReadinessCollections(configuration, sources, input, certificates);
+        AssertReadinessResponseCopies();
+    }
+
+    private static (List<ProxyConfiguredListenerSummarySource> ConfiguredListeners, ProxyConfiguredListenerSummarySource ConfiguredReplacement, List<ProxyRuntimeListenerSummarySource> RuntimeListeners, ProxyRuntimeListenerSummarySource RuntimeReplacement) CreateReadinessListenerInputs()
+    {
+        var configured = new ProxyConfiguredListenerSummarySource(Enabled: true, Http1Enabled: true, Http2Enabled: false, Http3EnabledForTraffic: false);
+        var configuredReplacement = configured with
+        {
+            Enabled = false
+        };
+        var configuredListeners = new List<ProxyConfiguredListenerSummarySource>
+        {
+            configured
+        };
+        var runtime = new ProxyRuntimeListenerSummarySource(IsQuic: false, ProxyListenerState.Active);
+        var runtimeReplacement = runtime with
+        {
+            State = ProxyListenerState.Failed
+        };
+        var runtimeListeners = new List<ProxyRuntimeListenerSummarySource>
+        {
+            runtime
+        };
+
+        return (configuredListeners, configuredReplacement, runtimeListeners, runtimeReplacement);
+    }
+
+    private static void AssertReadinessResponseCopies()
+    {
+        var readiness = ProxyReadinessStatus.Evaluated(ProxyStatusText.Degraded, ["runtime_preflight_degraded"], DateTimeOffset.UnixEpoch, configGeneration: 42);
+        AssertEx.False(readiness.Reasons is string[], "Readiness status reasons should not expose a mutable array.");
+        var readinessResponse = ProxyReadinessStatusResponseMapper.FromStatus(readiness);
+        AssertEx.Equal("runtime_preflight_degraded", readinessResponse.Reasons[0]);
+        AssertEx.False(ReferenceEquals(readiness.Reasons, readinessResponse.Reasons), "Readiness API reasons should not reuse the BLL reasons collection.");
+        AssertEx.False(readinessResponse.Reasons is string[], "Readiness API reasons should not expose a mutable array.");
+        var responseReasons = new List<string>
+        {
+            readinessResponse.Reasons[0]
+        };
+        var directReadinessResponse = new ProxyReadinessStatusResponse(state: ProxyStatusText.Degraded, reasons: responseReasons, generatedAtUtc: DateTimeOffset.UnixEpoch, configGeneration: 42);
+        responseReasons[0] = "replacement_reason";
+        responseReasons.Clear();
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyReadinessStatusResponse(state: ProxyStatusText.Degraded, reasons: null!, generatedAtUtc: DateTimeOffset.UnixEpoch, configGeneration: 42));
+        AssertEx.Equal("runtime_preflight_degraded", directReadinessResponse.Reasons[0]);
+        AssertEx.False(directReadinessResponse.Reasons is string[], "Direct readiness API reasons should not expose a mutable array.");
+    }
+
+    private static void AssertCopiedReadinessCollections(ProxyStatusReadinessConfigurationSourceSet configuration, ProxyStatusReadinessSourceSet sources, ProxyStatusReadinessInput input, ProxyCertificateSummarySource certificates)
+    {
+        AssertEx.True(configuration.ConfiguredListeners[0].Enabled);
+        AssertEx.Equal("main", configuration.Routes[0].SiteName);
+        AssertEx.True(sources.ConfiguredListeners[0].Enabled);
+        AssertEx.Equal(ProxyListenerState.Active, sources.RuntimeListeners[0].State);
+        AssertEx.Equal("main", sources.Routes[0].SiteName);
+        AssertEx.Equal(UpstreamHealthState.Healthy, sources.Upstreams[0].HealthState);
+        AssertEx.True(input.ConfiguredListeners[0].Enabled);
+        AssertEx.Equal(ProxyListenerState.Active, input.RuntimeListeners[0].State);
+        AssertEx.Equal("main", input.Routes[0].SiteName);
+        AssertEx.Equal(UpstreamHealthState.Healthy, input.Upstreams[0].HealthState);
+        AssertEx.Equal("cert-a", input.AcmeStatuses[0].CertificateId);
+        AssertEx.Equal("cert-a", certificates.ReferencedCertificateIds[0]);
+        AssertEx.Equal("cert-a", certificates.LoadedCertificates[0].Id);
+        AssertEx.False(input.Routes is ProxyRouteSummarySource[], "Readiness input routes should not expose a mutable array.");
+        AssertEx.False(sources.Upstreams is ProxyUpstreamSummarySource[], "Readiness source upstreams should not expose a mutable array.");
+        AssertEx.False(certificates.ReferencedCertificateIds is string[], "Certificate references should not expose a mutable array.");
+    }
+
+    private static void MutateOriginalReadinessInputs(List<ProxyConfiguredListenerSummarySource> configuredListeners, List<ProxyRuntimeListenerSummarySource> runtimeListeners, List<ProxyRouteSummarySource> routes, List<ProxyUpstreamSummarySource> upstreams, List<AcmeCertificateLifecycleStatus> acmeStatuses, List<string> referencedCertificates, List<ProxyCertificateValiditySource> loadedCertificates, ProxyConfiguredListenerSummarySource configuredReplacement, ProxyRuntimeListenerSummarySource runtimeReplacement, ProxyRouteSummarySource routeReplacement, ProxyUpstreamSummarySource upstreamReplacement, AcmeCertificateLifecycleStatus acmeReplacement, ProxyCertificateValiditySource loadedCertificate)
+    {
         configuredListeners[0] = configuredReplacement;
         runtimeListeners[0] = runtimeReplacement;
         routes[0] = routeReplacement;
@@ -510,38 +546,39 @@ internal static class OperatorStatusTests
         acmeStatuses.Clear();
         referencedCertificates.Clear();
         loadedCertificates.Clear();
-        AssertEx.True(configuration.ConfiguredListeners[0].Enabled);
-        AssertEx.Equal("main", configuration.Routes[0].SiteName);
-        AssertEx.True(sources.ConfiguredListeners[0].Enabled);
-        AssertEx.Equal(ProxyListenerState.Active, sources.RuntimeListeners[0].State);
-        AssertEx.Equal("main", sources.Routes[0].SiteName);
-        AssertEx.Equal(UpstreamHealthState.Healthy, sources.Upstreams[0].HealthState);
-        AssertEx.True(input.ConfiguredListeners[0].Enabled);
-        AssertEx.Equal(ProxyListenerState.Active, input.RuntimeListeners[0].State);
-        AssertEx.Equal("main", input.Routes[0].SiteName);
-        AssertEx.Equal(UpstreamHealthState.Healthy, input.Upstreams[0].HealthState);
-        AssertEx.Equal("cert-a", input.AcmeStatuses[0].CertificateId);
-        AssertEx.Equal("cert-a", certificates.ReferencedCertificateIds[0]);
-        AssertEx.Equal("cert-a", certificates.LoadedCertificates[0].Id);
-        AssertEx.False(input.Routes is ProxyRouteSummarySource[], "Readiness input routes should not expose a mutable array.");
-        AssertEx.False(sources.Upstreams is ProxyUpstreamSummarySource[], "Readiness source upstreams should not expose a mutable array.");
-        AssertEx.False(certificates.ReferencedCertificateIds is string[], "Certificate references should not expose a mutable array.");
-        var readiness = ProxyReadinessStatus.Evaluated(ProxyStatusText.Degraded, ["runtime_preflight_degraded"], DateTimeOffset.UnixEpoch, configGeneration: 42);
-        AssertEx.False(readiness.Reasons is string[], "Readiness status reasons should not expose a mutable array.");
-        var readinessResponse = ProxyReadinessStatusResponseMapper.FromStatus(readiness);
-        AssertEx.Equal("runtime_preflight_degraded", readinessResponse.Reasons[0]);
-        AssertEx.False(ReferenceEquals(readiness.Reasons, readinessResponse.Reasons), "Readiness API reasons should not reuse the BLL reasons collection.");
-        AssertEx.False(readinessResponse.Reasons is string[], "Readiness API reasons should not expose a mutable array.");
-        var responseReasons = new List<string>
+    }
+
+    private static void AssertReadinessLogGuards()
+    {
+        AssertEx.Throws<ArgumentException>(() => new ProxyLogSummarySource(AccessLogPersistenceEnabled: true, AdminAuditPersistenceEnabled: true, State: " ", Reason: "ok"));
+        AssertEx.Throws<ArgumentException>(() => new ProxyLogSummarySource(AccessLogPersistenceEnabled: true, AdminAuditPersistenceEnabled: true, State: ProxyStatusText.Healthy, Reason: " "));
+        AssertEx.Throws<ArgumentException>(() => new ProxyLogPersistenceFailureStatus(TimestampUtc: DateTimeOffset.UnixEpoch, Category: " ", Reason: "write_failed"));
+        AssertEx.Throws<ArgumentException>(() => new ProxyLogPersistenceFailureStatus(TimestampUtc: DateTimeOffset.UnixEpoch, Category: "io", Reason: " "));
+    }
+
+    private static void AssertReadinessCertificateGuards(List<ProxyCertificateValiditySource> loadedCertificates, ProxyCertificateValiditySource loadedCertificate)
+    {
+        AssertEx.Throws<ArgumentException>(() => new ProxyCertificateSummarySource([" "], loadedCertificates));
+        AssertEx.Throws<ArgumentException>(() => new ProxyCertificateValiditySource(" ", DateTime.UnixEpoch, DateTime.UnixEpoch.AddDays(30)));
+        AssertEx.Throws<ArgumentException>(() =>
         {
-            readinessResponse.Reasons[0]
-        };
-        var directReadinessResponse = new ProxyReadinessStatusResponse(state: ProxyStatusText.Degraded, reasons: responseReasons, generatedAtUtc: DateTimeOffset.UnixEpoch, configGeneration: 42);
-        responseReasons[0] = "replacement_reason";
-        responseReasons.Clear();
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyReadinessStatusResponse(state: ProxyStatusText.Degraded, reasons: null!, generatedAtUtc: DateTimeOffset.UnixEpoch, configGeneration: 42));
-        AssertEx.Equal("runtime_preflight_degraded", directReadinessResponse.Reasons[0]);
-        AssertEx.False(directReadinessResponse.Reasons is string[], "Direct readiness API reasons should not expose a mutable array.");
+            _ = loadedCertificate with
+            {
+                Id = " "
+            };
+        });
+    }
+
+    private static void AssertReadinessRouteGuards(ProxyRouteSummarySource route)
+    {
+        AssertEx.Throws<ArgumentException>(() => new ProxyRouteSummarySource(SiteName: " ", IsProxyRoute: true, CacheEnabled: true, HasHttp3Upstream: false));
+        AssertEx.Throws<ArgumentException>(() =>
+        {
+            _ = route with
+            {
+                SiteName = " "
+            };
+        });
     }
 
     public static void StatusReadinessSourceMapperConsumesRuntimeSummaryWithoutRuntimeSnapshot()

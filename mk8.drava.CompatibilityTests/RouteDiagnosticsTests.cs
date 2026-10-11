@@ -533,11 +533,7 @@ internal static class RouteDiagnosticsTests
         };
         var http3Support = new Http3SupportConfigurationSource([new Http3SupportListenerSource(snapshot.Listeners[0].Http3.Configured, snapshot.Listeners[0].Http3.EnabledForTraffic, snapshot.Listeners[0].Http3.EnablementLevel, false, 86400, snapshot.Listeners[0].QuicIdentity?.Key)], UpstreamHttp3Configured: false);
         var source = new ProxyConfigLintRuntimeConfigurationSource(sourceFiles, adminUrls, snapshot.AdminSecurity.RequireAuthentication, snapshot.Metrics.PublicMetricsEnabled, http3Support, listeners, routes);
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigLintConfigurationSnapshotMapper.ToLintSnapshot(null!, TestHttp3PlatformSupport.Supported));
-        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigLintConfigurationSnapshotMapper.ToLintSnapshot(source, null!));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigLintRuntimeConfigurationSource(sourceFiles, adminUrls, snapshot.AdminSecurity.RequireAuthentication, snapshot.Metrics.PublicMetricsEnabled, http3Support, [null!], routes));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigLintRuntimeConfigurationSource(sourceFiles, adminUrls, snapshot.AdminSecurity.RequireAuthentication, snapshot.Metrics.PublicMetricsEnabled, http3Support, listeners, [null!]));
-        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigLintRuntimeRouteSource("api", "diag", "diag.test", "/api", RuntimeRouteAction.Proxy.ToString(), false, false, "", true, cacheVaryByHeaders, true, retryMethods, false, [null!], ""));
+        AssertConfigLintSourceGuards(snapshot, source, sourceFiles, adminUrls, http3Support, listeners, routes, cacheVaryByHeaders, retryMethods);
         var mappedSourceFiles = new List<string>
         {
             "mapped.json"
@@ -551,6 +547,12 @@ internal static class RouteDiagnosticsTests
         AssertEx.Throws<ArgumentNullException>(() => ProxyConfigLintRuntimeConfigurationSourceMapper.FromSources(mappedSourceFiles, mappedAdminUrls, snapshot.AdminSecurity.RequireAuthentication, snapshot.Metrics.PublicMetricsEnabled, snapshot.Listeners, [snapshot.Routes[0].WithUpstreams([null!])]));
         var mappedSource = ProxyConfigLintRuntimeConfigurationSourceMapper.FromSources(mappedSourceFiles.Select(static sourceFile => sourceFile), mappedAdminUrls.Select(static adminUrl => adminUrl), snapshot.AdminSecurity.RequireAuthentication, snapshot.Metrics.PublicMetricsEnabled, snapshot.Listeners.Select(static listener => listener), snapshot.Routes.Select(static route => route));
         var lintSnapshot = ProxyConfigLintConfigurationSnapshotMapper.ToLintSnapshot(source, TestHttp3PlatformSupport.Supported);
+        MutateOriginalConfigLintInputs(mappedSourceFiles, mappedAdminUrls, sourceFiles, adminUrls, listeners, routes, cacheVaryByHeaders, retryMethods, upstreams);
+        AssertCopiedConfigLintCollections(snapshot, source, mappedSource, lintSnapshot);
+    }
+
+    private static void MutateOriginalConfigLintInputs(List<string> mappedSourceFiles, List<string> mappedAdminUrls, List<string> sourceFiles, List<string> adminUrls, List<ProxyConfigLintRuntimeListenerSource> listeners, List<ProxyConfigLintRuntimeRouteSource> routes, List<string> cacheVaryByHeaders, List<string> retryMethods, List<ProxyConfigLintRuntimeUpstreamSource> upstreams)
+    {
         mappedSourceFiles.Clear();
         mappedAdminUrls.Clear();
         sourceFiles[0] = "replacement.json";
@@ -565,6 +567,10 @@ internal static class RouteDiagnosticsTests
         cacheVaryByHeaders.Clear();
         retryMethods.Clear();
         upstreams.Clear();
+    }
+
+    private static void AssertCopiedConfigLintCollections(ProxyConfigurationSnapshot snapshot, ProxyConfigLintRuntimeConfigurationSource source, ProxyConfigLintRuntimeConfigurationSource mappedSource, ProxyConfigLintConfigurationSnapshot lintSnapshot)
+    {
         AssertEx.Equal(1, lintSnapshot.SourceFiles.Count);
         AssertEx.Equal("site.json", lintSnapshot.SourceFiles[0]);
         AssertEx.Equal("site.json", source.SourceFiles[0]);
@@ -600,6 +606,15 @@ internal static class RouteDiagnosticsTests
         AssertEx.False(lintSnapshot.Routes is ProxyConfigLintRoute[], "Config lint routes should not expose a mutable array.");
         AssertEx.False(lintSnapshot.Routes[0].CacheVaryByHeaders is string[], "Config lint route vary headers should not expose a mutable array.");
         AssertEx.False(lintSnapshot.Routes[0].Upstreams is ProxyConfigLintUpstream[], "Config lint route upstreams should not expose a mutable array.");
+    }
+
+    private static void AssertConfigLintSourceGuards(ProxyConfigurationSnapshot snapshot, ProxyConfigLintRuntimeConfigurationSource source, List<string> sourceFiles, List<string> adminUrls, Http3SupportConfigurationSource http3Support, List<ProxyConfigLintRuntimeListenerSource> listeners, List<ProxyConfigLintRuntimeRouteSource> routes, List<string> cacheVaryByHeaders, List<string> retryMethods)
+    {
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigLintConfigurationSnapshotMapper.ToLintSnapshot(null!, TestHttp3PlatformSupport.Supported));
+        AssertEx.Throws<ArgumentNullException>(() => ProxyConfigLintConfigurationSnapshotMapper.ToLintSnapshot(source, null!));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigLintRuntimeConfigurationSource(sourceFiles, adminUrls, snapshot.AdminSecurity.RequireAuthentication, snapshot.Metrics.PublicMetricsEnabled, http3Support, [null!], routes));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigLintRuntimeConfigurationSource(sourceFiles, adminUrls, snapshot.AdminSecurity.RequireAuthentication, snapshot.Metrics.PublicMetricsEnabled, http3Support, listeners, [null!]));
+        AssertEx.Throws<ArgumentNullException>(() => new ProxyConfigLintRuntimeRouteSource("api", "diag", "diag.test", "/api", RuntimeRouteAction.Proxy.ToString(), false, false, "", true, cacheVaryByHeaders, true, retryMethods, false, [null!], ""));
     }
 
     public static void ConfigLintRuntimeListenerStateMapperReadsListenerStatuses()
