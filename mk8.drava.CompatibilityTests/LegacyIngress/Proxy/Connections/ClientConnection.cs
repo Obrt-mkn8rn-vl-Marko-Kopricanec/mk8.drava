@@ -119,170 +119,25 @@ internal sealed partial class ClientConnection
             return;
         }
 
+        await RunHttp1RequestsAsync(clientStream, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask RunHttp1RequestsAsync(Stream clientStream, CancellationToken cancellationToken)
+    {
         var maxRequestHeadBytes = Math.Min(_listener.MaxRequestHeadBytes, _configurationSnapshot.Limits.MaxRequestHeadBytes);
+        var requestState = new Http1RequestLoopState();
         var requestHeadBuffer = ArrayPool<byte>.Shared.Rent(maxRequestHeadBytes);
-        var requestsProcessed = 0;
-        ProxyRequestContext? currentContext = null;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                currentContext = requestsProcessed == 0 ? CreateRequestContext() : null;
-                var timeoutKind = requestsProcessed == 0 ? ProxyTimeoutKind.ClientRequestHead : ProxyTimeoutKind.ClientKeepAliveIdle;
-                var timeout = requestsProcessed == 0 ? _configurationSnapshot.Timeouts.ClientRequestHeadTimeout : _configurationSnapshot.Timeouts.ClientKeepAliveIdleTimeout;
-                var requestHeadRead = await Http1ClientRequestHeadReader.ReadAsync(clientStream, requestHeadBuffer, maxRequestHeadBytes, timeout, timeoutKind, _metrics, cancellationToken).ConfigureAwait(false);
-                if (requestHeadRead.IsEmptyRequest)
+                var (requestHeadRead, requestHead) = await ReadParsedRequestAsync(clientStream, requestHeadBuffer, maxRequestHeadBytes, requestState, cancellationToken).ConfigureAwait(false);
+                if (requestHead is null)
                 {
                     return;
                 }
 
-                currentContext ??= CreateRequestContext();
-                if (requestHeadRead.IsRequestHeadTooLarge)
-                {
-                    _metrics.ParseFailed();
-                    _metrics.ParserLimitRejected();
-                    _metrics.MalformedRequestRejected();
-                    await WriteGeneratedResponseAsync(clientStream, 431, "Request Header Fields Too Large", "Request Head Too Large", currentContext, ProxyFailureKind.ParserLimitExceeded, cancellationToken).ConfigureAwait(false);
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                if (requestHeadRead.IsIncompleteRequest)
-                {
-                    _metrics.ParseFailed();
-                    _metrics.MalformedRequestRejected();
-                    await WriteGeneratedResponseAsync(clientStream, 400, "Bad Request", "Bad Request", currentContext, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                var requestHeadBytes = requestHeadRead.HeadBytes;
-                if (!Http1RequestParser.TryParse(requestHeadBytes.Span, new Http1RequestParseLimits(_configurationSnapshot.Limits.MaxHeaderCount, _configurationSnapshot.Limits.MaxHeaderLineBytes, _configurationSnapshot.Limits.MaxPathBytes), out var requestHead, out var parseError))
-                {
-                    _metrics.ParseFailed();
-                    if (parseError is Http1ParseError.HeaderCountExceeded or Http1ParseError.HeaderLineTooLarge or Http1ParseError.TargetTooLarge)
-                    {
-                        _metrics.ParserLimitRejected();
-                        await WriteGeneratedResponseAsync(clientStream, 431, "Request Header Fields Too Large", "Request Head Too Large", currentContext, ProxyFailureKind.ParserLimitExceeded, cancellationToken).ConfigureAwait(false);
-                        CompleteContext(ref currentContext);
-                        return;
-                    }
-
-                    if (parseError == Http1ParseError.UnsupportedTransferEncoding)
-                    {
-                        _metrics.UnsupportedRequestFramingRejected();
-                        await WriteGeneratedResponseAsync(clientStream, 501, "Not Implemented", "Not Implemented", currentContext, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
-                        CompleteContext(ref currentContext);
-                        return;
-                    }
-
-                    _metrics.MalformedRequestRejected();
-                    if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-                    {
-                        LogRejectedMalformedRequestHeadWith10035(_logger, parseError, null);
-                    }
-                    await WriteGeneratedResponseAsync(clientStream, 400, "Bad Request", "Bad Request", currentContext, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                _metrics.RequestReceived();
-                currentContext.SetRequest(requestHead.Method, requestHead.Host, requestHead.Target, ProxyExternalRequestIdPolicy.Extract(requestHead));
-                var forwardedHeaders = _forwardedHeadersPolicy.Build(requestHead, ProxyForwardedHeadersRuntimeMapper.ToListener(_listener), _configurationSnapshot.ForwardedHeaders, ProxyClientAddressPolicy.ToForwardedHeadersPeer(GetRemoteEndPoint()));
-                currentContext.SetClientEndpoint(forwardedHeaders.ResolvedClientEndpoint);
-                if (_rateLimiter.AcquireRequest(forwardedHeaders.ResolvedClientAddress, _configurationSnapshot.Limits.RequestsPerMinutePerIp) is ClientRateLimitDecision.RejectedResult)
-                {
-                    await WriteGeneratedResponseAsync(clientStream, 429, "Too Many Requests", "Too Many Requests", currentContext, ProxyFailureKind.RateLimited, cancellationToken).ConfigureAwait(false);
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                if (ProxyRequestMethodPolicy.IsConnectTunnelMethod(requestHead.Method))
-                {
-                    _metrics.UnsupportedRequestFramingRejected();
-                    await WriteGeneratedResponseAsync(clientStream, 501, "Not Implemented", "Not Implemented", currentContext, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                if (_acmeChallengeResponder.CreateResponse(requestHead)is AcmeHttp01ChallengeResponseResult.HandledResult acmeChallengeResponse)
-                {
-                    await WriteGeneratedRouteResponseAsync(clientStream, acmeChallengeResponse.Response, currentContext, cancellationToken).ConfigureAwait(false);
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                if (_upgradeRequestPolicy.IsUpgradeRequest(requestHead))
-                {
-                    var shouldContinue = await HandleUpgradeAsync(clientStream, requestHead, forwardedHeaders, currentContext, cancellationToken).ConfigureAwait(false);
-                    CompleteContext(ref currentContext);
-                    if (!shouldContinue)
-                    {
-                        return;
-                    }
-
-                    continue;
-                }
-
-                var routeMatch = _routeMatcher.Match(_routeCandidates, ProxyRouteMatchRuntimeMapper.ToRequest(requestHead));
-                if (routeMatch is null)
-                {
-                    await WriteGeneratedResponseAsync(clientStream, 404, "Not Found", "Not Found", currentContext, ProxyFailureKind.NoMatchingRoute, cancellationToken).ConfigureAwait(false);
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                var route = ProxyRouteMatchRuntimeMapper.SelectRoute(_configurationSnapshot.Routes, routeMatch);
-                currentContext.SetRoute(ProxyRequestContextRuntimeMapper.ToRequestRoute(route));
-                if (await TryHandleGeneratedRouteActionAsync(clientStream, route, requestHead, currentContext, cancellationToken).ConfigureAwait(false))
-                {
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                if (await TryRejectKnownLengthRequestBodyAsync(clientStream, route, requestHead, currentContext, cancellationToken).ConfigureAwait(false))
-                {
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                var nextRequestCount = requestsProcessed + 1;
-                var preferKeepAlive = Http1ClientConnectionPolicy.ShouldKeepOpen(requestHead) && nextRequestCount < _configurationSnapshot.ConnectionLimits.MaxRequestsPerClientConnection;
-                var upstreamTarget = _pathRewritePolicy.Apply(ProxyPathRewriteRuntimeMapper.ToPolicyInput(route), requestHead.Target, requestHead.Path);
-                var effectiveTimeouts = ProxyTimeoutPolicy.ApplyRouteTimeouts(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), _configurationSnapshot.Timeouts);
-                if (await TryHandleCacheHitAsync(clientStream, route, requestHead, upstreamTarget, preferKeepAlive, currentContext, effectiveTimeouts, cancellationToken).ConfigureAwait(false))
-                {
-                    requestsProcessed = nextRequestCount;
-                    if (requestsProcessed >= _configurationSnapshot.ConnectionLimits.MaxRequestsPerClientConnection)
-                    {
-                        _metrics.ClientConnectionClosedByMaxRequests();
-                        currentContext.RecordClientConnectionClose();
-                        CompleteContext(ref currentContext);
-                        return;
-                    }
-
-                    CompleteContext(ref currentContext);
-                    if (!preferKeepAlive)
-                    {
-                        return;
-                    }
-
-                    continue;
-                }
-
-                var result = await ForwardWithRetriesAsync(clientStream, requestHeadRead, requestHead, route, _listener, effectiveTimeouts, _configurationSnapshot.ConnectionLimits, _configurationSnapshot.Limits, upstreamTarget, forwardedHeaders, preferKeepAlive, currentContext, currentContext.RequestId, cancellationToken).ConfigureAwait(false);
-                requestsProcessed = nextRequestCount;
-                ApplyForwardingResult(currentContext, result);
-                if (requestsProcessed >= _configurationSnapshot.ConnectionLimits.MaxRequestsPerClientConnection)
-                {
-                    _metrics.ClientConnectionClosedByMaxRequests();
-                    currentContext.RecordClientConnectionClose();
-                    CompleteContext(ref currentContext);
-                    return;
-                }
-
-                CompleteContext(ref currentContext);
-                if (result is ForwardingResult.FailureResult || !result.KeepClientConnectionOpen)
+                if (!await ProcessParsedRequestAsync(clientStream, requestHeadRead, requestHead, requestState.CurrentContext ?? throw new InvalidOperationException("A parsed request requires its owned context."), requestState, cancellationToken).ConfigureAwait(false))
                 {
                     return;
                 }
@@ -290,16 +145,7 @@ internal sealed partial class ClientConnection
         }
         catch (ProxyTimeoutException exception)when (exception.Kind == ProxyTimeoutKind.ClientRequestHead)
         {
-            _metrics.ClientRequestHeadTimedOut();
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-            {
-                LogClientTimedOutBeforeSending10036(_logger, exception);
-            }
-            if (currentContext is not null)
-            {
-                await WriteGeneratedResponseAsync(clientStream, 408, "Request Timeout", "Request Timeout", currentContext, ProxyFailureKind.ClientRequestHeadTimeout, cancellationToken).ConfigureAwait(false);
-                CompleteContext(ref currentContext);
-            }
+            await HandleRequestHeadTimeoutAsync(clientStream, exception, requestState, cancellationToken).ConfigureAwait(false);
         }
         catch (ProxyTimeoutException exception)when (exception.Kind == ProxyTimeoutKind.ClientKeepAliveIdle)
         {
@@ -316,29 +162,245 @@ internal sealed partial class ClientConnection
             {
                 LogTimedOutWhileWritingA10038(_logger, exception);
             }
-            if (currentContext is not null)
+            if (requestState.CurrentContext is not null)
             {
-                currentContext.RecordClientDisconnect();
-                CompleteContext(ref currentContext);
+                requestState.CurrentContext.RecordClientDisconnect();
+                CompleteContext(ref requestState.CurrentContext);
             }
         }
         catch (IOException exception)when (IsClientDisconnect(exception))
         {
-            _metrics.ClientPrematureDisconnect();
-            if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
-            {
-                LogClientDisconnectedDuringRequestProcessing10039(_logger, exception);
-            }
-            if (currentContext is not null)
-            {
-                currentContext.RecordClientDisconnect();
-                CompleteContext(ref currentContext);
-            }
+            RecordClientDisconnect(exception, requestState);
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(requestHeadBuffer);
         }
+    }
+
+    private void RecordClientDisconnect(IOException exception, Http1RequestLoopState requestState)
+    {
+        _metrics.ClientPrematureDisconnect();
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+        {
+            LogClientDisconnectedDuringRequestProcessing10039(_logger, exception);
+        }
+        if (requestState.CurrentContext is not null)
+        {
+            requestState.CurrentContext.RecordClientDisconnect();
+            CompleteContext(ref requestState.CurrentContext);
+        }
+    }
+
+    private async ValueTask HandleRequestHeadTimeoutAsync(Stream clientStream, ProxyTimeoutException exception, Http1RequestLoopState requestState, CancellationToken cancellationToken)
+    {
+        _metrics.ClientRequestHeadTimedOut();
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+        {
+            LogClientTimedOutBeforeSending10036(_logger, exception);
+        }
+        if (requestState.CurrentContext is not null)
+        {
+            await WriteGeneratedResponseAsync(clientStream, 408, "Request Timeout", "Request Timeout", requestState.CurrentContext, ProxyFailureKind.ClientRequestHeadTimeout, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+        }
+    }
+
+    private async ValueTask<(Http1HeadReadResult Read, Http1RequestHead? Head)> ReadParsedRequestAsync(Stream clientStream, byte[] requestHeadBuffer, int maxRequestHeadBytes, Http1RequestLoopState requestState, CancellationToken cancellationToken)
+    {
+        requestState.CurrentContext = requestState.RequestsProcessed == 0 ? CreateRequestContext() : null;
+        var timeoutKind = requestState.RequestsProcessed == 0 ? ProxyTimeoutKind.ClientRequestHead : ProxyTimeoutKind.ClientKeepAliveIdle;
+        var timeout = requestState.RequestsProcessed == 0 ? _configurationSnapshot.Timeouts.ClientRequestHeadTimeout : _configurationSnapshot.Timeouts.ClientKeepAliveIdleTimeout;
+        var requestHeadRead = await Http1ClientRequestHeadReader.ReadAsync(clientStream, requestHeadBuffer, maxRequestHeadBytes, timeout, timeoutKind, _metrics, cancellationToken).ConfigureAwait(false);
+        if (requestHeadRead.IsEmptyRequest)
+        {
+            return (requestHeadRead, null);
+        }
+
+        requestState.CurrentContext ??= CreateRequestContext();
+        if (requestHeadRead.IsRequestHeadTooLarge)
+        {
+            _metrics.ParseFailed();
+            _metrics.ParserLimitRejected();
+            _metrics.MalformedRequestRejected();
+            await WriteGeneratedResponseAsync(clientStream, 431, "Request Header Fields Too Large", "Request Head Too Large", requestState.CurrentContext, ProxyFailureKind.ParserLimitExceeded, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            return (requestHeadRead, null);
+        }
+
+        if (requestHeadRead.IsIncompleteRequest)
+        {
+            _metrics.ParseFailed();
+            _metrics.MalformedRequestRejected();
+            await WriteGeneratedResponseAsync(clientStream, 400, "Bad Request", "Bad Request", requestState.CurrentContext, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            return (requestHeadRead, null);
+        }
+
+        var requestHeadBytes = requestHeadRead.HeadBytes;
+        if (!Http1RequestParser.TryParse(requestHeadBytes.Span, new Http1RequestParseLimits(_configurationSnapshot.Limits.MaxHeaderCount, _configurationSnapshot.Limits.MaxHeaderLineBytes, _configurationSnapshot.Limits.MaxPathBytes), out var requestHead, out var parseError))
+        {
+            await RejectMalformedRequestHeadAsync(clientStream, parseError, requestState.CurrentContext, requestState, cancellationToken).ConfigureAwait(false);
+            return (requestHeadRead, null);
+        }
+
+        return (requestHeadRead, requestHead);
+    }
+
+    private async ValueTask RejectMalformedRequestHeadAsync(Stream clientStream, Http1ParseError parseError, ProxyRequestContext context, Http1RequestLoopState requestState, CancellationToken cancellationToken)
+    {
+        _metrics.ParseFailed();
+        if (parseError is Http1ParseError.HeaderCountExceeded or Http1ParseError.HeaderLineTooLarge or Http1ParseError.TargetTooLarge)
+        {
+            _metrics.ParserLimitRejected();
+            await WriteGeneratedResponseAsync(clientStream, 431, "Request Header Fields Too Large", "Request Head Too Large", context, ProxyFailureKind.ParserLimitExceeded, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            return;
+        }
+
+        if (parseError == Http1ParseError.UnsupportedTransferEncoding)
+        {
+            _metrics.UnsupportedRequestFramingRejected();
+            await WriteGeneratedResponseAsync(clientStream, 501, "Not Implemented", "Not Implemented", context, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            return;
+        }
+
+        _metrics.MalformedRequestRejected();
+        if (_logger.IsEnabled(global::Microsoft.Extensions.Logging.LogLevel.Debug))
+        {
+            LogRejectedMalformedRequestHeadWith10035(_logger, parseError, null);
+        }
+        await WriteGeneratedResponseAsync(clientStream, 400, "Bad Request", "Bad Request", context, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
+        CompleteContext(ref requestState.CurrentContext);
+        return;
+    }
+
+    private async ValueTask<bool> ProcessParsedRequestAsync(Stream clientStream, Http1HeadReadResult requestHeadRead, Http1RequestHead requestHead, ProxyRequestContext context, Http1RequestLoopState requestState, CancellationToken cancellationToken)
+    {
+        _metrics.RequestReceived();
+        context.SetRequest(requestHead.Method, requestHead.Host, requestHead.Target, ProxyExternalRequestIdPolicy.Extract(requestHead));
+        var forwardedHeaders = _forwardedHeadersPolicy.Build(requestHead, ProxyForwardedHeadersRuntimeMapper.ToListener(_listener), _configurationSnapshot.ForwardedHeaders, ProxyClientAddressPolicy.ToForwardedHeadersPeer(GetRemoteEndPoint()));
+        context.SetClientEndpoint(forwardedHeaders.ResolvedClientEndpoint);
+        if (_rateLimiter.AcquireRequest(forwardedHeaders.ResolvedClientAddress, _configurationSnapshot.Limits.RequestsPerMinutePerIp) is ClientRateLimitDecision.RejectedResult)
+        {
+            await WriteGeneratedResponseAsync(clientStream, 429, "Too Many Requests", "Too Many Requests", context, ProxyFailureKind.RateLimited, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            return false;
+        }
+
+        if (ProxyRequestMethodPolicy.IsConnectTunnelMethod(requestHead.Method))
+        {
+            _metrics.UnsupportedRequestFramingRejected();
+            await WriteGeneratedResponseAsync(clientStream, 501, "Not Implemented", "Not Implemented", context, ProxyFailureKind.ClientMalformedRequest, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            return false;
+        }
+
+        if (_acmeChallengeResponder.CreateResponse(requestHead)is AcmeHttp01ChallengeResponseResult.HandledResult acmeChallengeResponse)
+        {
+            await WriteGeneratedRouteResponseAsync(clientStream, acmeChallengeResponse.Response, context, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            return false;
+        }
+
+        if (_upgradeRequestPolicy.IsUpgradeRequest(requestHead))
+        {
+            var shouldContinue = await HandleUpgradeAsync(clientStream, requestHead, forwardedHeaders, context, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            if (!shouldContinue)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        return await ProcessMatchedRouteAsync(clientStream, requestHeadRead, requestHead, forwardedHeaders, context, requestState, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask<bool> ProcessMatchedRouteAsync(Stream clientStream, Http1HeadReadResult requestHeadRead, Http1RequestHead requestHead, ForwardedHeadersContext forwardedHeaders, ProxyRequestContext context, Http1RequestLoopState requestState, CancellationToken cancellationToken)
+    {
+        var routeMatch = _routeMatcher.Match(_routeCandidates, ProxyRouteMatchRuntimeMapper.ToRequest(requestHead));
+        if (routeMatch is null)
+        {
+            await WriteGeneratedResponseAsync(clientStream, 404, "Not Found", "Not Found", context, ProxyFailureKind.NoMatchingRoute, cancellationToken).ConfigureAwait(false);
+            CompleteContext(ref requestState.CurrentContext);
+            return false;
+        }
+
+        var route = ProxyRouteMatchRuntimeMapper.SelectRoute(_configurationSnapshot.Routes, routeMatch);
+        context.SetRoute(ProxyRequestContextRuntimeMapper.ToRequestRoute(route));
+        if (await TryHandleGeneratedRouteActionAsync(clientStream, route, requestHead, context, cancellationToken).ConfigureAwait(false))
+        {
+            CompleteContext(ref requestState.CurrentContext);
+            return false;
+        }
+
+        if (await TryRejectKnownLengthRequestBodyAsync(clientStream, route, requestHead, context, cancellationToken).ConfigureAwait(false))
+        {
+            CompleteContext(ref requestState.CurrentContext);
+            return false;
+        }
+
+        var nextRequestCount = requestState.RequestsProcessed + 1;
+        var preferKeepAlive = Http1ClientConnectionPolicy.ShouldKeepOpen(requestHead) && nextRequestCount < _configurationSnapshot.ConnectionLimits.MaxRequestsPerClientConnection;
+        var upstreamTarget = _pathRewritePolicy.Apply(ProxyPathRewriteRuntimeMapper.ToPolicyInput(route), requestHead.Target, requestHead.Path);
+        var effectiveTimeouts = ProxyTimeoutPolicy.ApplyRouteTimeouts(ProxyTimeoutRuntimeMapper.ToPolicyInput(route), _configurationSnapshot.Timeouts);
+        if (await TryHandleCacheHitAsync(clientStream, route, requestHead, upstreamTarget, preferKeepAlive, context, effectiveTimeouts, cancellationToken).ConfigureAwait(false))
+        {
+            return FinishCachedRequest(nextRequestCount, preferKeepAlive, context, requestState);
+        }
+
+        var result = await ForwardWithRetriesAsync(clientStream, requestHeadRead, requestHead, route, _listener, effectiveTimeouts, _configurationSnapshot.ConnectionLimits, _configurationSnapshot.Limits, upstreamTarget, forwardedHeaders, preferKeepAlive, context, context.RequestId, cancellationToken).ConfigureAwait(false);
+        return FinishForwardedRequest(result, nextRequestCount, context, requestState);
+    }
+
+    private bool FinishForwardedRequest(ForwardingResult result, int nextRequestCount, ProxyRequestContext context, Http1RequestLoopState requestState)
+    {
+        requestState.RequestsProcessed = nextRequestCount;
+        ApplyForwardingResult(context, result);
+        if (requestState.RequestsProcessed >= _configurationSnapshot.ConnectionLimits.MaxRequestsPerClientConnection)
+        {
+            _metrics.ClientConnectionClosedByMaxRequests();
+            context.RecordClientConnectionClose();
+            CompleteContext(ref requestState.CurrentContext);
+            return false;
+        }
+
+        CompleteContext(ref requestState.CurrentContext);
+        if (result is ForwardingResult.FailureResult || !result.KeepClientConnectionOpen)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool FinishCachedRequest(int nextRequestCount, bool preferKeepAlive, ProxyRequestContext context, Http1RequestLoopState requestState)
+    {
+        requestState.RequestsProcessed = nextRequestCount;
+        if (requestState.RequestsProcessed >= _configurationSnapshot.ConnectionLimits.MaxRequestsPerClientConnection)
+        {
+            _metrics.ClientConnectionClosedByMaxRequests();
+            context.RecordClientConnectionClose();
+            CompleteContext(ref requestState.CurrentContext);
+            return false;
+        }
+
+        CompleteContext(ref requestState.CurrentContext);
+        if (!preferKeepAlive)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private sealed class Http1RequestLoopState
+    {
+        public int RequestsProcessed;
+        public ProxyRequestContext? CurrentContext;
     }
 
     private async ValueTask<bool> TryHandleGeneratedRouteActionAsync(Stream clientStream, RuntimeRoute route, Http1RequestHead requestHead, ProxyRequestContext context, CancellationToken cancellationToken)
@@ -394,15 +456,7 @@ internal sealed partial class ClientConnection
             var selection = _upstreamSelector.Select(ProxyUpstreamSelectionRuntimeMapper.ToSelectionRoute(route));
             if (selection is null)
             {
-                if (ProxyRetryPolicy.DidExhaustAttemptsBeforeUpstreamSelection(attempt))
-                {
-                    _metrics.RetryExhausted();
-                }
-
-                var failureResponse = ProxyGeneratedFailurePolicy.BuildFailureResponse(ProxyFailureKind.NoHealthyUpstream);
-                ProxyGeneratedFailureMetrics.Record(_metrics, failureResponse);
-                await WriteGeneratedResponseAsync(clientStream, failureResponse, context, cancellationToken).ConfigureAwait(false);
-                return failureResponse.ToForwardingResult();
+                return await WriteNoUpstreamFailureAsync(attempt, clientStream, context, cancellationToken).ConfigureAwait(false);
             }
 
             context.SetUpstream(ProxyRequestContextRuntimeMapper.ToRequestUpstream(selection.Upstream));
@@ -422,15 +476,7 @@ internal sealed partial class ClientConnection
                 continue;
             }
 
-            if (retryAttempt is ProxyRetryAttemptDecision.SkippedDecision skippedAttempt)
-            {
-                _metrics.RetrySkipped(skippedAttempt.Reason);
-            }
-
-            if (retryAllowed && ProxyRetryPolicy.DidExhaustAttempts(retryOutcome, result, attempt, maxAttempts))
-            {
-                _metrics.RetryExhausted();
-            }
+            RecordStoppedRetryAttempt(retryAttempt, retryAllowed, retryOutcome, result, attempt, maxAttempts);
 
             if (suppressGeneratedFailureResponse && result is ForwardingResult.FailureResult { ResponseStarted: false } suppressedFailure)
             {
@@ -446,6 +492,32 @@ internal sealed partial class ClientConnection
         }
 
         return ProxyRetryPolicy.RequireCompletedAttemptResult(lastResult);
+    }
+
+    private void RecordStoppedRetryAttempt(ProxyRetryAttemptDecision retryAttempt, bool retryAllowed, ProxyRetryOutcomeInput retryOutcome, ForwardingResult result, int attempt, int maxAttempts)
+    {
+        if (retryAttempt is ProxyRetryAttemptDecision.SkippedDecision skippedAttempt)
+        {
+            _metrics.RetrySkipped(skippedAttempt.Reason);
+        }
+
+        if (retryAllowed && ProxyRetryPolicy.DidExhaustAttempts(retryOutcome, result, attempt, maxAttempts))
+        {
+            _metrics.RetryExhausted();
+        }
+    }
+
+    private async ValueTask<ForwardingResult> WriteNoUpstreamFailureAsync(int attempt, Stream clientStream, ProxyRequestContext context, CancellationToken cancellationToken)
+    {
+        if (ProxyRetryPolicy.DidExhaustAttemptsBeforeUpstreamSelection(attempt))
+        {
+            _metrics.RetryExhausted();
+        }
+
+        var failureResponse = ProxyGeneratedFailurePolicy.BuildFailureResponse(ProxyFailureKind.NoHealthyUpstream);
+        ProxyGeneratedFailureMetrics.Record(_metrics, failureResponse);
+        await WriteGeneratedResponseAsync(clientStream, failureResponse, context, cancellationToken).ConfigureAwait(false);
+        return failureResponse.ToForwardingResult();
     }
 
     private async ValueTask<bool> HandleUpgradeAsync(Stream clientStream, Http1RequestHead requestHead, ForwardedHeadersContext forwardedHeaders, ProxyRequestContext context, CancellationToken cancellationToken)
