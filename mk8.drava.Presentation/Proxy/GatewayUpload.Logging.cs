@@ -11,4 +11,7 @@ public sealed partial class GatewayUpload
 
     [LoggerMessage(EventId = 2, Level = LogLevel.Debug, Message = "Upload timing readMilliseconds={ReadMilliseconds} rpcWriteMilliseconds={RpcWriteMilliseconds}")]
     private static partial void LogUploadTiming(ILogger logger, double readMilliseconds, double rpcWriteMilliseconds);
+
+    [LoggerMessage(EventId = 3, Level = LogLevel.Debug, Message = "Upload writer phases creditWaitMilliseconds={CreditWaitMilliseconds} serializationWaitMilliseconds={SerializationWaitMilliseconds} transportWriteMilliseconds={TransportWriteMilliseconds}")]
+    private static partial void LogWritePhases(ILogger logger, double creditWaitMilliseconds, double serializationWaitMilliseconds, double transportWriteMilliseconds);
 }

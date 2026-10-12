@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using System.Diagnostics;
 using Mk8.Drava.Transport.Protocol;
 using Mk8.Drava.Transport.Protocol.V1;
+using Mk8.Drava.Transport.Streaming;
 
 namespace Mk8.Drava.Presentation.Proxy;
 
@@ -20,6 +21,7 @@ public sealed partial class GatewayUpload : IDisposable
     private readonly CancellationTokenSource _stop;
     private readonly BodyDigest _digest = new();
     private readonly ILogger<GatewayUpload> _logger;
+    private readonly ExchangeWriteObservation? _writeObservation;
 
     public GatewayUpload(HttpContext context, IClientStreamWriter<ExchangeFrame> writer, long maximumBytes, int frameBytes)
         : this(context, writer, maximumBytes, frameBytes, NullLogger<GatewayUpload>.Instance) { }
@@ -35,6 +37,11 @@ public sealed partial class GatewayUpload : IDisposable
         _maximumBytes = maximumBytes;
         _frameBytes = frameBytes;
         _stop = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        if (logger.IsEnabled(LogLevel.Debug) && writer is ExchangeClientWriter exchange)
+        {
+            _writeObservation = new ExchangeWriteObservation();
+            exchange.Observation = _writeObservation;
+        }
     }
 
     internal GatewayUpgradeState? Upgrade { get; init; }
@@ -105,6 +112,11 @@ public sealed partial class GatewayUpload : IDisposable
             {
                 LogUploadCounters(_logger, _context.Request.IsHttps, _digest.Bytes, frames, smallFrames, maximumFrame, endOfStream);
                 LogUploadTiming(_logger, 1000d * readTicks / Stopwatch.Frequency, 1000d * writeTicks / Stopwatch.Frequency);
+                if (_writeObservation is { } phases)
+                {
+                    LogWritePhases(_logger, 1000d * phases.CreditTicks / Stopwatch.Frequency,
+                        1000d * phases.SerializationTicks / Stopwatch.Frequency, 1000d * phases.WriteTicks / Stopwatch.Frequency);
+                }
             }
         }
     }
