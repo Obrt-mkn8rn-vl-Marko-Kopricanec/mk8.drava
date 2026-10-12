@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Http;
+using Mk8.Drava.Configuration;
 using Mk8.Drava.Contracts.Registration.V1;
 using Xunit;
 using Xunit.Abstractions;
@@ -23,7 +24,15 @@ public sealed class RegisteredReplicaChurnProcessTests(ITestOutputHelper output)
         await using var thirdLifetime = third.ConfigureAwait(true);
         var dns = new DevelopmentDnsServer(IPAddress.Loopback);
         await using var dnsLifetime = dns.ConfigureAwait(true);
-        var proxy = await TwoProcessProxy.StartAsync(first.Port, enrolledSite: true, manualRoute: false, dnsPort: dns.Port).ConfigureAwait(true);
+        // Three successive admissions at the default ten-second probe cadence
+        // can consume the entire sixty-second test guard. Preserve hysteresis
+        // while using an explicit local cadence for this membership control.
+        var lifecycle = new DevelopmentLifecycleSettings
+        {
+            Registration = new RegistrationSettings { ReadinessIntervalMilliseconds = 1000 },
+        };
+        var proxy = await TwoProcessProxy.StartAsync(first.Port, enrolledSite: true, manualRoute: false,
+            dnsPort: dns.Port, lifecycleSettings: lifecycle).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         using var registration = new DevelopmentRegistrationClient(proxy);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
