@@ -4,7 +4,7 @@ internal static class DevelopmentBinaryPaths
 {
     internal static string ForProject(string project)
     {
-        if (project is not ("mk8.drava.Application" or "mk8.drava.Gateway"))
+        if (project is not ("mk8.drava.Application" or "mk8.drava.Gateway" or "mk8.drava.CompatibilityTests"))
             throw new ArgumentException("Unknown development executable.", nameof(project));
 
         var testDirectory = new DirectoryInfo(AppContext.BaseDirectory);

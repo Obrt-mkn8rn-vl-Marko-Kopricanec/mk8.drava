@@ -2,6 +2,12 @@ using System.Text.Json;
 using Mk8.Drava.CompatibilityTests;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 
+if (args is ["--development-native-reference", var dataDirectory])
+{
+    await DevelopmentNativeReference.RunAsync(dataDirectory).ConfigureAwait(false);
+    return;
+}
+
 if (PerformanceSmokeRunner.IsPerformanceCommand(args))
 {
     Environment.ExitCode = await PerformanceSmokeRunner.RunAsync(args).ConfigureAwait(false);
