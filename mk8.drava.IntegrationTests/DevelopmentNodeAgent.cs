@@ -15,9 +15,10 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
     { _process = process; _proxy = proxy; Descriptor = descriptor; StateDirectory = stateDirectory; }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "Successful construction transfers the child process to this async-disposable fixture. Failed descriptor loading kills and joins the process in the catch; fixture disposal kills and joins it before preserving logs. The analyzer does not recognize this async ownership transfer.")]
-    public static async Task<DevelopmentNodeAgent> StartAsync(TwoProcessProxy proxy, RelayLimits? relay = null, int mappingLeaseSeconds = 90, PrivateHttp2Settings? privateHttp2 = null)
+    public static async Task<DevelopmentNodeAgent> StartAsync(TwoProcessProxy proxy, RelayLimits? relay = null, int mappingLeaseSeconds = 90, PrivateHttp2Settings? privateHttp2 = null,
+        string stateDirectoryName = "agent", IReadOnlyDictionary<string, string>? environment = null)
     {
-        var directory = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(proxy.NodeCertificatePath)!, "agent")).FullName;
+        var directory = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(proxy.NodeCertificatePath)!, stateDirectoryName)).FullName;
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var token = Path.Combine(directory, "agent.token");
         await File.WriteAllTextAsync(token, Convert.ToHexString(RandomNumberGenerator.GetBytes(32))).ConfigureAwait(false);
@@ -38,7 +39,7 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
         await File.WriteAllTextAsync(path, BootstrapFile.Serialize(bootstrap)).ConfigureAwait(false);
         var profile = proxy.NodeCertificatePath + ".agent.json";
         var previous = File.Exists(profile) ? await BootstrapFile.LoadAsync<NodeAgentDescriptor>(profile, CancellationToken.None).ConfigureAwait(false) : null;
-        var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path, "--node-agent-bootstrap");
+        var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path, "--node-agent-bootstrap", environment);
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));

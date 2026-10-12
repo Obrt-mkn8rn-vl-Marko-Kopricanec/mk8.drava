@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Mk8.Drava.Application.BLL.NodeRelay;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Acme;
+using Mk8.Drava.Application.DAL.Storage;
 using Mk8.Drava.Application.INF.NodeRelay;
 using Mk8.Drava.Application.Transport;
 using Mk8.Drava.Configuration;
@@ -122,14 +123,9 @@ internal static class NodeAgentHost
         return addresses;
     }
 
-    private static FileStream OpenProfileLock(string certificatePath)
-    {
-        var path = certificatePath + ".agent.lock";
-        if (new FileInfo(path).LinkTarget is not null) throw new InvalidDataException("Agent enrollment lock cannot be a symbolic link.");
-        var options = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
-        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        return new FileStream(path, options);
-    }
+    // Distinct state roots can share this enrollment; its descriptor needs one confirmed owner.
+    private static FileStream OpenProfileLock(string certificatePath) =>
+        PrivateOwnerFile.AcquireLease(certificatePath + ".agent.lock");
 
     private static async Task WriteProfileAsync(string path, NodeAgentDescriptor descriptor)
     {
