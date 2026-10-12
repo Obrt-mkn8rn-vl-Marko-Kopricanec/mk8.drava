@@ -10,8 +10,9 @@ using Mk8.Drava.Transport.Streaming;
 namespace Mk8.Drava.Application.Transport;
 
 internal sealed class ProxyExchangeService(ProxyRequestPipeline pipeline, ProxyForwarder forwarder, UpgradeForwarder upgrades,
-    ApplicationBootstrap bootstrap, ExchangeAdmission admission) : ProxyExchange.ProxyExchangeBase
+    ApplicationBootstrap bootstrap, ExchangeAdmission admission, ILogger<ProxyExchangeService> logger) : ProxyExchange.ProxyExchangeBase
 {
+    private readonly ILogger<ProxyExchangeService> _logger = logger;
     public override async Task Exchange(IAsyncStreamReader<ExchangeFrame> requestStream, IServerStreamWriter<ExchangeFrame> responseStream, ServerCallContext context)
     {
         ArgumentNullException.ThrowIfNull(requestStream);
@@ -50,7 +51,9 @@ internal sealed class ProxyExchangeService(ProxyRequestPipeline pipeline, ProxyF
         var window = head.StreamWindowFrames == 0 ? 4 : (int)head.StreamWindowFrames;
         using var writer = new ExchangeServerWriter(responseStream, window, token);
         var inbound = new ExchangeInbound(requestStream, writer, window);
-        using var stream = new ExchangeClientStream(inbound, writer, head, inbound.RequestConsumedAsync);
+        var observed = new ObservedExchangeInbound(inbound, _logger);
+        var stream = new ExchangeClientStream(observed, writer, head, observed.RequestConsumedAsync);
+        await using var streamLifetime = stream.ConfigureAwait(false);
         async Task ExecutePipelineAsync()
         {
             if (!head.HasBody && !head.WantsUpgrade) await stream.VerifyEmptyUploadAsync(token).ConfigureAwait(false);
@@ -75,6 +78,7 @@ internal sealed class ProxyExchangeService(ProxyRequestPipeline pipeline, ProxyF
             await exchangeCancellation.CancelAsync().ConfigureAwait(false);
             try { await Task.WhenAll(pump, execute).ConfigureAwait(false); }
             catch (Exception exception) when (exception is OperationCanceledException or IOException or RpcException or System.Threading.Channels.ChannelClosedException) { }
+            finally { observed.Report(); }
         }
     }
 }

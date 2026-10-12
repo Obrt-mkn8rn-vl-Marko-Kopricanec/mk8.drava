@@ -117,7 +117,8 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs, verifiedUpstreamTls, flowTimeouts).ConfigureAwait(false);
         var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath,
             environment: observeForwarding || observeUploadTiming ? new Dictionary<string, string>(StringComparer.Ordinal)
-                { ["Logging__LogLevel__Mk8.Drava.Application.INF.Proxy.Forwarding"] = "Debug" } : null) : null;
+                { ["Logging__LogLevel__Mk8.Drava.Application.INF.Proxy.Forwarding"] = "Debug",
+                    ["Logging__LogLevel__Mk8.Drava.Application.Transport"] = observeUploadTiming ? "Debug" : "Information", } : null) : null;
         DevelopmentProcess? gateway = null;
         try
         {

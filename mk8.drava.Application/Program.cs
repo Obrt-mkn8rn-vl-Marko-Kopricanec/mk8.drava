@@ -101,7 +101,8 @@ internal static class Program
         builder.Services.AddSingleton(_ => new IpcIdentityInterceptor(bootstrap));
         builder.Services.AddSingleton(_ => new ExchangeAdmission(bootstrap));
         builder.Services.AddSingleton(services => new ProxyExchangeService(services.GetRequiredService<ProxyRequestPipeline>(),
-            services.GetRequiredService<ProxyForwarder>(), services.GetRequiredService<UpgradeForwarder>(), bootstrap, services.GetRequiredService<ExchangeAdmission>()));
+            services.GetRequiredService<ProxyForwarder>(), services.GetRequiredService<UpgradeForwarder>(), bootstrap, services.GetRequiredService<ExchangeAdmission>(),
+            services.GetRequiredService<ILogger<ProxyExchangeService>>()));
         builder.Services.AddGrpc(options => { options.Interceptors.Add<IpcIdentityInterceptor>(); options.MaxReceiveMessageSize = 8 * 1024 * 1024; options.MaxSendMessageSize = 8 * 1024 * 1024; });
         builder.Services.AddGrpc().AddServiceOptions<ProxyExchangeService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
         builder.Services.RemoveAll<IProxyAdminSecurityOptionsReader>();
