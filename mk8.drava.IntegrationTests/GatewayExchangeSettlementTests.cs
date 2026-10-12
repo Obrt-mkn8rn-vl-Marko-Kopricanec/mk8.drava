@@ -19,6 +19,7 @@ public sealed class GatewayExchangeSettlementTests
         try
         {
             await scenario.Reader.CompletionRead.Task.WaitAsync(scenario.Token).ConfigureAwait(true);
+            await scenario.Sink.CreditWritten.Task.WaitAsync(scenario.Token).ConfigureAwait(true);
             Assert.Equal(404, scenario.Context.Response.StatusCode);
             Assert.Equal(9L, scenario.Context.Response.ContentLength);
             Assert.Equal("Not Found"u8.ToArray(), scenario.Body.ToArray());
@@ -28,6 +29,7 @@ public sealed class GatewayExchangeSettlementTests
 
             scenario.Reader.ReleaseCompletion.TrySetResult();
             await scenario.Reader.EofRead.Task.WaitAsync(scenario.Token).ConfigureAwait(true);
+            await scenario.Sink.Completed.Task.WaitAsync(scenario.Token).ConfigureAwait(true);
             Assert.Equal(1, scenario.Sink.Completions);
             Assert.False(receive.IsCompleted);
 
@@ -43,12 +45,24 @@ public sealed class GatewayExchangeSettlementTests
     }
 
     [Fact]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD003", Justification = "The assertion joins the receive task started and owned by this test. Its finally releases the EOF gate and joins the same task before disposing the scenario.")]
     public async Task AFrameAfterVerifiedCompletionStillFailsTheExchangeAsync()
     {
         using var scenario = new SettlementScenario(extraFrame: true);
         scenario.Reader.ReleaseCompletion.TrySetResult();
-        scenario.Reader.ReleaseEof.TrySetResult();
-        await Assert.ThrowsAsync<InvalidDataException>(scenario.ReceiveAsync).ConfigureAwait(true);
+        var receive = scenario.ReceiveAsync();
+        try
+        {
+            await scenario.Sink.Completed.Task.WaitAsync(scenario.Token).ConfigureAwait(true);
+            scenario.Reader.ReleaseEof.TrySetResult();
+            await Assert.ThrowsAsync<InvalidDataException>(() => receive).ConfigureAwait(true);
+        }
+        finally
+        {
+            scenario.Reader.ReleaseEof.TrySetResult();
+            try { await receive.ConfigureAwait(true); }
+            catch (InvalidDataException) { }
+        }
         Assert.Equal("Not Found"u8.ToArray(), scenario.Body.ToArray());
         Assert.Equal(1, scenario.Sink.Completions);
     }
@@ -133,6 +147,8 @@ public sealed class GatewayExchangeSettlementTests
         public WriteOptions? WriteOptions { get; set; }
         public int Completions { get; private set; }
         public uint ResponseCredits { get; private set; }
+        public TaskCompletionSource CreditWritten { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Task WriteAsync(ExchangeFrame message)
         {
             RecordCredit(message);
@@ -144,6 +160,7 @@ public sealed class GatewayExchangeSettlementTests
             var consumed = message.Consumed ?? throw new InvalidDataException("Expected response consumption credit.");
             Assert.Equal(Consumed.Types.Direction.Response, consumed.Direction);
             ResponseCredits += consumed.Frames;
+            CreditWritten.TrySetResult();
         }
         public Task WriteAsync(ExchangeFrame message, CancellationToken cancellationToken)
         {
@@ -151,6 +168,6 @@ public sealed class GatewayExchangeSettlementTests
             RecordCredit(message);
             return Task.CompletedTask;
         }
-        public Task CompleteAsync() { Completions++; return Task.CompletedTask; }
+        public Task CompleteAsync() { Completions++; Completed.TrySetResult(); return Task.CompletedTask; }
     }
 }

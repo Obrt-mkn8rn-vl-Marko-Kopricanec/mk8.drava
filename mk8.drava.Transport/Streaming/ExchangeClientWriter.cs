@@ -7,6 +7,7 @@ public sealed class ExchangeClientWriter(IClientStreamWriter<ExchangeFrame> writ
 {
     private readonly SemaphoreSlim _serialization = new(1, 1);
     private bool _completed;
+    public int WindowFrames { get; } = window;
     public FrameWindow RequestWindow { get; } = new(window);
     public WriteOptions? WriteOptions { get => writer.WriteOptions; set => writer.WriteOptions = value; }
     public Task WriteAsync(ExchangeFrame message) => WriteAsync(message, exchangeCancellation);

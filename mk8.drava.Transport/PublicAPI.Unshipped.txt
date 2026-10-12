@@ -561,6 +561,7 @@ Mk8.Drava.Transport.Streaming.ExchangeClientWriter.CompleteAsync() -> System.Thr
 Mk8.Drava.Transport.Streaming.ExchangeClientWriter.Dispose() -> void
 Mk8.Drava.Transport.Streaming.ExchangeClientWriter.ExchangeClientWriter(Grpc.Core.IClientStreamWriter<Mk8.Drava.Transport.Protocol.V1.ExchangeFrame!>! writer, int window, System.Threading.CancellationToken exchangeCancellation) -> void
 Mk8.Drava.Transport.Streaming.ExchangeClientWriter.RequestWindow.get -> Mk8.Drava.Transport.Streaming.FrameWindow!
+Mk8.Drava.Transport.Streaming.ExchangeClientWriter.WindowFrames.get -> int
 Mk8.Drava.Transport.Streaming.ExchangeClientWriter.WriteAsync(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame! message) -> System.Threading.Tasks.Task!
 Mk8.Drava.Transport.Streaming.ExchangeClientWriter.WriteAsync(Mk8.Drava.Transport.Protocol.V1.ExchangeFrame! message, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Mk8.Drava.Transport.Streaming.ExchangeClientWriter.WriteOptions.get -> Grpc.Core.WriteOptions?

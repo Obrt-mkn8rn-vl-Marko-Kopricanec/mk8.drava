@@ -10,6 +10,8 @@ namespace Mk8.Drava.Presentation.Proxy;
 
 public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<ExchangeFrame> reader, ExchangeClientWriter writer, GatewayUpload upload, Func<Task> stopUpload)
 {
+    private readonly GatewayResponseInbound _inbound = new(reader, writer);
+    private CancellationToken _receiveCancellation;
     internal GatewayUpgradeState? Upgrade { get; init; }
     private bool _finalHead;
     private bool _complete;
@@ -21,23 +23,34 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
     public async Task ReceiveAsync()
     {
         using var digest = new BodyDigest();
-        while (await reader.MoveNext(context.RequestAborted).ConfigureAwait(false))
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        await ReceiveOwnedAsync(digest, stop).ConfigureAwait(false);
+    }
+
+    private async Task ReceiveOwnedAsync(BodyDigest digest, CancellationTokenSource stop)
+    {
+        _receiveCancellation = stop.Token;
+        var consume = _inbound.ConsumeAsync(frame => FrameAsync(frame, digest), stop.Token);
+        var pump = _inbound.PumpAsync(stop.Token);
+        try
         {
-            if (_complete) throw new InvalidDataException("Frames follow response completion.");
-            await FrameAsync(reader.Current, digest).ConfigureAwait(false);
+            var first = await Task.WhenAny(pump, consume).ConfigureAwait(false);
+            await first.ConfigureAwait(false);
+            await Task.WhenAll(pump, consume).ConfigureAwait(false);
+            if (!_complete) throw new InvalidDataException("Application ended without response completion.");
         }
-        if (!_complete) throw new InvalidDataException("Application ended without response completion.");
+        finally
+        {
+            await stop.CancelAsync().ConfigureAwait(false);
+            try { await Task.WhenAll(pump, consume).ConfigureAwait(false); }
+            catch (Exception exception) when (exception is IOException or RpcException or OperationCanceledException or InvalidOperationException) { }
+        }
     }
 
     private async Task FrameAsync(ExchangeFrame frame, BodyDigest digest)
     {
         switch (frame.FrameCase)
         {
-            case ExchangeFrame.FrameOneofCase.Consumed:
-                var consumed = frame.Consumed ?? throw new InvalidDataException("Consumption frame is missing.");
-                if (consumed.Direction != Consumed.Types.Direction.Request) throw new InvalidDataException("Invalid credit direction.");
-                writer.RequestWindow.Return(consumed.Frames);
-                break;
             case ExchangeFrame.FrameOneofCase.UploadAllowed:
                 if (_finalHead || _uploadAllowed || _uploadStopped) throw new InvalidDataException("Unexpected upload allowance.");
                 _uploadAllowed = true;
@@ -63,7 +76,7 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
             case ExchangeFrame.FrameOneofCase.Complete:
                 if (!_finalHead) throw new InvalidDataException("Response completion has no final head.");
                 digest.Verify(frame.Complete ?? throw new InvalidDataException("Response completion is missing."));
-                ApplyTrailers(_trailers);
+                ApplyTrailers(context, _trailers);
                 _complete = true;
                 await writer.CompleteAsync().ConfigureAwait(false);
                 break;
@@ -84,7 +97,7 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
             var feature = context.Features.Get<IGatewayInformationalResponseFeature>()
                 ?? throw new InvalidDataException("Client transport has no informational response adapter.");
             var streamId = context.Features.Get<IHttp2StreamIdFeature>()?.StreamId ?? 0;
-            await feature.WriteAsync(head, streamId, context.RequestAborted).ConfigureAwait(false);
+            await feature.WriteAsync(head, streamId, _receiveCancellation).ConfigureAwait(false);
             return;
         }
         _finalHead = true;
@@ -92,13 +105,13 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
         {
             var upgrade = Upgrade ?? throw new InvalidDataException("Upgrade presentation was not negotiated.");
             upgrade.Validate(context, head);
-            ApplyHead(head);
+            ApplyHead(context, head);
             await upgrade.AcceptAsync(context).ConfigureAwait(false);
         }
         else
         {
-            ApplyHead(head);
-            await context.Response.StartAsync(context.RequestAborted).ConfigureAwait(false);
+            ApplyHead(context, head);
+            await context.Response.StartAsync(_receiveCancellation).ConfigureAwait(false);
         }
     }
 
@@ -108,12 +121,13 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
         FrameLimits.ValidateData(data);
         digest.Append(data.Payload.Span);
         var destination = Upgrade?.AcceptedStream ?? context.Response.Body;
-        await destination.WriteAsync(data.Payload.Memory, context.RequestAborted).ConfigureAwait(false);
-        await destination.FlushAsync(context.RequestAborted).ConfigureAwait(false);
-        await writer.WriteAsync(new ExchangeFrame { Consumed = new Consumed { Direction = Consumed.Types.Direction.Response, Frames = 1 } }, context.RequestAborted).ConfigureAwait(false);
+        await destination.WriteAsync(data.Payload.Memory, _receiveCancellation).ConfigureAwait(false);
+        await destination.FlushAsync(_receiveCancellation).ConfigureAwait(false);
+        _inbound.ResponseConsumed();
+        await writer.WriteAsync(new ExchangeFrame { Consumed = new Consumed { Direction = Consumed.Types.Direction.Response, Frames = 1 } }, _receiveCancellation).ConfigureAwait(false);
     }
 
-    private void ApplyHead(ResponseHead head)
+    private static void ApplyHead(HttpContext context, ResponseHead head)
     {
         context.Response.StatusCode = checked((int)head.StatusCode);
         foreach (var header in head.Headers)
@@ -128,7 +142,7 @@ public sealed class GatewayResponse(HttpContext context, IAsyncStreamReader<Exch
         }
     }
 
-    private void ApplyTrailers(TrailerFrame? trailers)
+    private static void ApplyTrailers(HttpContext context, TrailerFrame? trailers)
     {
         if (trailers is null || trailers.Headers.Count == 0) return;
         if (!context.Response.SupportsTrailers()) throw new InvalidDataException("Client transport did not negotiate response trailers.");
