@@ -26,6 +26,12 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
 
     public bool HasExited => _process.HasExited;
 
+    public DevelopmentProcessMemory ReadMemory()
+    {
+        _process.Refresh();
+        return new DevelopmentProcessMemory(_process.Id, _process.WorkingSet64, _process.PrivateMemorySize64);
+    }
+
     public void ThrowIfExited()
     {
         if (!_process.HasExited) return;

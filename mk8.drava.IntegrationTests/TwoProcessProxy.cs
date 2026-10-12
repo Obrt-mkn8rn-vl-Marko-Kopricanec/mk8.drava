@@ -47,6 +47,9 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     internal string ApplicationLog => _application?.CapturedLog ?? "";
     internal string EvidenceId => Path.GetFileName(_directory);
 
+    internal (DevelopmentProcessMemory Application, DevelopmentProcessMemory Gateway) ReadMemory() =>
+        ((_application ?? throw new InvalidOperationException("Application is absent.")).ReadMemory(), _gateway.ReadMemory());
+
     public async Task StopApplicationAsync()
     {
         if (_application is null) return;
