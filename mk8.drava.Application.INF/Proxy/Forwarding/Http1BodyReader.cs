@@ -2,21 +2,13 @@ using Mk8.Drava.Application.BLL.ControlPlane.Metrics;
 using Mk8.Drava.Application.BLL.ControlPlane.Timeouts;
 
 namespace Mk8.Drava.Application.INF.Proxy.Forwarding;
-internal sealed class Http1BodyReader
+internal sealed class Http1BodyReader(Stream stream, ReadOnlyMemory<byte> initialBytes, ProxyMetrics metrics, TimeSpan readTimeout, ProxyTimeoutKind timeoutKind)
 {
-    private readonly Stream _stream;
-    private readonly ProxyMetrics _metrics;
-    private readonly TimeSpan _readTimeout;
-    private readonly ProxyTimeoutKind _timeoutKind;
-    private ReadOnlyMemory<byte> _initialBytes;
-    public Http1BodyReader(Stream stream, ReadOnlyMemory<byte> initialBytes, ProxyMetrics metrics, TimeSpan readTimeout, ProxyTimeoutKind timeoutKind)
-    {
-        _stream = stream;
-        _initialBytes = initialBytes;
-        _metrics = metrics;
-        _readTimeout = readTimeout;
-        _timeoutKind = timeoutKind;
-    }
+    private readonly Stream _stream = stream;
+    private readonly ProxyMetrics _metrics = metrics;
+    private readonly TimeSpan _readTimeout = readTimeout;
+    private readonly ProxyTimeoutKind _timeoutKind = timeoutKind;
+    private ReadOnlyMemory<byte> _initialBytes = initialBytes;
 
     public bool HasBufferedBytes => !_initialBytes.IsEmpty;
 
@@ -57,14 +49,16 @@ internal sealed class Http1BodyReader
     {
         List<byte> bytes = [];
         var previous = (byte)0;
+        var one = new byte[1];
         while (bytes.Count < maxLineBytes)
         {
-            var one = await ReadExactAsync(1, cancellationToken).ConfigureAwait(false);
+            if (await ReadAsync(one, cancellationToken).ConfigureAwait(false) == 0)
+                throw new IOException("Source closed before the required bytes were read.");
             var current = one[0];
             bytes.Add(current);
             if (previous == (byte)'\r' && current == (byte)'\n')
             {
-                return bytes.ToArray();
+                return [.. bytes];
             }
 
             previous = current;
