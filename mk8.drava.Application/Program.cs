@@ -166,9 +166,9 @@ internal static class Program
         builder.WebHost.ConfigureKestrel(options =>
         {
             options.AddServerHeader = false;
-            options.Limits.Http2.InitialStreamWindowSize = 64 * 1024;
-            options.Limits.Http2.InitialConnectionWindowSize = 256 * 1024;
-            options.Limits.Http2.MaxStreamsPerConnection = 128;
+            options.Limits.Http2.InitialStreamWindowSize = bootstrap.PrivateHttp2.InitialStreamWindowBytes;
+            options.Limits.Http2.InitialConnectionWindowSize = bootstrap.PrivateHttp2.InitialConnectionWindowBytes;
+            options.Limits.Http2.MaxStreamsPerConnection = bootstrap.PrivateHttp2.MaximumStreamsPerConnection;
             options.Limits.MaxRequestBodySize = null;
             if (bootstrap.Listen.UnixSocketPath.Length > 0)
                 options.ListenUnixSocket(bootstrap.Listen.UnixSocketPath, listener => listener.Protocols = HttpProtocols.Http2);

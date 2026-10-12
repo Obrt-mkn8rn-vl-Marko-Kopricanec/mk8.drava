@@ -24,15 +24,20 @@ internal static class NodeAgentHost
     {
         var bootstrap = await BootstrapFile.LoadAsync<NodeAgentBootstrap>(path, CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
-        using var privateState = await PrivateApplicationState.OpenAsync(new ApplicationBootstrap { StateDirectory = bootstrap.StateDirectory, Listen = bootstrap.LocalListen }, CancellationToken.None).ConfigureAwait(false);
+        var privateState = await PrivateApplicationState.OpenAsync(new ApplicationBootstrap { StateDirectory = bootstrap.StateDirectory, Listen = bootstrap.LocalListen }, CancellationToken.None).ConfigureAwait(false);
+        await using var privateStateLifetime = privateState.ConfigureAwait(false);
         using var node = X509CertificateLoader.LoadPkcs12(PrivateCertificateFile.Read(bootstrap.Site.NodeCertificatePath), password: null, X509KeyStorageFlags.EphemeralKeySet);
         using var root = X509CertificateLoader.LoadCertificateFromFile(bootstrap.Site.RootCertificatePath);
         var fingerprint = node.GetCertHashString(HashAlgorithmName.SHA256);
         if (!node.HasPrivateKey || !string.Equals(root.GetCertHashString(HashAlgorithmName.SHA256), bootstrap.Site.RootFingerprint, StringComparison.Ordinal) ||
-            !NodeCertificateTrust.Validate(node, root, bootstrap.RelayAddress, fingerprint, TimeProvider.System)) throw new InvalidDataException("Node relay enrollment key, trust, role or listener name is invalid.");
+            !NodeCertificateTrust.Validate(node, root, bootstrap.RelayAddress, fingerprint, TimeProvider.System))
+        {
+            throw new InvalidDataException("Node relay enrollment key, trust, role or listener name is invalid.");
+        }
         var localAddresses = ReadLocalAddresses();
         if (!localAddresses.Contains(bootstrap.RelayAddress)) throw new InvalidDataException("Relay listener does not belong to a local interface.");
-        using var profileLock = OpenProfileLock(bootstrap.Site.NodeCertificatePath);
+        var profileLock = OpenProfileLock(bootstrap.Site.NodeCertificatePath);
+        await using var profileLockLifetime = profileLock.ConfigureAwait(false);
         var boot = Guid.NewGuid().ToString("N");
         var grant = new NodeGrant(bootstrap.NodeId, bootstrap.OwnerId, fingerprint, bootstrap.ServicePrefix, bootstrap.EndpointAddresses,
             bootstrap.MinimumPort, bootstrap.MaximumPort, new DateTimeOffset(node.NotAfter.ToUniversalTime()), revoked: false);
@@ -61,9 +66,9 @@ internal static class NodeAgentHost
         {
             options.AddServerHeader = false;
             options.Limits.MaxRequestBodySize = null;
-            options.Limits.Http2.InitialStreamWindowSize = 64 * 1024;
-            options.Limits.Http2.InitialConnectionWindowSize = 256 * 1024;
-            options.Limits.Http2.MaxStreamsPerConnection = 128;
+            options.Limits.Http2.InitialStreamWindowSize = bootstrap.PrivateHttp2.InitialStreamWindowBytes;
+            options.Limits.Http2.InitialConnectionWindowSize = bootstrap.PrivateHttp2.InitialConnectionWindowBytes;
+            options.Limits.Http2.MaxStreamsPerConnection = bootstrap.PrivateHttp2.MaximumStreamsPerConnection;
             if (bootstrap.LocalListen.UnixSocketPath.Length != 0) options.ListenUnixSocket(bootstrap.LocalListen.UnixSocketPath, listener => listener.Protocols = HttpProtocols.Http2);
             else if (OperatingSystem.IsWindows()) options.ListenNamedPipe(bootstrap.LocalListen.NamedPipeName, listener => listener.Protocols = HttpProtocols.Http2);
             options.Listen(IPAddress.Parse(bootstrap.RelayAddress), bootstrap.RelayPort, listener =>
@@ -93,15 +98,15 @@ internal static class NodeAgentHost
         var profilePath = bootstrap.Site.NodeCertificatePath + ".agent.json";
         try
         {
-            await app.StartAsync().ConfigureAwait(false);
+            await app.StartAsync(CancellationToken.None).ConfigureAwait(false);
             var bound = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>() ?? throw new InvalidDataException("Bound relay endpoint is absent.");
             var addresses = bound.Addresses.Where(static value => value.StartsWith("https://", StringComparison.Ordinal)).Select(static value => new Uri(value)).ToArray();
             if (addresses.Length != 1 || addresses[0].Port < bootstrap.MinimumPort || addresses[0].Port > bootstrap.MaximumPort) throw new InvalidDataException("Bound relay port is outside the enrollment scope.");
             var descriptor = new NodeAgentDescriptor { SiteId = bootstrap.Site.SiteId, NodeId = bootstrap.NodeId, AgentBootId = boot, RelayAddress = bootstrap.RelayAddress, MappingLeaseSeconds = bootstrap.MappingLeaseSeconds,
-                RelayPort = addresses[0].Port, CertificateFingerprint = fingerprint, LocalEndpoint = bootstrap.LocalListen };
+                RelayPort = addresses[0].Port, CertificateFingerprint = fingerprint, LocalEndpoint = bootstrap.LocalListen, };
             state.Install(descriptor);
             await WriteProfileAsync(profilePath, descriptor).ConfigureAwait(false);
-            await app.WaitForShutdownAsync().ConfigureAwait(false);
+            await app.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally { mappings.Revoke(); File.Delete(profilePath); }
     }
@@ -110,8 +115,10 @@ internal static class NodeAgentHost
     {
         var addresses = new HashSet<string>(StringComparer.Ordinal) { "127.0.0.1", "::1" };
         foreach (var network in NetworkInterface.GetAllNetworkInterfaces())
+        {
             if (network.OperationalStatus == OperationalStatus.Up)
                 foreach (var address in network.GetIPProperties().UnicastAddresses) addresses.Add(address.Address.ToString());
+        }
         return addresses;
     }
 

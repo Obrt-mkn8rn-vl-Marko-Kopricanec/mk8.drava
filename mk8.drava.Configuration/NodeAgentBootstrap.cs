@@ -11,6 +11,7 @@ public sealed record NodeAgentBootstrap
     public string ServicePrefix { get; init; } = "";
     public string StateDirectory { get; init; } = "";
     public IpcEndpoint LocalListen { get; init; } = new();
+    public PrivateHttp2Settings PrivateHttp2 { get; init; } = new();
     public string RelayAddress { get; init; } = "";
     public int RelayPort { get; init; }
     public IReadOnlyList<string> EndpointAddresses { get; init; } = [];
@@ -22,14 +23,17 @@ public sealed record NodeAgentBootstrap
     public void Validate()
     {
         if (SchemaVersion != 1) throw new InvalidDataException("Unsupported node-agent schema.");
+        PrivateHttp2.Validate();
         Site.Validate(); LocalListen.Validate(); Relay.Validate();
         if (MappingLeaseSeconds is < 15 or > 300) throw new InvalidDataException("Invalid local mapping lease lifetime.");
         foreach (var label in new[] { NodeId, OwnerId, ServicePrefix }) RegistrationSiteTrust.RequireLabel(label);
         if (!Path.IsPathFullyQualified(StateDirectory) || LocalListen.HttpsAddress.Length != 0)
             throw new InvalidDataException("Node SDK mappings require a private local socket or current-user pipe.");
         if (EndpointAddresses.Count is < 1 or > 64 || MinimumPort < 1 || MaximumPort > 65535 || MinimumPort > MaximumPort || RelayPort is < 0 or > 65535 ||
-            RelayPort > 0 && (RelayPort < MinimumPort || RelayPort > MaximumPort))
+            (RelayPort > 0 && (RelayPort < MinimumPort || RelayPort > MaximumPort)))
+        {
             throw new InvalidDataException("Invalid node-agent admission or endpoint scope.");
+        }
         foreach (var address in EndpointAddresses) RequireAddress(address);
         RequireAddress(RelayAddress);
         if (!EndpointAddresses.Contains(RelayAddress, StringComparer.Ordinal)) throw new InvalidDataException("Relay listener must belong to the enrolled endpoint scope.");
@@ -39,8 +43,10 @@ public sealed record NodeAgentBootstrap
     {
         if (!IPAddress.TryParse(value, out var address) || !string.Equals(address.ToString(), value, StringComparison.Ordinal) || address.IsIPv4MappedToIPv6 ||
             address.IsIPv6Multicast || address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) ||
-            address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && address.ScopeId != 0)
+            (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && address.ScopeId != 0))
+        {
             throw new InvalidDataException("Node-agent requires canonical unscoped unicast literals.");
+        }
         if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && address.GetAddressBytes()[0] is 0 or >= 224)
             throw new InvalidDataException("Node-agent requires unicast IPv4.");
     }

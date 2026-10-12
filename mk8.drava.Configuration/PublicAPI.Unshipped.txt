@@ -482,3 +482,23 @@ Mk8.Drava.Configuration.DnsPublicationSettings.ApiBaseUrl.init -> void
 Mk8.Drava.Configuration.DnsPublicationSettings.RequireApiBaseUrl() -> System.Uri!
 Mk8.Drava.Configuration.DnsObservationEndpoint
 static Mk8.Drava.Configuration.DnsObservationEndpoint.Parse(string! address, int port) -> System.Net.IPEndPoint!
+Mk8.Drava.Configuration.ApplicationBootstrap.PrivateHttp2.get -> Mk8.Drava.Configuration.PrivateHttp2Settings!
+Mk8.Drava.Configuration.ApplicationBootstrap.PrivateHttp2.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.PrivateHttp2.get -> Mk8.Drava.Configuration.PrivateHttp2Settings!
+Mk8.Drava.Configuration.NodeAgentBootstrap.PrivateHttp2.init -> void
+Mk8.Drava.Configuration.PrivateHttp2Settings
+Mk8.Drava.Configuration.PrivateHttp2Settings.<Clone>$() -> Mk8.Drava.Configuration.PrivateHttp2Settings!
+Mk8.Drava.Configuration.PrivateHttp2Settings.Equals(Mk8.Drava.Configuration.PrivateHttp2Settings? other) -> bool
+Mk8.Drava.Configuration.PrivateHttp2Settings.PrivateHttp2Settings() -> void
+Mk8.Drava.Configuration.PrivateHttp2Settings.Validate() -> void
+Mk8.Drava.Configuration.PrivateHttp2Settings.InitialStreamWindowBytes.get -> int
+Mk8.Drava.Configuration.PrivateHttp2Settings.InitialStreamWindowBytes.init -> void
+Mk8.Drava.Configuration.PrivateHttp2Settings.InitialConnectionWindowBytes.get -> int
+Mk8.Drava.Configuration.PrivateHttp2Settings.InitialConnectionWindowBytes.init -> void
+Mk8.Drava.Configuration.PrivateHttp2Settings.MaximumStreamsPerConnection.get -> int
+Mk8.Drava.Configuration.PrivateHttp2Settings.MaximumStreamsPerConnection.init -> void
+override Mk8.Drava.Configuration.PrivateHttp2Settings.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.PrivateHttp2Settings.GetHashCode() -> int
+override Mk8.Drava.Configuration.PrivateHttp2Settings.ToString() -> string!
+static Mk8.Drava.Configuration.PrivateHttp2Settings.operator !=(Mk8.Drava.Configuration.PrivateHttp2Settings? left, Mk8.Drava.Configuration.PrivateHttp2Settings? right) -> bool
+static Mk8.Drava.Configuration.PrivateHttp2Settings.operator ==(Mk8.Drava.Configuration.PrivateHttp2Settings? left, Mk8.Drava.Configuration.PrivateHttp2Settings? right) -> bool

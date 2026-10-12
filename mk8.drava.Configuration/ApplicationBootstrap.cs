@@ -8,6 +8,7 @@ public sealed record ApplicationBootstrap
     public string GatewayId { get; init; } = "local";
     public string StateDirectory { get; init; } = "";
     public IpcEndpoint Listen { get; init; } = new();
+    public PrivateHttp2Settings PrivateHttp2 { get; init; } = new();
     public string IngressAddress { get; init; } = "127.0.0.1";
     public int HttpPort { get; init; } = 80;
     public int HttpsPort { get; init; } = 443;
@@ -25,6 +26,7 @@ public sealed record ApplicationBootstrap
         if (HttpPort is < 0 or > 65535 || HttpsPort is < 0 or > 65535 || (HttpPort == 0 && HttpsPort == 0) || HttpPort == HttpsPort)
             throw new InvalidDataException("Invalid public listener ports.");
         if (MaxConcurrentExchanges is < 1 or > 4096) throw new InvalidDataException("Invalid Application exchange admission limit.");
+        PrivateHttp2.Validate();
         Listen.Validate();
         Controller?.Validate();
         if (ManagementPort is < 0 or > 65535 || (ManagementPort > 0 && (Controller is null || AdministratorTokenPath.Length == 0 || ManagementPort == HttpPort || ManagementPort == HttpsPort || ManagementPort == Controller.RegistrationPort)))
