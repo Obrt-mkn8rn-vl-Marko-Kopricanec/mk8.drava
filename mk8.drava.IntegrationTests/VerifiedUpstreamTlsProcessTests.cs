@@ -61,11 +61,13 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         var names = new ConcurrentQueue<string?>();
         var completed = 0;
         var headersValidated = 0;
+        var originPhase = "not-started";
         long receivedBytes = 0;
         var upstream = await DevelopmentHttpUpstream.StartAsync(async context =>
         {
             await ValidateUploadAsync(context, bodyBytes, rawTarget, count => Interlocked.Exchange(ref receivedBytes, count),
-                () => Volatile.Write(ref headersValidated, 1), requireHttps: originTls).ConfigureAwait(false);
+                () => Volatile.Write(ref headersValidated, 1), requireHttps: originTls,
+                observePhase: phase => Volatile.Write(ref originPhase, phase)).ConfigureAwait(false);
             Interlocked.Increment(ref completed);
         }, originTls ? certificates.Leaf : null, names.Enqueue).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
@@ -97,6 +99,7 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
             _output.WriteLine("expect_continue={0}; expected_bytes={1}; client_written_bytes={2}; origin_read_bytes={3}; origin_headers_validated={4}; origin_completed={5}; sni_observations={6}; send_elapsed_ms={7}; actual_tcp_no_delay={8}; front_tls={9}; origin_tls={10}",
                 expectContinue, bodyBytes, content.SerializedBytes, Interlocked.Read(ref receivedBytes), Volatile.Read(ref headersValidated),
                 Volatile.Read(ref completed), names.Count, watch.Elapsed.TotalMilliseconds, client.ObservedTcpNoDelay, frontTls, originTls);
+            _output.WriteLine("origin_phase={0}", Volatile.Read(ref originPhase));
             if (observeUploadTiming)
             {
                 _output.WriteLine(proxy.GatewayLog);
@@ -237,7 +240,8 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static async Task ValidateUploadAsync(HttpContext context, long bodyBytes, string rawTarget, Action<long> observeBodyBytes, Action observeHeaders, bool requireHttps = true)
+    private static async Task ValidateUploadAsync(HttpContext context, long bodyBytes, string rawTarget, Action<long> observeBodyBytes,
+        Action observeHeaders, bool requireHttps = true, Action<string>? observePhase = null)
     {
         Assert.Equal(requireHttps, context.Request.IsHttps);
         Assert.Equal("PUT", context.Request.Method);
@@ -250,6 +254,7 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         var admission = context.Features.Get<IHttpMaxRequestBodySizeFeature>() ?? throw new InvalidOperationException("The development origin has no body admission feature.");
         admission.MaxRequestBodySize = bodyBytes;
         observeHeaders();
+        observePhase?.Invoke("reading-body");
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[32 * 1024];
         long received = 0;
@@ -260,10 +265,15 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
             observeBodyBytes(received);
             hash.AppendData(buffer.AsSpan(0, count));
         }
+        observePhase?.Invoke("body-eof");
         Assert.Equal(bodyBytes, received);
-        Assert.Equal(DevelopmentRepeatedBodyContent.ExpectedHash(bodyBytes), Convert.ToHexString(hash.GetHashAndReset()));
+        observePhase?.Invoke("computing-expected-hash");
+        var expectedHash = DevelopmentRepeatedBodyContent.ExpectedHash(bodyBytes);
+        observePhase?.Invoke("validating-hash");
+        Assert.Equal(expectedHash, Convert.ToHexString(hash.GetHashAndReset()));
         context.Response.StatusCode = StatusCodes.Status201Created;
         context.Response.Headers.ETag = "\"development-etag\"";
+        observePhase?.Invoke("response-prepared");
     }
 
     private static async Task<UpstreamTlsOptions> PreparePolicyAsync(string directory, DevelopmentUpstreamTrustCertificates certificates)
