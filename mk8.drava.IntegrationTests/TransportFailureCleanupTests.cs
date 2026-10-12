@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging;
 using Mk8.Drava.Application.BLL.ControlPlane.Timeouts;
 using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
 using Mk8.Drava.Application.INF.Proxy.Connections;
@@ -61,15 +62,39 @@ public sealed class TransportFailureCleanupTests
             var endpoint = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_missing_" + Guid.NewGuid().ToString("N"), IdentityTokenPath = token }
                 : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "missing.sock"), IdentityTokenPath = token };
             using var channel = new ApplicationChannel(endpoint);
-            using var gateway = new GatewayProxy(channel, new GatewayBootstrap { Application = endpoint, MaxConcurrentExchanges = 1 });
+            var logger = new FailureLogger();
+            using var gateway = new GatewayProxy(channel, new GatewayBootstrap { Application = endpoint, MaxConcurrentExchanges = 1 }, logger);
             for (var index = 0; index < 2; index++)
             {
                 var context = InvalidContext();
                 await gateway.InvokeAsync(context).ConfigureAwait(true);
                 Assert.Equal(StatusCodes.Status502BadGateway, context.Response.StatusCode);
             }
+            Assert.Equal(2, logger.Messages.Count);
+            for (var index = 0; index < logger.Messages.Count; index++)
+            {
+                var message = logger.Messages[index];
+                Assert.Equal("Gateway exchange failed category=invalid-data rpcStatus=none responseStarted=False clientCanceled=False", message);
+                Assert.DoesNotContain("line", message, StringComparison.Ordinal);
+                Assert.DoesNotContain("break", message, StringComparison.Ordinal);
+                Assert.DoesNotContain("service.test", message, StringComparison.Ordinal);
+            }
         }
         finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    private sealed class FailureLogger : ILogger<GatewayUpload>
+    {
+        public List<string> Messages { get; } = [];
+        public bool IsEnabled(LogLevel logLevel) => logLevel == LogLevel.Warning;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Assert.Equal(LogLevel.Warning, logLevel);
+            Assert.Equal(4, eventId.Id);
+            Assert.Null(exception);
+            Messages.Add(formatter(state, exception));
+        }
     }
 
     private static DefaultHttpContext InvalidContext()

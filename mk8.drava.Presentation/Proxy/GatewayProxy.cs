@@ -10,7 +10,7 @@ using Mk8.Drava.Transport.Streaming;
 
 namespace Mk8.Drava.Presentation.Proxy;
 
-public sealed class GatewayProxy : IDisposable
+public sealed partial class GatewayProxy : IDisposable
 {
     private readonly ApplicationChannel _channel;
     private readonly GatewayBootstrap _bootstrap;
@@ -38,6 +38,8 @@ public sealed class GatewayProxy : IDisposable
         try { await ExchangeAsync(context).ConfigureAwait(false); }
         catch (Exception exception) when (exception is RpcException or IOException or InvalidDataException or InvalidOperationException or OperationCanceledException)
         {
+            LogExchangeFailure(_uploadLogger, ClassifyFailure(exception), exception is RpcException rpc ? rpc.StatusCode.ToString() : "none",
+                context.Response.HasStarted, context.RequestAborted.IsCancellationRequested);
             if (context.Response.HasStarted || context.RequestAborted.IsCancellationRequested) context.Abort();
             else context.Response.StatusCode = exception is BadHttpRequestException badRequest ? badRequest.StatusCode : exception is InvalidDataException ? 502 : 503;
         }
@@ -86,4 +88,19 @@ public sealed class GatewayProxy : IDisposable
     }
 
     public void Dispose() => _admission.Dispose();
+
+    private static string ClassifyFailure(Exception exception) => exception switch
+    {
+        RpcException => "rpc",
+        InvalidDataException => "invalid-data",
+        OperationCanceledException => "canceled",
+        IOException => "io",
+        InvalidOperationException => "invalid-state",
+        _ => "unknown",
+    };
+
+    // Fixed categories and flags only. Exceptions can contain request targets,
+    // credentials or peer details, so neither their text nor object is logged.
+    [LoggerMessage(EventId = 4, Level = LogLevel.Warning, Message = "Gateway exchange failed category={Category} rpcStatus={RpcStatus} responseStarted={ResponseStarted} clientCanceled={ClientCanceled}")]
+    private static partial void LogExchangeFailure(ILogger logger, string category, string rpcStatus, bool responseStarted, bool clientCanceled);
 }
