@@ -41,7 +41,7 @@ internal sealed class DevelopmentInitializedSite : IAsyncDisposable
 
     public async Task<int> InitializeAsync(string? rawJson = null)
     {
-        await File.WriteAllTextAsync(OptionsPath, PortableConfiguration.SerializeDocument<Mk8.Drava.Application.Installation.SiteInitializationOptions>(rawJson ?? Options.ToJsonString())).ConfigureAwait(false);
+        await PortableFixtureFile.WriteAsync(OptionsPath, PortableConfiguration.SerializeDocument<Mk8.Drava.Application.Installation.SiteInitializationOptions>(rawJson ?? Options.ToJsonString())).ConfigureAwait(false);
         var command = new DevelopmentProcess(Assembly("mk8.drava.Application"), OptionsPath, "--initialize-site");
         await using var lifetime = command.ConfigureAwait(false);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));

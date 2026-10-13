@@ -20,12 +20,12 @@ public sealed class NodeAgentLocalClient : IDisposable
     private readonly NodeAgentLocal.NodeAgentLocalClient _client;
     public NodeAgentDescriptor Descriptor { get; }
 
-    public NodeAgentLocalClient(NodeAgentDescriptor descriptor)
+    public NodeAgentLocalClient(NodeAgentDescriptor descriptor, SecretText identityToken)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         descriptor.Validate();
         Descriptor = descriptor;
-        _channel = new ApplicationChannel(descriptor.LocalEndpoint);
+        _channel = new ApplicationChannel(descriptor.LocalEndpoint, identityToken);
         _client = new NodeAgentLocal.NodeAgentLocalClient(_channel.Invoker);
     }
 
@@ -42,8 +42,10 @@ public sealed class NodeAgentLocalClient : IDisposable
         await input.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
         var descriptor = Decode(bytes);
         if (!string.Equals(descriptor.SiteId, trust.SiteId, StringComparison.Ordinal) || !string.Equals(descriptor.NodeId, nodeId, StringComparison.Ordinal) ||
-            !string.Equals(descriptor.CertificateFingerprint, fingerprint, StringComparison.Ordinal)) throw new InvalidDataException("Local agent does not match node enrollment.");
-        RequirePrivateFile(descriptor.LocalEndpoint.IdentityTokenPath);
+            !string.Equals(descriptor.CertificateFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("Local agent does not match node enrollment.");
+        }
         return descriptor;
     }
 
@@ -91,7 +93,7 @@ public sealed class NodeAgentLocalClient : IDisposable
         }
         if (!OperatingSystem.IsWindows())
         {
-            var denied = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+            const UnixFileMode denied = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
             if ((File.GetUnixFileMode(path) & denied) != UnixFileMode.None || (File.GetUnixFileMode(file.DirectoryName!) & denied) != UnixFileMode.None)
                 throw new InvalidDataException("Local agent file and directory must be private.");
         }

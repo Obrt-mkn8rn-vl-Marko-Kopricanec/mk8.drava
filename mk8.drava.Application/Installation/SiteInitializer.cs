@@ -34,7 +34,7 @@ internal static class SiteInitializer
         await workspace.WriteAsync(Path.Combine("node", "site-root.der"), root.RawData, cancellationToken).ConfigureAwait(false);
         startup.Enter(ApplicationStartupPhase.SiteNodeEnroll);
         await EnrollAsync(applicationState, options, node, cancellationToken).ConfigureAwait(false);
-        var bundle = SiteInitializationBundle.Create(options, fingerprint);
+        var bundle = SiteInitializationBundle.Create(options, fingerprint, new SecretText(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))), new SecretText(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))));
         startup.Enter(ApplicationStartupPhase.SiteConfigurationProtect);
         await WriteBundleAsync(workspace, bundle, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
@@ -57,8 +57,6 @@ internal static class SiteInitializer
 
     private static async Task WriteBundleAsync(PrivateSiteWorkspace workspace, SiteInitializationBundle bundle, CancellationToken cancellationToken)
     {
-        await workspace.WriteAsync("gateway.token", Encoding.UTF8.GetBytes(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))), cancellationToken).ConfigureAwait(false);
-        await workspace.WriteAsync(Path.Combine("application", "administrator.token"), Encoding.UTF8.GetBytes(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))), cancellationToken).ConfigureAwait(false);
         workspace.CreateDirectory(Path.Combine("roles", "application", "Environment"));
         workspace.CreateDirectory(Path.Combine("roles", "gateway", "Environment"));
         workspace.CreateDirectory(Path.Combine("roles", "node", "Environment"));

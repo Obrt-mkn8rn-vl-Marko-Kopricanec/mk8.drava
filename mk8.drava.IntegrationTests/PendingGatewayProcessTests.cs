@@ -21,19 +21,17 @@ public sealed class PendingGatewayProcessTests
         var application = PendingServingPlanTests.PublicApplication(fixture, publicMaterial);
         using var plans = await ServingPlanState.OpenAsync(application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var directory = fixture.Application.StateDirectory;
-        var token = Path.Combine(directory, "gateway.token"); await File.WriteAllTextAsync(token, Convert.ToHexString(RandomNumberGenerator.GetBytes(32))).ConfigureAwait(true);
-        File.SetUnixFileMode(token, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         using var root = fixture.Authority.PublicCertificate; var rootPath = Path.Combine(directory, "private-root.der"); await File.WriteAllBytesAsync(rootPath, root.RawData).ConfigureAwait(true);
         using var node = fixture.Authority.IssueNode("node", ["127.0.0.1"]); var nodePath = Path.Combine(directory, "node.pfx");
         await PrivateCertificateFile.WriteNewAsync(nodePath, node.Export(X509ContentType.Pkcs12), CancellationToken.None).ConfigureAwait(true);
         var gateway = fixture.Gateway with { HttpPort = TwoProcessProxy.UnusedPort(), HttpsPort = TwoProcessProxy.UnusedPort(), RegistrationPort = TwoProcessProxy.UnusedPort(), DiscoveryEnabled = false,
-            ServingTrust = application.Controller!.ServingTrust, Application = new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "absent.sock"), IdentityTokenPath = token, }, };
+            ServingTrust = application.Controller!.ServingTrust, Application = new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "absent.sock"), }, };
         var plan = plans.Read("local");
         foreach (var listener in plan.Listeners)
             listener.Port = checked((uint)(listener.Id switch { "http" => gateway.HttpPort, "https" => gateway.HttpsPort, "registration" => gateway.RegistrationPort, _ => throw new InvalidOperationException("Unexpected listener.") }));
         plan.ContentSha256 = Google.Protobuf.ByteString.CopyFrom(Mk8.Drava.Transport.Protocol.PresentationPlanDigest.Compute(plan));
         using (var cache = new GatewayPlanCache(directory)) await cache.WriteAsync(plan, CancellationToken.None).ConfigureAwait(true);
-        var bootstrapPath = Path.Combine(directory, "pending-gateway.json"); await File.WriteAllTextAsync(bootstrapPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
+        var bootstrapPath = Path.Combine(directory, "pending-gateway.json"); await PortableFixtureFile.WriteAsync(bootstrapPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
         var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), bootstrapPath);
         await using var processLifetime = process.ConfigureAwait(true);
         using var privateClient = new DevelopmentSiteClient(rootPath, gateway.RegistrationPort, "register.site.test", nodePath);

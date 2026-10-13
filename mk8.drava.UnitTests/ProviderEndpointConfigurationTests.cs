@@ -49,8 +49,8 @@ public sealed class ProviderEndpointConfigurationTests
         var acmePath = Path.Combine(directory.Path, "acme.json");
         var dns = Settings();
         var acme = new AcmeIssuanceSettings { DirectoryUrl = new Uri("https://ca.invalid/directory"), UseStaging = useStaging };
-        await File.WriteAllTextAsync(dnsPath, PortableConfiguration.Serialize(dns)).ConfigureAwait(true);
-        await File.WriteAllTextAsync(acmePath, PortableConfiguration.Serialize(acme)).ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(dnsPath, PortableConfiguration.Serialize(dns)).ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(acmePath, PortableConfiguration.Serialize(acme)).ConfigureAwait(true);
         var loadedDns = await PortableConfiguration.LoadDocumentAsync<DnsPublicationSettings>(dnsPath, CancellationToken.None).ConfigureAwait(true);
         var loadedAcme = await PortableConfiguration.LoadDocumentAsync<AcmeIssuanceSettings>(acmePath, CancellationToken.None).ConfigureAwait(true);
         loadedDns.Validate("site.test");

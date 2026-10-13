@@ -24,6 +24,9 @@ public static class PortableConfiguration
         var file = new FileInfo(path);
         if (!file.Exists || file.LinkTarget is not null || file.Length is < 1 or > 4 * 1024 * 1024)
             throw new InvalidDataException("Portable configuration must be an existing bounded regular document.");
+        InstallationDocumentGuard.Require(path, 1, 4 * 1024 * 1024);
+        var keyPath = Path.Combine(file.DirectoryName!, ".installation.key");
+        if (File.Exists(keyPath) || Directory.Exists(keyPath) || new FileInfo(keyPath).LinkTarget is not null) InstallationDocumentGuard.Require(keyPath, 32, 64);
         var options = new SupprocomSecretsOptions
         {
             EnvironmentName = "Production",
@@ -36,6 +39,8 @@ public static class PortableConfiguration
         options.File.Recovery = SecretFileRecovery.None;
         options.File.Protection = SecretFileProtection.InstallationBoundAesGcm;
         var snapshot = await new SupprocomSecretFileStore(options).LoadAsync(cancellationToken).ConfigureAwait(false);
+        InstallationDocumentGuard.Require(path, 1, 4 * 1024 * 1024);
+        InstallationDocumentGuard.Require(keyPath, 32, 64);
         if (!snapshot.TryGetValue(Key<T>(), out var value) || string.IsNullOrWhiteSpace(value))
             throw new InvalidDataException("The portable collection does not contain the requested role configuration.");
         cancellationToken.ThrowIfCancellationRequested();

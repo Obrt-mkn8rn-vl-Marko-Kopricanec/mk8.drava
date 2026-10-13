@@ -4,6 +4,7 @@ public sealed record NodeEnrollmentProfile
 {
     public int SchemaVersion { get; init; } = 1;
     public RegistrationSiteTrust Site { get; init; } = new();
+    public SecretText LocalToken { get; init; } = SecretText.Empty;
     public string NodeId { get; init; } = "";
     public string OwnerId { get; init; } = "";
     public string ServicePrefix { get; init; } = "";
@@ -13,6 +14,7 @@ public sealed record NodeEnrollmentProfile
 
     public void Validate()
     {
+        if (!LocalToken.IsEmpty) _ = LocalToken.RequireToken();
         if (SchemaVersion != 1 || GatewayAddresses.Count > 16 || RegistrationPort is < 1 or > 65535)
             throw new InvalidDataException("Invalid node enrollment profile.");
         Site.Validate();

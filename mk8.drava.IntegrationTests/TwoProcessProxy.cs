@@ -23,7 +23,9 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public int TlsPort { get; private set; }
     public int RegistrationPort { get; private set; }
     public int ManagementPort { get; private set; }
-    public string AdministratorTokenPath => Path.Combine(_directory, "app", "administrator.token");
+    public SecretText IpcToken { get; private init; } = SecretText.Empty;
+    public SecretText AdministratorToken { get; private init; } = SecretText.Empty;
+    public SecretText NodeAgentToken { get; } = new(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
     public string RootCertificatePath => Path.Combine(_directory, "site-root.der");
     public string NodeCertificatePath => Path.Combine(_directory, "node.pfx");
     public string EnrolledNodeId { get; private set; } = "local";
@@ -107,23 +109,22 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var gatewayState = Directory.CreateDirectory(Path.Combine(directory, "gateway")).FullName;
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(state, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        var token = Path.Combine(directory, "gateway.token");
-        await File.WriteAllTextAsync(token, Convert.ToHexString(RandomNumberGenerator.GetBytes(32))).ConfigureAwait(false);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(token, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        var ipc = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_" + Guid.NewGuid().ToString("N"), IdentityTokenPath = token }
-            : new IpcEndpoint { UnixSocketPath = Path.Combine(state, "app.sock"), IdentityTokenPath = token };
+        var ipcToken = new SecretText(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+        var ipc = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_" + Guid.NewGuid().ToString("N") }
+            : new IpcEndpoint { UnixSocketPath = Path.Combine(state, "app.sock") };
         var port = UnusedPort();
         var registrationPort = UnusedPort();
         var tlsPort = enrolledSite ? UnusedPort() : 0;
         var managementPort = administration ? UnusedPort() : 0;
+        var administratorToken = administration ? new SecretText(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))) : SecretText.Empty;
         var relayAddress = relayNode ? LocalRelayAddress() : null;
-        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs, verifiedUpstreamTls, flowTimeouts, privateHttp2, observeForwarding, observeUploadTiming).ConfigureAwait(false);
+        var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs, verifiedUpstreamTls, flowTimeouts, privateHttp2, observeForwarding, observeUploadTiming, ipcToken, administratorToken).ConfigureAwait(false);
         var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath) : null;
         DevelopmentProcess? gateway = null;
         try
         {
             gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), gatewayPath);
-            var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { TlsPort = tlsPort, RegistrationPort = registrationPort, ManagementPort = managementPort,
+            var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { IpcToken = ipcToken, AdministratorToken = administratorToken, TlsPort = tlsPort, RegistrationPort = registrationPort, ManagementPort = managementPort,
                 EnrolledNodeId = relayNode ? "remote" : "local", NodeRelayAddress = relayAddress ?? "127.0.0.1", };
             try { await result.WaitUntilBoundAsync().ConfigureAwait(false); return result; }
             catch { result.Client.Dispose(); throw; }
@@ -146,7 +147,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         await File.WriteAllTextAsync(Path.Combine(evidence, "startup-failure.log"), exception.ToString()).ConfigureAwait(false);
     }
 
-    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery, string? relayAddress, DevelopmentLifecycleSettings lifecycleSettings, bool upstreamHttp2, bool manualCache, bool upstreamHttp3, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits, long? routeBodyLimit, int? responseHeadTimeoutMs, UpstreamTlsOptions? verifiedUpstreamTls, DevelopmentFlowTimeoutSettings? flowTimeouts, PrivateHttp2Settings? privateHttp2, bool observeForwarding, bool observeUploadTiming)
+    private static async Task<(string Application, string Gateway)> WriteBootstrapAsync(string directory, string state, string gatewayState, IpcEndpoint ipc, int port, int tlsPort, int registrationPort, int managementPort, int upstreamPort, string host, bool enrolledSite, bool manualRoute, int? dnsPort, bool discovery, string? relayAddress, DevelopmentLifecycleSettings lifecycleSettings, bool upstreamHttp2, bool manualCache, bool upstreamHttp3, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits, long? routeBodyLimit, int? responseHeadTimeoutMs, UpstreamTlsOptions? verifiedUpstreamTls, DevelopmentFlowTimeoutSettings? flowTimeouts, PrivateHttp2Settings? privateHttp2, bool observeForwarding, bool observeUploadTiming, SecretText ipcToken, SecretText administratorToken)
     {
         ControllerBootstrap? controller = null;
         if (enrolledSite)
@@ -159,14 +160,8 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             await EnrollDevelopmentNodeAsync(directory, state, authority, relayAddress).ConfigureAwait(false);
             controller = new ControllerBootstrap { Domain = "site.test", CertificateAuthorityPath = authorityPath, EnrollmentRootFingerprint = fingerprint, RegistrationPort = registrationPort, DnsServerAddress = "127.0.0.1", DnsServerPort = dnsPort ?? 53, Registration = lifecycleSettings.Registration, ServingPlan = lifecycleSettings.Serving };
         }
-        var administratorPath = managementPort > 0 ? Path.Combine(state, "administrator.token") : "";
-        if (administratorPath.Length > 0)
-        {
-            await File.WriteAllTextAsync(administratorPath, Convert.ToHexString(RandomNumberGenerator.GetBytes(32))).ConfigureAwait(false);
-            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(administratorPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-        var applicationBootstrap = new ApplicationBootstrap { SiteId = "development", NodeId = "local", StateDirectory = state, Listen = ipc, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, AdministratorTokenPath = administratorPath, Controller = controller, PrivateHttp2 = privateHttp2 ?? new PrivateHttp2Settings(), ForwardingDiagnostics = observeForwarding || observeUploadTiming, TransportDiagnostics = observeUploadTiming };
-        var gatewayBootstrap = new GatewayBootstrap { SiteId = "development", StateDirectory = gatewayState, Application = ipc, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, RegistrationPort = registrationPort, DiscoveryEnabled = discovery, Plan = lifecycleSettings.Gateway, EnrollmentRootFingerprint = controller?.EnrollmentRootFingerprint ?? "", RequestBodyLimits = requestBodyLimits ?? [], UploadDiagnostics = observeUploadTiming };
+        var applicationBootstrap = new ApplicationBootstrap { SiteId = "development", NodeId = "local", StateDirectory = state, Listen = ipc, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, IpcToken = ipcToken, AdministratorToken = administratorToken, Controller = controller, PrivateHttp2 = privateHttp2 ?? new PrivateHttp2Settings(), ForwardingDiagnostics = observeForwarding || observeUploadTiming, TransportDiagnostics = observeUploadTiming };
+        var gatewayBootstrap = new GatewayBootstrap { SiteId = "development", StateDirectory = gatewayState, Application = ipc, ApplicationToken = ipcToken, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, RegistrationPort = registrationPort, DiscoveryEnabled = discovery, Plan = lifecycleSettings.Gateway, EnrollmentRootFingerprint = controller?.EnrollmentRootFingerprint ?? "", RequestBodyLimits = requestBodyLimits ?? [], UploadDiagnostics = observeUploadTiming };
         var sites = Directory.CreateDirectory(Path.Combine(state, "config", "sites")).FullName;
         if (manualRoute)
         {
@@ -185,8 +180,8 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             await WriteFlowSettingsAsync(state, sites, host, port, upstreamPort, flowTimeouts).ConfigureAwait(false);
         var applicationPath = Path.Combine(directory, "application.json");
         var gatewayPath = Path.Combine(directory, "gateway.json");
-        await File.WriteAllTextAsync(applicationPath, PortableConfiguration.Serialize(applicationBootstrap)).ConfigureAwait(false);
-        await File.WriteAllTextAsync(gatewayPath, PortableConfiguration.Serialize(gatewayBootstrap)).ConfigureAwait(false);
+        await PortableFixtureFile.WriteAsync(applicationPath, PortableConfiguration.Serialize(applicationBootstrap)).ConfigureAwait(false);
+        await PortableFixtureFile.WriteAsync(gatewayPath, PortableConfiguration.Serialize(gatewayBootstrap)).ConfigureAwait(false);
         return (applicationPath, gatewayPath);
     }
 

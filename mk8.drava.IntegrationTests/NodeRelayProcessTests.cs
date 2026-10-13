@@ -95,11 +95,15 @@ public sealed class NodeRelayProcessTests
         if (string.Equals(context.Request.Path.Value, "/ready", StringComparison.Ordinal)) { await context.Response.WriteAsync("ready", context.RequestAborted).ConfigureAwait(false); return; }
         if (HttpMethods.IsPost(context.Request.Method))
         {
-            using var body = new MemoryStream();
+            var body = new MemoryStream();
+            await using var bodyLifetime = body.ConfigureAwait(false);
             await context.Request.Body.CopyToAsync(body, context.RequestAborted).ConfigureAwait(false);
             await context.Response.WriteAsync(Convert.ToHexString(SHA256.HashData(body.ToArray())), context.RequestAborted).ConfigureAwait(false);
         }
-        else await context.Response.WriteAsync(new string('r', 300 * 1024), context.RequestAborted).ConfigureAwait(false);
+        else
+        {
+            await context.Response.WriteAsync(new string('r', 300 * 1024), context.RequestAborted).ConfigureAwait(false);
+        }
     }
 
     private static async Task AssertTrafficAsync(HttpClient client, CancellationToken cancellationToken)
@@ -119,9 +123,9 @@ public sealed class NodeRelayProcessTests
         using var handler = new SocketsHttpHandler { UseProxy = false, SslOptions = new SslClientAuthenticationOptions
         {
             RemoteCertificateValidationCallback = (_, peer, _, _) => peer is not null && string.Equals(peer.GetCertHashString(HashAlgorithmName.SHA256), certificate.GetCertHashString(HashAlgorithmName.SHA256), StringComparison.Ordinal),
-        } };
+        }, };
         using var direct = new HttpClient(handler, disposeHandler: false);
-        using var stillRunning = await direct.GetAsync(new Uri($"{(tls ? "https" : "http")}://127.0.0.1:{backendPort}/ready"), cancellationToken).ConfigureAwait(true);
+        using var stillRunning = await direct.GetAsync(new Uri($"{(tls ? "https" : "http")}://127.0.0.1:{backendPort.ToString(System.Globalization.CultureInfo.InvariantCulture)}/ready"), cancellationToken).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, stillRunning.StatusCode);
         using var stopped = await client.GetAsync(new Uri("/", UriKind.Relative), cancellationToken).ConfigureAwait(true);
         Assert.True(stopped.StatusCode is HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout);
@@ -149,8 +153,8 @@ public sealed class NodeRelayProcessTests
                 if (valid) Volatile.Write(ref verifiedServer, 1);
                 return valid;
             },
-        } };
-        using var channel = GrpcChannel.ForAddress($"https://{agent.Descriptor.RelayAddress}:{agent.Descriptor.RelayPort}", new GrpcChannelOptions { HttpHandler = handler });
+        }, };
+        using var channel = GrpcChannel.ForAddress($"https://{agent.Descriptor.RelayAddress}:{agent.Descriptor.RelayPort.ToString(System.Globalization.CultureInfo.InvariantCulture)}", new GrpcChannelOptions { HttpHandler = handler });
         using var call = new Mk8.Drava.Transport.Protocol.V1.NodeRelay.NodeRelayClient(channel).Relay(deadline: DateTime.UtcNow.AddSeconds(5));
         Exception? rejected = null;
         try
@@ -175,9 +179,9 @@ public sealed class NodeRelayProcessTests
 
     private static bool IsRelayRejection(Grpc.Core.RpcException exception, bool verifiedServer) =>
         exception.StatusCode is Grpc.Core.StatusCode.Unavailable or Grpc.Core.StatusCode.Unauthenticated or Grpc.Core.StatusCode.PermissionDenied
-        || verifiedServer && exception.StatusCode == Grpc.Core.StatusCode.Internal
+        || (verifiedServer && exception.StatusCode == Grpc.Core.StatusCode.Internal
         && exception.Status.DebugException is HttpRequestException { HttpRequestError: HttpRequestError.Unknown, InnerException: null } transport
-        && string.Equals(transport.Message, "An HTTP/2 connection could not be established because the server did not complete the HTTP/2 handshake.", StringComparison.Ordinal);
+        && string.Equals(transport.Message, "An HTTP/2 connection could not be established because the server did not complete the HTTP/2 handshake.", StringComparison.Ordinal));
 
     private static async Task AssertControllerListenerLiveAsync(TwoProcessProxy proxy, DevelopmentNodeAgent agent, X509Certificate2 root)
     {
@@ -188,9 +192,9 @@ public sealed class NodeRelayProcessTests
         {
             ClientCertificates = new X509CertificateCollection { controller },
             RemoteCertificateValidationCallback = (_, peer, _, _) => peer is not null && ValidatePeer(peer, root, agent.Descriptor),
-        } };
+        }, };
         using var client = new HttpClient(handler, disposeHandler: false);
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://{agent.Descriptor.RelayAddress}:{agent.Descriptor.RelayPort}/role-probe"))
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://{agent.Descriptor.RelayAddress}:{agent.Descriptor.RelayPort.ToString(System.Globalization.CultureInfo.InvariantCulture)}/role-probe"))
             { Version = HttpVersion.Version20, VersionPolicy = HttpVersionPolicy.RequestVersionExact };
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var response = await client.SendAsync(request, deadline.Token).ConfigureAwait(true);
@@ -208,7 +212,7 @@ public sealed class NodeRelayProcessTests
         using var root = X509CertificateLoader.LoadCertificateFromFile(proxy.RootCertificatePath);
         return new DravaRegistrationOptions
         {
-            Site = new RegistrationSiteTrust { SiteId = "development", Domain = "site.test", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256), RootCertificatePath = proxy.RootCertificatePath, NodeCertificatePath = proxy.NodeCertificatePath },
+            NodeAgentToken = proxy.NodeAgentToken, Site = new RegistrationSiteTrust { SiteId = "development", Domain = "site.test", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256), RootCertificatePath = proxy.RootCertificatePath, NodeCertificatePath = proxy.NodeCertificatePath },
             NodeId = proxy.EnrolledNodeId, OwnerId = "development", ServiceId = "svc", ReadinessPath = "/ready", MulticastDiscovery = false,
             GatewaySeeds = [new DiscoveryCandidate("127.0.0.1", proxy.RegistrationPort)],
         };

@@ -18,18 +18,16 @@ public sealed class ApplicationStartupIdentityTests
         {
             File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var state = Directory.CreateDirectory(Path.Combine(directory, "app"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute).FullName;
-            var token = Path.Combine(directory, "identity.token");
-            await File.WriteAllTextAsync(token, new string('A', 64) + (invalidPermissions ? "" : "!"), CancellationToken.None).ConfigureAwait(true);
-            File.SetUnixFileMode(token, UnixFileMode.UserRead | UnixFileMode.UserWrite | (invalidPermissions ? UnixFileMode.GroupRead : UnixFileMode.None));
             var socket = Path.Combine(state, "i");
             var bootstrap = new ApplicationBootstrap
             {
-                SiteId = "startup-fixture", NodeId = "fixture", StateDirectory = state,
+                IpcToken = new SecretText(new string('A', 64) + (invalidPermissions ? "" : "!")), SiteId = "startup-fixture", NodeId = "fixture", StateDirectory = state,
                 HttpPort = DevelopmentPortAllocator.GetPort(), HttpsPort = 0,
-                Listen = new IpcEndpoint { UnixSocketPath = socket, IdentityTokenPath = token },
+                Listen = new IpcEndpoint { UnixSocketPath = socket },
             };
             var path = Path.Combine(directory, "application.json");
-            await File.WriteAllTextAsync(path, PortableConfiguration.Serialize(bootstrap), CancellationToken.None).ConfigureAwait(true);
+            await PortableFixtureFile.WriteAsync(path, PortableConfiguration.Serialize(bootstrap), CancellationToken.None).ConfigureAwait(true);
+            if (invalidPermissions) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path);
             await using var lifetime = process.ConfigureAwait(true);
@@ -43,7 +41,7 @@ public sealed class ApplicationStartupIdentityTests
             await process.DisposeAsync().ConfigureAwait(true);
             var evidence = Directory.CreateDirectory(Path.Combine(TwoProcessProxy.FindRoot(), "artifacts", "startup-identity-tests")).FullName;
             await File.WriteAllTextAsync(Path.Combine(evidence, Path.GetFileName(directory) + ".log"), process.CapturedLog, CancellationToken.None).ConfigureAwait(true);
-            var reason = invalidPermissions ? "Scoped identity requires a consuming-owner directory0700 and regular file0400/0600." : "Invalid scoped identity encoding.";
+            var reason = invalidPermissions ? "Portable collection requires a consuming-owner directory0700 and regular file0400/0600." : "Invalid scoped identity encoding.";
             Assert.Contains(reason, process.CapturedLog, StringComparison.Ordinal);
         }
         finally { Directory.Delete(directory, recursive: true); }

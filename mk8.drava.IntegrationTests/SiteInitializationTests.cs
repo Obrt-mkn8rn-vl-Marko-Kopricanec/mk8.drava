@@ -155,7 +155,7 @@ public sealed class SiteInitializationTests
         var options = DravaRegistrationOptions.FromEnrollment(await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true), "svc-api", "/ready");
         var gateway = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(site.GatewayPath, CancellationToken.None).ConfigureAwait(true);
         using var administrator = new DevelopmentSiteClient(options.Site.RootCertificatePath, gateway.ManagementPort, "admin.site.test", options.Site.NodeCertificatePath);
-        administrator.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await File.ReadAllTextAsync(Path.Combine(site.DirectoryPath, "application", "administrator.token")).ConfigureAwait(true));
+        administrator.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await PortableConfiguration.LoadDocumentAsync<ApplicationBootstrap>(site.ApplicationPath, CancellationToken.None).ConfigureAwait(true)).AdministratorToken.RequireToken());
         var policy = await administrator.Client.GetFromJsonAsync<PolicyStateResponse>(new Uri("/admin/drava/policy", UriKind.Relative)).ConfigureAwait(true);
         Assert.NotNull(policy);
         using var accepted = await administrator.Client.PostAsJsonAsync(new Uri("/admin/drava/policy", UriKind.Relative), new PolicyUpdateRequest
@@ -225,7 +225,7 @@ public sealed class SiteInitializationTests
     private static async Task AssertInitialGrantAsync(DevelopmentInitializedSite site, GatewayBootstrap gateway, NodeEnrollmentProfile profile)
     {
         using var client = new DevelopmentSiteClient(profile.Site.RootCertificatePath, gateway.ManagementPort, "admin.site.test", profile.Site.NodeCertificatePath);
-        client.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await File.ReadAllTextAsync(Path.Combine(site.DirectoryPath, "application", "administrator.token")).ConfigureAwait(false));
+        client.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await PortableConfiguration.LoadDocumentAsync<ApplicationBootstrap>(site.ApplicationPath, CancellationToken.None).ConfigureAwait(false)).AdministratorToken.RequireToken());
         using var response = await client.Client.GetAsync(new Uri("/admin/drava/registry?kind=nodes", UriKind.Relative)).ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var state = await response.Content.ReadFromJsonAsync<RegistryStateResponse>().ConfigureAwait(false);

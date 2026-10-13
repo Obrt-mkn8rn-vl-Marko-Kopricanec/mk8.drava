@@ -56,12 +56,9 @@ public sealed class TransportFailureCleanupTests
         try
         {
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            var token = Path.Combine(directory, "gateway.token");
-            await File.WriteAllTextAsync(token, new string('A', 64)).ConfigureAwait(true);
-            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(token, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            var endpoint = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_missing_" + Guid.NewGuid().ToString("N"), IdentityTokenPath = token }
-                : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "missing.sock"), IdentityTokenPath = token };
-            using var channel = new ApplicationChannel(endpoint);
+            var endpoint = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_missing_" + Guid.NewGuid().ToString("N") }
+                : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "missing.sock") };
+            using var channel = new ApplicationChannel(endpoint, new SecretText(new string('A', 64)));
             var logger = new FailureLogger();
             using var gateway = new GatewayProxy(channel, new GatewayBootstrap { Application = endpoint, MaxConcurrentExchanges = 1 }, logger);
             for (var index = 0; index < 2; index++)

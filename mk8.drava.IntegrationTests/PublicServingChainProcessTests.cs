@@ -68,11 +68,8 @@ public sealed class PublicServingChainProcessTests
         var publicPath = Path.Combine(fixture.Application.StateDirectory, "public.pfx");
         await Mk8.Drava.Application.DAL.Acme.PrivateCertificateFile.WriteNewAsync(publicPath, publicMaterial.Pfx, CancellationToken.None).ConfigureAwait(true);
         var gatewayDirectory = Path.Combine(fixture.Application.StateDirectory, "gateway");
-        var token = Path.Combine(fixture.Application.StateDirectory, "gateway.token");
-        await File.WriteAllTextAsync(token, Convert.ToHexString(RandomNumberGenerator.GetBytes(32))).ConfigureAwait(true);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(token, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        var ipc = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_" + Guid.NewGuid().ToString("N"), IdentityTokenPath = token }
-            : new IpcEndpoint { UnixSocketPath = Path.Combine(fixture.Application.StateDirectory, "absent.sock"), IdentityTokenPath = token };
+        var ipc = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_" + Guid.NewGuid().ToString("N") }
+            : new IpcEndpoint { UnixSocketPath = Path.Combine(fixture.Application.StateDirectory, "absent.sock") };
         var gateway = fixture.Gateway with
         {
             StateDirectory = gatewayDirectory, Application = ipc, ServingTrust = trust, DiscoveryEnabled = false,
@@ -88,7 +85,7 @@ public sealed class PublicServingChainProcessTests
         using (var cache = new GatewayPlanCache(gatewayDirectory))
             await cache.WriteAsync(plans.Read("local"), CancellationToken.None).ConfigureAwait(true);
         var bootstrapPath = Path.Combine(fixture.Application.StateDirectory, "gateway.json");
-        await File.WriteAllTextAsync(bootstrapPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(bootstrapPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
         return (gateway, bootstrapPath);
     }
 

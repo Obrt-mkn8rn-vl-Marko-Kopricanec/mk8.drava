@@ -10,6 +10,7 @@ public sealed record NodeAgentBootstrap
     public string OwnerId { get; init; } = "";
     public string ServicePrefix { get; init; } = "";
     public string StateDirectory { get; init; } = "";
+    public SecretText LocalToken { get; init; } = SecretText.Empty;
     public IpcEndpoint LocalListen { get; init; } = new();
     public PrivateHttp2Settings PrivateHttp2 { get; init; } = new();
     public string RelayAddress { get; init; } = "";
@@ -22,6 +23,7 @@ public sealed record NodeAgentBootstrap
 
     public void Validate()
     {
+        _ = LocalToken.RequireToken();
         if (SchemaVersion != 1) throw new InvalidDataException("Unsupported node-agent schema.");
         PrivateHttp2.Validate();
         Site.Validate(); LocalListen.Validate(); Relay.Validate();

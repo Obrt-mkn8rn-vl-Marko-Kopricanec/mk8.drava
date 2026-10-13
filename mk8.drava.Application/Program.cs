@@ -102,7 +102,7 @@ internal static class Program
         builder.Services.AddGrpc(options => { options.Interceptors.Add<IpcIdentityInterceptor>(); options.MaxReceiveMessageSize = 8 * 1024 * 1024; options.MaxSendMessageSize = 8 * 1024 * 1024; });
         builder.Services.AddGrpc().AddServiceOptions<ProxyExchangeService>(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
         builder.Services.RemoveAll<IProxyAdminSecurityOptionsReader>();
-        builder.Services.AddSingleton<IProxyAdminSecurityOptionsReader>(_ => new EnrolledAdministratorSecurityReader(bootstrap.AdministratorTokenPath));
+        builder.Services.AddSingleton<IProxyAdminSecurityOptionsReader>(_ => new EnrolledAdministratorSecurityReader(bootstrap.AdministratorToken));
         builder.Services.AddSingleton<ProxyAdministrationDispatcher>();
         builder.Services.AddSingleton(services => new ControlService(registration?.Plans, services.GetRequiredService<ProxyAdminAuthenticationService>(), services.GetRequiredService<ProxyAdministrationDispatcher>()));
         if (registration is null) return;

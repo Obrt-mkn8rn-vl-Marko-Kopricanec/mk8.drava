@@ -3,7 +3,6 @@ using System.Text;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Mk8.Drava.Configuration;
-using Mk8.Drava.Transport.Clients;
 
 namespace Mk8.Drava.Application.Transport;
 
@@ -14,7 +13,7 @@ internal sealed class IpcIdentityInterceptor : Interceptor
     public IpcIdentityInterceptor(ApplicationBootstrap bootstrap)
     {
         ArgumentNullException.ThrowIfNull(bootstrap);
-        var token = PrivateIpcIdentityFile.Read(bootstrap.Listen.IdentityTokenPath);
+        var token = bootstrap.IpcToken.RequireToken();
         _tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(token));
     }
 

@@ -3,7 +3,6 @@ using System.Text;
 using Google.Protobuf;
 using Grpc.Core;
 using Mk8.Drava.Application.BLL.NodeRelay;
-using Mk8.Drava.Application.DAL.Administration;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Contracts.Registration.V1;
 using Mk8.Drava.Transport.Protocol.V1;
@@ -13,7 +12,7 @@ namespace Mk8.Drava.Application.Transport;
 
 internal sealed class NodeAgentLocalService(NodeRelayMappings mappings, NodeAgentDescriptorState state, NodeAgentBootstrap bootstrap) : NodeAgentLocal.NodeAgentLocalBase
 {
-    private readonly byte[] _tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(AdministratorCredentialFile.Read(bootstrap.LocalListen.IdentityTokenPath)));
+    private readonly byte[] _tokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(bootstrap.LocalToken.RequireToken()));
 
     public override Task<NodeLocalReply> Apply(NodeLocalRequest request, ServerCallContext context)
     {
@@ -21,7 +20,9 @@ internal sealed class NodeAgentLocalService(NodeRelayMappings mappings, NodeAgen
         var credentials = context.RequestHeaders.Where(static entry => string.Equals(entry.Key, "authorization", StringComparison.Ordinal)).ToArray();
         if (credentials.Length != 1 || credentials[0].Value.Length is < 39 or > 263 || !credentials[0].Value.StartsWith("Bearer ", StringComparison.Ordinal) ||
             !CryptographicOperations.FixedTimeEquals(SHA256.HashData(Encoding.ASCII.GetBytes(credentials[0].Value[7..])), _tokenHash))
+        {
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Private node identity is required."));
+        }
         var descriptor = state.Read() ?? throw new RpcException(new Status(StatusCode.Unavailable, "Node agent is starting."));
         if (request.Version != 1) throw new RpcException(new Status(StatusCode.InvalidArgument, "Unsupported local mapping version."));
         try
@@ -40,7 +41,10 @@ internal sealed class NodeAgentLocalService(NodeRelayMappings mappings, NodeAgen
                 if (advertisement.Relay is not null && advertisement.Relay != relay) throw new UnauthorizedAccessException("Mapping belongs to another agent boot.");
                 mappings.Renew(command.Identity, advertisement with { Relay = relay });
             }
-            else throw new InvalidDataException("Unknown local mapping operation.");
+            else
+            {
+                throw new InvalidDataException("Unknown local mapping operation.");
+            }
             return Task.FromResult(new NodeLocalReply { StatusCode = 200, DescriptorJson = ByteString.CopyFromUtf8(BootstrapFile.Serialize(descriptor)) });
         }
         catch (UnauthorizedAccessException) { throw new RpcException(new Status(StatusCode.PermissionDenied, "Local mapping is outside enrollment scope.")); }

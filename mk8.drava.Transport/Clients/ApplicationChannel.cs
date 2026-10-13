@@ -15,11 +15,12 @@ public sealed class ApplicationChannel : IDisposable
     private readonly X509Certificate2? _trustedCertificate;
     private readonly string _identityToken;
 
-    public ApplicationChannel(IpcEndpoint endpoint)
+    public ApplicationChannel(IpcEndpoint endpoint, SecretText identityToken)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         endpoint.Validate();
-        _identityToken = PrivateIpcIdentityFile.Read(endpoint.IdentityTokenPath);
+        ArgumentNullException.ThrowIfNull(identityToken);
+        _identityToken = identityToken.RequireToken();
         var handler = CreateHandler(endpoint);
         try
         {

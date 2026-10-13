@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><RootNamespace>Mk8.Drava.Configuration</RootNamespace><IsPackable>true</IsPackable></PropertyGroup>
+  <PropertyGroup><RootNamespace>Mk8.Drava.Configuration</RootNamespace><IsPackable>true</IsPackable><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Supprocom.Secrets" />
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />

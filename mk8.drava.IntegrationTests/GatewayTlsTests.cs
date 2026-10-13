@@ -15,10 +15,7 @@ public sealed class GatewayTlsTests
     [Fact]
     public async Task SeparateGatewayBindsItsRealTlsPlanAndProxiesHttp2Async()
     {
-        var upstream = await DevelopmentHttpUpstream.StartAsync(async context =>
-        {
-            await context.Request.Body.CopyToAsync(context.Response.Body, context.RequestAborted).ConfigureAwait(false);
-        }).ConfigureAwait(true);
+        var upstream = await DevelopmentHttpUpstream.StartAsync(async context => await context.Request.Body.CopyToAsync(context.Response.Body, context.RequestAborted).ConfigureAwait(false)).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
@@ -29,7 +26,7 @@ public sealed class GatewayTlsTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(HttpVersion.Version20, response.Version);
         Assert.Equal(body, await response.Content.ReadAsByteArrayAsync().ConfigureAwait(true));
-        using var channel = new ApplicationChannel(proxy.Ipc);
+        using var channel = new ApplicationChannel(proxy.Ipc, proxy.IpcToken);
         var control = new ApplicationControl.ApplicationControlClient(channel.Invoker);
         using var planCall = control.GatewayPlanAsync(new GatewayIdentity { Version = 1, GatewayId = "local" }, channel.Credentials);
         var plan = await planCall.ResponseAsync.ConfigureAwait(true);
@@ -45,7 +42,7 @@ public sealed class GatewayTlsTests
     [Fact]
     public async Task RegistrationListenerRejectsAnAnonymousTlsPeerAsync()
     {
-        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("unused")).ConfigureAwait(true);
+        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("unused", context.RequestAborted)).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);

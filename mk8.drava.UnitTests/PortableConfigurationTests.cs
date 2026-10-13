@@ -19,8 +19,8 @@ public sealed class PortableConfigurationTests
         {
             Environment.SetEnvironmentVariable("Drava__GatewayBootstrap", "{\"siteId\":\"ambient\"}");
             Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Development");
-            await File.WriteAllTextAsync(path, PortableConfiguration.Serialize(new GatewayBootstrap { SiteId = "configured" })).ConfigureAwait(true);
-            await File.WriteAllTextAsync(Path.Combine(directory.Path, ".dev.env"), PortableConfiguration.Serialize(new GatewayBootstrap { SiteId = "overlay" })).ConfigureAwait(true);
+            await PortableFixtureFile.WriteAsync(path, PortableConfiguration.Serialize(new GatewayBootstrap { SiteId = "configured" })).ConfigureAwait(true);
+            await PortableFixtureFile.WriteAsync(Path.Combine(directory.Path, ".dev.env"), PortableConfiguration.Serialize(new GatewayBootstrap { SiteId = "overlay" })).ConfigureAwait(true);
             var result = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None).ConfigureAwait(true);
             Assert.Equal("configured", result.SiteId, StringComparer.Ordinal);
             Assert.True(File.Exists(Path.Combine(directory.Path, ".installation.key")));
@@ -45,7 +45,7 @@ public sealed class PortableConfigurationTests
     {
         using var directory = new RegistryStateDirectory();
         var path = Path.Combine(directory.Path, ".env");
-        await File.WriteAllTextAsync(path, PortableConfiguration.Serialize(new ApplicationBootstrap())).ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(path, PortableConfiguration.Serialize(new ApplicationBootstrap())).ConfigureAwait(true);
         await Assert.ThrowsAsync<InvalidDataException>(() => PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None)).ConfigureAwait(true);
     }
 
@@ -53,7 +53,7 @@ public sealed class PortableConfigurationTests
     public async Task MissingActiveCollectionDoesNotActivateATemplateOrCreateAKeyAsync()
     {
         using var directory = new RegistryStateDirectory();
-        await File.WriteAllTextAsync(Path.Combine(directory.Path, ".env.template"), PortableConfiguration.Serialize(new GatewayBootstrap())).ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(Path.Combine(directory.Path, ".env.template"), PortableConfiguration.Serialize(new GatewayBootstrap())).ConfigureAwait(true);
         await Assert.ThrowsAsync<InvalidDataException>(() => PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(Path.Combine(directory.Path, ".env"), CancellationToken.None)).ConfigureAwait(true);
         Assert.False(File.Exists(Path.Combine(directory.Path, ".env")));
         Assert.False(File.Exists(Path.Combine(directory.Path, ".installation.key")));
@@ -74,7 +74,7 @@ public sealed class PortableConfigurationTests
     {
         using var directory = new RegistryStateDirectory();
         var path = Path.Combine(directory.Path, ".env");
-        await File.WriteAllTextAsync(path, "{\"siteId\":\"legacy\"}").ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(path, "{\"siteId\":\"legacy\"}").ConfigureAwait(true);
         await Assert.ThrowsAsync<SupprocomSecretsException>(() => PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None)).ConfigureAwait(true);
         Assert.False(File.Exists(path + ".original"));
     }
@@ -84,7 +84,7 @@ public sealed class PortableConfigurationTests
     {
         using var directory = new RegistryStateDirectory();
         var path = Path.Combine(directory.Path, ".env");
-        await File.WriteAllTextAsync(path, "SUPPROCOM_SECRET_SOURCE=unavailable://reserved.invalid/fixture\n").ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(path, "SUPPROCOM_SECRET_SOURCE=unavailable://reserved.invalid/fixture\n").ConfigureAwait(true);
         var exception = await Assert.ThrowsAsync<SupprocomSecretsException>(() => PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None)).ConfigureAwait(true);
         Assert.Equal("ExternalProviderPointer", exception.Code, StringComparer.Ordinal);
     }
@@ -94,7 +94,7 @@ public sealed class PortableConfigurationTests
     {
         using var directory = new RegistryStateDirectory();
         var path = Path.Combine(directory.Path, ".env");
-        await File.WriteAllTextAsync(path, PortableConfiguration.SerializeDocument<GatewayBootstrap>("{\"siteId\":\"one\",\"siteId\":\"two\"}")).ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(path, PortableConfiguration.SerializeDocument<GatewayBootstrap>("{\"siteId\":\"one\",\"siteId\":\"two\"}")).ConfigureAwait(true);
         await Assert.ThrowsAsync<InvalidDataException>(() => PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None)).ConfigureAwait(true);
     }
 
@@ -103,7 +103,7 @@ public sealed class PortableConfigurationTests
     {
         using var directory = new RegistryStateDirectory();
         var path = Path.Combine(directory.Path, ".env");
-        await File.WriteAllTextAsync(path, PortableConfiguration.SerializeDocument<GatewayBootstrap>("{\"unknown\":1}")).ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(path, PortableConfiguration.SerializeDocument<GatewayBootstrap>("{\"unknown\":1}")).ConfigureAwait(true);
         await Assert.ThrowsAsync<JsonException>(() => PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None)).ConfigureAwait(true);
     }
 }

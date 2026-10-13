@@ -33,10 +33,10 @@ public sealed class GatewayBodyLimitConfigurationTests
     {
         var bootstrap = new GatewayBootstrap
         {
-            SiteId = "site", StateDirectory = Path.GetTempPath(),
+            ApplicationToken = new SecretText(new string('A', 64)), SiteId = "site", StateDirectory = Path.GetTempPath(),
             Application = OperatingSystem.IsWindows()
-                ? new IpcEndpoint { NamedPipeName = "fixture", IdentityTokenPath = Path.Combine(Path.GetTempPath(), "fixture.token") }
-                : new IpcEndpoint { UnixSocketPath = Path.Combine(Path.GetTempPath(), "fixture.sock"), IdentityTokenPath = Path.Combine(Path.GetTempPath(), "fixture.token") },
+                ? new IpcEndpoint { NamedPipeName = "fixture" }
+                : new IpcEndpoint { UnixSocketPath = Path.Combine(Path.GetTempPath(), "fixture.sock") },
             RequestBodyLimits = [new GatewayRequestBodyLimit { Host = "blob.site.test", MaxRequestBodyBytes = 269_615_107 }],
         };
         bootstrap.Validate();

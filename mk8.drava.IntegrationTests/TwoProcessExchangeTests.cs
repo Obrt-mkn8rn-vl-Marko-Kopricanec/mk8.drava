@@ -73,7 +73,7 @@ public sealed class TwoProcessExchangeTests
     {
         var proxy = await TwoProcessProxy.StartAsync(TwoProcessProxy.UnusedPort()).ConfigureAwait(true);
         await using var lifetime = proxy.ConfigureAwait(true);
-        using var channel = new ApplicationChannel(proxy.Ipc);
+        using var channel = new ApplicationChannel(proxy.Ipc, proxy.IpcToken);
         var client = new ProxyExchange.ProxyExchangeClient(channel.Invoker);
         using var call = client.Exchange(cancellationToken: CancellationToken.None);
         await call.RequestStream.WriteAsync(new ExchangeFrame { Request = new RequestHead { Version = FrameLimits.Version } }).ConfigureAwait(true);

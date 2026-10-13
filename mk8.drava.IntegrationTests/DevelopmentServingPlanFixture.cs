@@ -14,9 +14,9 @@ internal sealed class DevelopmentServingPlanFixture : IDisposable
     private DevelopmentServingPlanFixture(string directory, PlanClock clock, LocalSiteCertificateAuthority authority, string fingerprint)
     {
         _directory = directory; Clock = clock; Authority = authority;
-        Application = new ApplicationBootstrap { SiteId = "site", StateDirectory = directory, Controller = new ControllerBootstrap
-            { Domain = "site.test", CertificateAuthorityPath = Path.Combine(directory, "ca.pfx"), EnrollmentRootFingerprint = fingerprint, DnsServerAddress = "127.0.0.1" } };
-        Gateway = new GatewayBootstrap { SiteId = "site", StateDirectory = directory, EnrollmentRootFingerprint = fingerprint };
+        Application = new ApplicationBootstrap { IpcToken = new SecretText(new string('A', 64)), SiteId = "site", StateDirectory = directory, Controller = new ControllerBootstrap
+            { Domain = "site.test", CertificateAuthorityPath = Path.Combine(directory, "ca.pfx"), EnrollmentRootFingerprint = fingerprint, DnsServerAddress = "127.0.0.1", }, };
+        Gateway = new GatewayBootstrap { ApplicationToken = Application.IpcToken, SiteId = "site", StateDirectory = directory, EnrollmentRootFingerprint = fingerprint };
     }
 
     public static async Task<DevelopmentServingPlanFixture> CreateAsync()

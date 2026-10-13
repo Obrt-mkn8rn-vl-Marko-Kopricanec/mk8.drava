@@ -15,7 +15,7 @@ public sealed class AdministrationProcessTests
     [Fact]
     public async Task ManagementRequiresBothSiteTlsAndApplicationAuthorizationAndIsNotExposedOnServingListenersAsync()
     {
-        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("business")).ConfigureAwait(true);
+        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("business", context.RequestAborted)).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         var proxy = await TwoProcessProxy.StartAsync(upstream.Port, enrolledSite: true, administration: true).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
@@ -28,7 +28,7 @@ public sealed class AdministrationProcessTests
         administrator.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new string('A', 64));
         using var wrong = await administrator.Client.GetAsync(new Uri("/admin/proxy/status", UriKind.Relative)).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.Forbidden, wrong.StatusCode);
-        var token = await File.ReadAllTextAsync(proxy.AdministratorTokenPath).ConfigureAwait(true);
+        var token = proxy.AdministratorToken.RequireToken();
         administrator.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var allowed = await administrator.Client.GetAsync(new Uri("/admin/proxy/status", UriKind.Relative)).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
@@ -61,7 +61,7 @@ public sealed class AdministrationProcessTests
     [InlineData("null")]
     public async Task ApplicationRejectsAmbiguousOrUnknownControlPayloadsAndRecordsFailureAsync(string json)
     {
-        var proxy = await TwoProcessProxy.StartAsync(TwoProcessProxy.UnusedPort(), enrolledSite: true, administration: true, manualRoute: false).ConfigureAwait(true);
+        var proxy = await TwoProcessProxy.StartAsync(TwoProcessProxy.UnusedPort(), enrolledSite: true, manualRoute: false, administration: true).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         using var administrator = await CreateAdministratorAsync(proxy).ConfigureAwait(true);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -76,7 +76,7 @@ public sealed class AdministrationProcessTests
     [Fact]
     public async Task ExistingCacheConfigDiagnosticsAcmeMetricsAndBackupOperationsCrossThePrivateBoundaryAsync()
     {
-        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("business")).ConfigureAwait(true);
+        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("business", context.RequestAborted)).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         var proxy = await TwoProcessProxy.StartAsync(upstream.Port, enrolledSite: true, administration: true).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
@@ -88,7 +88,7 @@ public sealed class AdministrationProcessTests
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(true));
             Assert.NotEqual(JsonValueKind.Null, json.RootElement.ValueKind);
         }
-        using var clear = await administrator.Client.PostAsync(new Uri("/admin/proxy/cache/clear", UriKind.Relative), null).ConfigureAwait(true);
+        using var clear = await administrator.Client.PostAsync(new Uri("/admin/proxy/cache/clear", UriKind.Relative), content: null).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, clear.StatusCode);
         using var acme = await administrator.Client.GetAsync(new Uri("/admin/proxy/acme/status", UriKind.Relative)).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, acme.StatusCode);
@@ -96,7 +96,7 @@ public sealed class AdministrationProcessTests
         Assert.Equal(HttpStatusCode.OK, metrics.StatusCode);
         Assert.Contains("mdrava_requests_total", await metrics.Content.ReadAsStringAsync().ConfigureAwait(true), StringComparison.Ordinal);
         await AssertNormalizationLintAndRouteAsync(administrator.Client, proxy.Port).ConfigureAwait(true);
-        using var validated = await administrator.Client.PostAsync(new Uri("/admin/proxy/config/validate", UriKind.Relative), null).ConfigureAwait(true);
+        using var validated = await administrator.Client.PostAsync(new Uri("/admin/proxy/config/validate", UriKind.Relative), content: null).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, validated.StatusCode);
     }
 
@@ -109,13 +109,13 @@ public sealed class AdministrationProcessTests
         Assert.Equal(HttpStatusCode.OK, normalize.StatusCode);
         using var lint = await client.PostAsJsonAsync(new Uri("/admin/proxy/config/lint", UriKind.Relative), new ProxyConfigLintSubmissionRequest("json", site)).ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.OK, lint.StatusCode);
-        using var matched = await client.PostAsJsonAsync(new Uri("/admin/proxy/routes/match", UriKind.Relative), new ProxyRouteMatchDryRunRequest("http", "app.test", port, "GET", "/", "", null, "127.0.0.1", "http", "http1")).ConfigureAwait(false);
+        using var matched = await client.PostAsJsonAsync(new Uri("/admin/proxy/routes/match", UriKind.Relative), new ProxyRouteMatchDryRunRequest("http", "app.test", port, "GET", "/", "", headers: null, "127.0.0.1", "http", protocol: "http1")).ConfigureAwait(false);
         Assert.Equal(HttpStatusCode.OK, matched.StatusCode);
     }
 
     internal static async Task<DevelopmentSiteClient> CreateAdministratorAsync(TwoProcessProxy proxy)
     {
-        var token = await File.ReadAllTextAsync(proxy.AdministratorTokenPath).ConfigureAwait(false);
+        var token = proxy.AdministratorToken.RequireToken();
         var client = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.ManagementPort, "admin.site.test", proxy.NodeCertificatePath);
         client.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;

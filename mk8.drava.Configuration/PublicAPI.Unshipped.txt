@@ -100,8 +100,6 @@ Mk8.Drava.Configuration.IpcEndpoint.ClientCertificatePath.init -> void
 Mk8.Drava.Configuration.IpcEndpoint.Equals(Mk8.Drava.Configuration.IpcEndpoint? other) -> bool
 Mk8.Drava.Configuration.IpcEndpoint.HttpsAddress.get -> string!
 Mk8.Drava.Configuration.IpcEndpoint.HttpsAddress.init -> void
-Mk8.Drava.Configuration.IpcEndpoint.IdentityTokenPath.get -> string!
-Mk8.Drava.Configuration.IpcEndpoint.IdentityTokenPath.init -> void
 Mk8.Drava.Configuration.IpcEndpoint.IpcEndpoint() -> void
 Mk8.Drava.Configuration.IpcEndpoint.NamedPipeName.get -> string!
 Mk8.Drava.Configuration.IpcEndpoint.NamedPipeName.init -> void
@@ -154,8 +152,6 @@ static Mk8.Drava.Configuration.IpcEndpoint.operator ==(Mk8.Drava.Configuration.I
 static Mk8.Drava.Configuration.RegistrationSiteTrust.RequireLabel(string! value) -> void
 static Mk8.Drava.Configuration.RegistrationSiteTrust.operator !=(Mk8.Drava.Configuration.RegistrationSiteTrust? left, Mk8.Drava.Configuration.RegistrationSiteTrust? right) -> bool
 static Mk8.Drava.Configuration.RegistrationSiteTrust.operator ==(Mk8.Drava.Configuration.RegistrationSiteTrust? left, Mk8.Drava.Configuration.RegistrationSiteTrust? right) -> bool
-Mk8.Drava.Configuration.ApplicationBootstrap.AdministratorTokenPath.get -> string!
-Mk8.Drava.Configuration.ApplicationBootstrap.AdministratorTokenPath.init -> void
 Mk8.Drava.Configuration.ApplicationBootstrap.ManagementPort.get -> int
 Mk8.Drava.Configuration.ApplicationBootstrap.ManagementPort.init -> void
 Mk8.Drava.Configuration.GatewayBootstrap.ManagementPort.get -> int
@@ -513,3 +509,23 @@ Mk8.Drava.Configuration.ApplicationBootstrap.TransportDiagnostics.get -> bool
 Mk8.Drava.Configuration.ApplicationBootstrap.TransportDiagnostics.init -> void
 Mk8.Drava.Configuration.GatewayBootstrap.UploadDiagnostics.get -> bool
 Mk8.Drava.Configuration.GatewayBootstrap.UploadDiagnostics.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.IpcToken.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.ApplicationBootstrap.IpcToken.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.AdministratorToken.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.ApplicationBootstrap.AdministratorToken.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.ApplicationToken.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.GatewayBootstrap.ApplicationToken.init -> void
+Mk8.Drava.Configuration.NodeAgentBootstrap.LocalToken.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.NodeAgentBootstrap.LocalToken.init -> void
+Mk8.Drava.Configuration.NodeEnrollmentProfile.LocalToken.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.NodeEnrollmentProfile.LocalToken.init -> void
+Mk8.Drava.Configuration.SecretText
+Mk8.Drava.Configuration.SecretText.SecretText(string! value) -> void
+static Mk8.Drava.Configuration.SecretText.Empty.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.SecretText.IsEmpty.get -> bool
+Mk8.Drava.Configuration.SecretText.Reveal() -> string!
+Mk8.Drava.Configuration.SecretText.RequireToken() -> string!
+Mk8.Drava.Configuration.SecretText.Equals(Mk8.Drava.Configuration.SecretText? other) -> bool
+override Mk8.Drava.Configuration.SecretText.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.SecretText.GetHashCode() -> int
+override Mk8.Drava.Configuration.SecretText.ToString() -> string!

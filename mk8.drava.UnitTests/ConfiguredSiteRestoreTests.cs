@@ -97,10 +97,10 @@ public sealed class ConfiguredSiteRestoreTests
         {
             "site" => request with { Gateway = request.Gateway with { SiteId = "different" } },
             "state" => request with { Application = request.Application with { StateDirectory = source.Path } },
-            "ipc" => request with { Gateway = request.Gateway with { Application = request.Gateway.Application with { IdentityTokenPath = Path.Combine(destination, "different.token") } } },
+            "ipc" => request with { Gateway = request.Gateway with { Application = request.Gateway.Application with { UnixSocketPath = Path.Combine(destination, "different.sock") } } },
             "port" => request with { Gateway = request.Gateway with { HttpPort = 18082 } },
-            "external" => request with { Application = request.Application with { AdministratorTokenPath = Path.Combine(source.Path, "admin.token") } },
-            "alias" => request with { Application = request.Application with { AdministratorTokenPath = request.Application.Listen.IdentityTokenPath } },
+            "external" => request with { Application = request.Application with { AdministratorToken = new SecretText(Path.Combine(source.Path, "admin.token")) } },
+            "alias" => request with { Application = request.Application with { AdministratorToken = request.Application.IpcToken } },
             "runtime" => request with { Placements = [request.Placements[0] with { RelativePath = "gateway/gateway-serving.plan" }, request.Placements[1]] },
             "placement" => request with { Placements = [request.Placements[0] with { RelativePath = "material/../escape" }, request.Placements[1]] },
             "classification" => request with { ApprovedFiles = [Approvals[0] with { Credential = false }, Approvals[1]] },
@@ -152,14 +152,14 @@ public sealed class ConfiguredSiteRestoreTests
 
     private static ConfiguredSiteRestoreRequest Request(string source, string destination, string digest)
     {
-        var ipc = new IpcEndpoint { UnixSocketPath = Path.Combine(destination, "application", "i"), IdentityTokenPath = Path.Combine(destination, "material", "ipc.token") };
+        var ipc = new IpcEndpoint { UnixSocketPath = Path.Combine(destination, "application", "i") };
         return new ConfiguredSiteRestoreRequest
         {
             SchemaVersion = 1, SourceDirectory = source, DestinationDirectory = destination, ExpectedManifestSha256 = digest,
             MaximumRegistryBytes = MaximumRegistryBytes, MaximumFileBytes = 4096, AllowCredentialEscrow = true,
             Application = new ApplicationBootstrap { SiteId = "site", NodeId = "node", StateDirectory = Path.Combine(destination, "application"), Listen = ipc,
-                IngressAddress = IPAddress.Loopback.ToString(), HttpPort = 18080, HttpsPort = 0, AdministratorTokenPath = Path.Combine(destination, "material", "admin.token"), },
-            Gateway = new GatewayBootstrap { SiteId = "site", StateDirectory = Path.Combine(destination, "gateway"), Application = ipc,
+                IngressAddress = IPAddress.Loopback.ToString(), HttpPort = 18080, HttpsPort = 0, IpcToken = new SecretText(new string('A', 64)), AdministratorToken = new SecretText(new string('B', 64)), },
+            Gateway = new GatewayBootstrap { SiteId = "site", StateDirectory = Path.Combine(destination, "gateway"), Application = ipc, ApplicationToken = new SecretText(new string('A', 64)),
                 BindAddress = IPAddress.Loopback.ToString(), HttpPort = 18080, HttpsPort = 0, RegistrationPort = 18081, DiscoveryEnabled = false, },
             ApprovedFiles = Approvals,
             Placements = [new("ipc.token", "material/ipc.token"), new("admin.token", "material/admin.token")],

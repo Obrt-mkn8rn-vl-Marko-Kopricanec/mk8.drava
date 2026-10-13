@@ -26,7 +26,8 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var started = lifetime.ApplicationStarted.Register(() => _started.TrySetResult());
+        var started = lifetime.ApplicationStarted.Register(() => _started.TrySetResult());
+        await using var startedLifetime = started.ConfigureAwait(false);
         await _started.Task.WaitAsync(stoppingToken).ConfigureAwait(false);
         while (!stoppingToken.IsCancellationRequested && Volatile.Read(ref _draining) == 0)
         {
@@ -36,7 +37,10 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
             {
                 if (Volatile.Read(ref _draining) != 0) return;
                 _channel ??= await RegistrationGatewayFinder.FindAsync(options, stoppingToken).ConfigureAwait(false);
-                if (_channel is null) state.Failed();
+                if (_channel is null)
+                {
+                    state.Failed();
+                }
                 else
                 {
                     var advertisement = await RenewAgentAsync(_channel, stoppingToken).ConfigureAwait(false);
@@ -77,7 +81,7 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
             _usesAgent = true;
             if (_agent?.Descriptor != descriptor)
             {
-                _agent?.Dispose(); _agent = new NodeAgentLocalClient(descriptor);
+                _agent?.Dispose(); _agent = new NodeAgentLocalClient(descriptor, options.NodeAgentToken);
                 _registered = false;
             }
             var relay = await _agent.ApplyAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Register, Advertisement = advertisement }, cancellationToken).ConfigureAwait(false);
@@ -104,8 +108,14 @@ internal sealed class DravaRegistrationHostedService(DravaRegistrationOptions op
                 if (_registerAttempted)
                 {
                     _channel ??= await RegistrationGatewayFinder.FindAsync(options, drain.Token).ConfigureAwait(false);
-                    if (_channel is null) state.Failed();
-                    else state.Accept(await _channel.SubmitAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Drain }, drain.Token).ConfigureAwait(false));
+                    if (_channel is null)
+                    {
+                        state.Failed();
+                    }
+                    else
+                    {
+                        state.Accept(await _channel.SubmitAsync(new RegistrationCommand { Identity = _identity, Operation = RegistrationOperation.Drain }, drain.Token).ConfigureAwait(false));
+                    }
                 }
             }
             finally { _operations.Release(); }

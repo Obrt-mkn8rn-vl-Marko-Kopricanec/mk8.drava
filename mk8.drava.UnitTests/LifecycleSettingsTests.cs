@@ -89,7 +89,7 @@ public sealed class LifecycleSettingsTests
         var path = Path.Combine(Path.GetTempPath(), "drava_settings_" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
-            await File.WriteAllTextAsync(path, PortableConfiguration.SerializeDocument<GatewayBootstrap>(json)).ConfigureAwait(true);
+            await PortableFixtureFile.WriteAsync(path, PortableConfiguration.SerializeDocument<GatewayBootstrap>(json)).ConfigureAwait(true);
             var exception = await Record.ExceptionAsync(() => PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None)).ConfigureAwait(true);
             Assert.True(exception is InvalidDataException or System.Text.Json.JsonException);
         }

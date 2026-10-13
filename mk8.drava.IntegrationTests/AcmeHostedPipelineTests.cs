@@ -50,7 +50,7 @@ public sealed class AcmeHostedPipelineTests
             await AssertPendingTlsAsync(bootstrap, gateway, privateRoot, node, deadline.Token).ConfigureAwait(true);
             var current = await IssueServingMaterialAsync(bootstrap, plans, dns, server, pending, deadline.Token).ConfigureAwait(true);
             await host.StartAsync(deadline.Token).ConfigureAwait(true);
-            await AssertControlRejectionsAsync(bootstrap.Listen, pending, deadline.Token).ConfigureAwait(true);
+            await AssertControlRejectionsAsync(bootstrap.Listen, bootstrap.IpcToken, pending, deadline.Token).ConfigureAwait(true);
             while (plans.ReadPublicationProof() is null)
             {
                 process.ThrowIfExited();
@@ -77,7 +77,7 @@ public sealed class AcmeHostedPipelineTests
         using (var cache = new GatewayPlanCache(gateway.StateDirectory))
             await cache.WriteAsync(pending, CancellationToken.None).ConfigureAwait(true);
         var gatewayPath = Path.Combine(directory, "gateway.json");
-        await File.WriteAllTextAsync(gatewayPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
+        await PortableFixtureFile.WriteAsync(gatewayPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
         return gatewayPath;
     }
 
@@ -114,11 +114,9 @@ public sealed class AcmeHostedPipelineTests
         DevelopmentServingPlanFixture fixture, DevelopmentAcmeServer server, X509Certificate2 publicRoot)
     {
         var directory = fixture.Application.StateDirectory;
-        var tokenPath = Path.Combine(directory, "gateway.token");
-        await WriteProtectedAsync(tokenPath, System.Text.Encoding.ASCII.GetBytes(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)))).ConfigureAwait(true);
         var ipc = OperatingSystem.IsWindows()
-            ? new IpcEndpoint { NamedPipeName = "drava_" + Guid.NewGuid().ToString("N"), IdentityTokenPath = tokenPath }
-            : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "app.sock"), IdentityTokenPath = tokenPath };
+            ? new IpcEndpoint { NamedPipeName = "drava_" + Guid.NewGuid().ToString("N") }
+            : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "app.sock") };
         var gateway = fixture.Gateway with
         {
             StateDirectory = Path.Combine(directory, "gateway"), Application = ipc, DiscoveryEnabled = false,
@@ -147,9 +145,9 @@ public sealed class AcmeHostedPipelineTests
         Assert.Equal(privateAfter, management);
     }
 
-    private static async Task AssertControlRejectionsAsync(IpcEndpoint ipc, PresentationPlan pending, CancellationToken cancellationToken)
+    private static async Task AssertControlRejectionsAsync(IpcEndpoint ipc, SecretText ipcToken, PresentationPlan pending, CancellationToken cancellationToken)
     {
-        using var channel = new ApplicationChannel(ipc);
+        using var channel = new ApplicationChannel(ipc, ipcToken);
         var control = new ApplicationControl.ApplicationControlClient(channel.Invoker);
         var unauthorized = await Assert.ThrowsAsync<RpcException>(async () =>
         {

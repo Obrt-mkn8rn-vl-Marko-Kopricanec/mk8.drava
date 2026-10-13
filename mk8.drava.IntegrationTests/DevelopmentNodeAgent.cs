@@ -20,23 +20,20 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
     {
         var directory = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(proxy.NodeCertificatePath)!, stateDirectoryName)).FullName;
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        var token = Path.Combine(directory, "agent.token");
-        await File.WriteAllTextAsync(token, Convert.ToHexString(RandomNumberGenerator.GetBytes(32))).ConfigureAwait(false);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(token, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         using var root = X509CertificateLoader.LoadCertificateFromFile(proxy.RootCertificatePath);
-        var local = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_agent_" + Guid.NewGuid().ToString("N"), IdentityTokenPath = token }
-            : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "agent.sock"), IdentityTokenPath = token };
+        var local = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_agent_" + Guid.NewGuid().ToString("N") }
+            : new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "agent.sock") };
         var bootstrap = new NodeAgentBootstrap
         {
             Site = new RegistrationSiteTrust { SiteId = "development", Domain = "site.test", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256),
                 RootCertificatePath = proxy.RootCertificatePath, NodeCertificatePath = proxy.NodeCertificatePath, },
-            NodeId = proxy.EnrolledNodeId, OwnerId = "development", ServicePrefix = "svc", StateDirectory = directory, LocalListen = local,
+            NodeId = proxy.EnrolledNodeId, OwnerId = "development", ServicePrefix = "svc", StateDirectory = directory, LocalListen = local, LocalToken = proxy.NodeAgentToken,
             RelayAddress = proxy.NodeRelayAddress, RelayPort = 0, EndpointAddresses = proxy.NodeRelayAddress is "127.0.0.1" ? ["127.0.0.1"] : ["127.0.0.1", proxy.NodeRelayAddress],
             Relay = relay ?? new RelayLimits(), MappingLeaseSeconds = mappingLeaseSeconds,
             PrivateHttp2 = privateHttp2 ?? new PrivateHttp2Settings(),
         };
         var path = Path.Combine(directory, "agent.json");
-        await File.WriteAllTextAsync(path, PortableConfiguration.Serialize(bootstrap)).ConfigureAwait(false);
+        await PortableFixtureFile.WriteAsync(path, PortableConfiguration.Serialize(bootstrap)).ConfigureAwait(false);
         var profile = proxy.NodeCertificatePath + ".agent.json";
         var previous = File.Exists(profile) ? BootstrapFile.Parse<NodeAgentDescriptor>(await File.ReadAllBytesAsync(profile, CancellationToken.None).ConfigureAwait(false)) : null;
         var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path, "--node-agent", environment);

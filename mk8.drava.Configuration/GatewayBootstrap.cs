@@ -12,6 +12,7 @@ public sealed record GatewayBootstrap
     public int ManagementPort { get; init; }
     public bool DiscoveryEnabled { get; init; } = true;
     public string StateDirectory { get; init; } = "";
+    public SecretText ApplicationToken { get; init; } = SecretText.Empty;
     public IpcEndpoint Application { get; init; } = new();
     public GatewayPlanSettings Plan { get; init; } = new();
     public ServingTrustSettings ServingTrust { get; init; } = new();
@@ -26,6 +27,7 @@ public sealed record GatewayBootstrap
 
     public void Validate()
     {
+        _ = ApplicationToken.RequireToken();
         if (SchemaVersion != 1 || GatewayId.Length is < 1 or > 128 || SiteId.Length is < 1 or > 128) throw new InvalidDataException("Invalid Gateway bootstrap identity or version.");
         if (!System.Net.IPAddress.TryParse(BindAddress, out _)) throw new InvalidDataException("Gateway bind address must be an IP literal.");
         if (HttpPort is < 0 or > 65535 || HttpsPort is < 0 or > 65535 || RegistrationPort is < 1 or > 65535 || (HttpPort == 0 && HttpsPort == 0)) throw new InvalidDataException("Invalid Gateway listener ports.");

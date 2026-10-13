@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Application.Transport;
 using Mk8.Drava.Transport.Clients;
@@ -17,7 +16,7 @@ public sealed class IpcIdentityFileTests
     [InlineData("link")]
     [InlineData("parent")]
     [InlineData("canonical")]
-    public void ClientRefusesUnqualifiedPrivateIdentity(string defect)
+    public void CollectionRefusesUnqualifiedPrivateAccess(string defect)
     {
         if (!OperatingSystem.IsLinux()) return;
         using var directory = new RegistryStateDirectory();
@@ -36,26 +35,25 @@ public sealed class IpcIdentityFileTests
             Directory.CreateDirectory(Path.Combine(directory.Path, "child"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             path = Path.Combine(directory.Path, "child", "..", "identity.token");
         }
-        var endpoint = new IpcEndpoint { UnixSocketPath = Path.Combine(directory.Path, "i"), IdentityTokenPath = path };
-        Assert.Throws<InvalidDataException>(() => { using var client = new ApplicationChannel(endpoint); });
-        Assert.Throws<InvalidDataException>(() => new IpcIdentityInterceptor(new ApplicationBootstrap { Listen = endpoint }));
+        Assert.Throws<InvalidDataException>(() => InstallationDocumentGuard.Require(path, 32, 256));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ClientAcceptsQualifiedIdentityAndPreservesItsExactAuthorization(bool readOnly)
+    public void QualifiedCollectionAndConfiguredValuePreserveExactAuthorization(bool readOnly)
     {
         using var directory = new RegistryStateDirectory();
         var path = Path.Combine(directory.Path, "identity.token");
         File.WriteAllText(path, Token);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | (readOnly ? UnixFileMode.None : UnixFileMode.UserWrite));
+        InstallationDocumentGuard.Require(path, 32, 256);
         var endpoint = OperatingSystem.IsWindows()
-            ? new IpcEndpoint { NamedPipeName = "identity-fixture", IdentityTokenPath = path }
-            : new IpcEndpoint { UnixSocketPath = Path.Combine(directory.Path, "i"), IdentityTokenPath = path };
-        using var client = new ApplicationChannel(endpoint);
+            ? new IpcEndpoint { NamedPipeName = "identity-fixture" }
+            : new IpcEndpoint { UnixSocketPath = Path.Combine(directory.Path, "i") };
+        using var client = new ApplicationChannel(endpoint, new SecretText(Token));
         Assert.Equal("Bearer " + Token, client.Credentials.GetValue("authorization"), StringComparer.Ordinal);
-        _ = new IpcIdentityInterceptor(new ApplicationBootstrap { Listen = endpoint });
+        _ = new IpcIdentityInterceptor(new ApplicationBootstrap { Listen = endpoint, IpcToken = new SecretText(Token) });
     }
 
     [Theory]
@@ -68,22 +66,20 @@ public sealed class IpcIdentityFileTests
         var path = Path.Combine(directory.Path, "identity.token");
         File.WriteAllText(path, new string('A', length));
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        Assert.Throws<InvalidDataException>(() => PrivateIpcIdentityFile.Read(path));
+        Assert.Throws<InvalidDataException>(() => new SecretText(new string('A', length)).RequireToken());
     }
 
     [Theory]
     [InlineData(32, false)]
     [InlineData(256, false)]
     [InlineData(64, true)]
-    public void PreservesExistingTokenBoundsBomDetectionAndWhitespace(int length, bool unicode)
+    public void PreservesTokenBoundsAndRefusesWhitespaceInsteadOfLegacyFileNormalization(int length, bool unicode)
     {
         using var directory = new RegistryStateDirectory();
         var path = Path.Combine(directory.Path, "identity.token");
         var token = new string('A', length - 2) + "_-";
-        if (unicode) File.WriteAllText(path, "\n" + token + "\r\n", Encoding.Unicode);
-        else File.WriteAllText(path, token);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead);
-        Assert.Equal(token, PrivateIpcIdentityFile.Read(path), StringComparer.Ordinal);
+        if (unicode) Assert.Throws<InvalidDataException>(() => new SecretText("\n" + token + "\r\n").RequireToken());
+        else Assert.Equal(token, new SecretText(token).RequireToken(), StringComparer.Ordinal);
     }
 
     [Theory]
@@ -96,7 +92,7 @@ public sealed class IpcIdentityFileTests
         var path = Path.Combine(directory.Path, "identity.token");
         File.WriteAllText(path, Token + suffix);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        Assert.Throws<InvalidDataException>(() => PrivateIpcIdentityFile.Read(path));
+        Assert.Throws<InvalidDataException>(() => new SecretText(Token + suffix).RequireToken());
     }
 
     [Fact]
@@ -111,7 +107,7 @@ public sealed class IpcIdentityFileTests
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not create the owned FIFO control.");
         await process.WaitForExitAsync().ConfigureAwait(true);
         Assert.Equal(0, process.ExitCode);
-        var read = Task.Run(() => Assert.Throws<InvalidDataException>(() => PrivateIpcIdentityFile.Read(path)));
+        var read = Task.Run(() => Assert.Throws<InvalidDataException>(() => InstallationDocumentGuard.Require(path, 1, 1024)));
         await read.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(true);
     }
 

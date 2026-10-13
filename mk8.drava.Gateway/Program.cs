@@ -28,7 +28,7 @@ internal static class Program
         var bootstrap = await BootstrapFile.LoadAsync<GatewayBootstrap>(configurationPath, CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
         startup.Enter(GatewayStartupPhase.PrivateChannelOpen);
-        using var channel = new ApplicationChannel(bootstrap.Application);
+        using var channel = new ApplicationChannel(bootstrap.Application, bootstrap.ApplicationToken);
         using var cache = new GatewayPlanCache(bootstrap.StateDirectory);
         using var material = new GatewayMaterialState(bootstrap.Plan.MaximumRetainedGenerations);
         var enrolled = bootstrap.EnrollmentRootFingerprint.Length != 0;

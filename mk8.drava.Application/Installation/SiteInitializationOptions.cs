@@ -31,12 +31,14 @@ internal sealed record SiteInitializationOptions
     {
         if (SchemaVersion != 1 || !Path.IsPathFullyQualified(DestinationDirectory) ||
             !string.Equals(Path.GetFullPath(DestinationDirectory), DestinationDirectory, StringComparison.Ordinal))
+        {
             throw new InvalidDataException("Unsupported site initialization version or destination.");
+        }
         RegistrationSiteTrust.RequireLabel(SiteId);
         RegistrationSiteTrust.RequireLabel(NodeId);
         RegistrationSiteTrust.RequireLabel(OwnerId);
         RegistrationSiteTrust.RequireLabel(ServicePrefix);
-        var bundle = SiteInitializationBundle.Create(this, new string('A', 64));
+        var bundle = SiteInitializationBundle.Create(this, new string('A', 64), new SecretText(new string('A', 64)), new SecretText(new string('B', 64)));
         bundle.Application.Validate(); bundle.Gateway.Validate(); bundle.Enrollment.Validate();
         _ = new Mk8.Drava.Application.BLL.Registry.NodeGrant(NodeId, OwnerId, new string('A', 64), ServicePrefix,
             EndpointAddresses, MinimumPort, MaximumPort, DateTimeOffset.MaxValue, revoked: false);

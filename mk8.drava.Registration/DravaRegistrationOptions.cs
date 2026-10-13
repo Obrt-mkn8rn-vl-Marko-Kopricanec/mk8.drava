@@ -6,6 +6,7 @@ namespace Mk8.Drava.Registration;
 public sealed record DravaRegistrationOptions
 {
     public RegistrationSiteTrust Site { get; init; } = new();
+    public SecretText NodeAgentToken { get; init; } = SecretText.Empty;
     public string NodeId { get; init; } = "";
     public string OwnerId { get; init; } = "";
     public string ServiceId { get; init; } = "";
@@ -43,7 +44,7 @@ public sealed record DravaRegistrationOptions
         for (var index = 0; index < seeds.Length; index++) seeds[index] = new DiscoveryCandidate(profile.GatewayAddresses[index], profile.RegistrationPort);
         return new DravaRegistrationOptions
         {
-            Site = profile.Site, NodeId = profile.NodeId, OwnerId = profile.OwnerId, ServiceId = serviceId, ReadinessPath = readinessPath,
+            Site = profile.Site, NodeAgentToken = profile.LocalToken, NodeId = profile.NodeId, OwnerId = profile.OwnerId, ServiceId = serviceId, ReadinessPath = readinessPath,
             GatewaySeeds = Array.AsReadOnly(seeds), MulticastDiscovery = profile.MulticastDiscovery,
         }.CopyValidated();
     }
@@ -52,6 +53,7 @@ public sealed record DravaRegistrationOptions
     {
         if (Site is null || GatewaySeeds is null) throw new InvalidDataException("Enrollment and seed collection are required.");
         Site.Validate();
+        if (!NodeAgentToken.IsEmpty) _ = NodeAgentToken.RequireToken();
         if (PendingRetrySeconds is < 1 or > 60 || RenewJitterPercent is < 0 or > 25 || ShutdownDeadlineMilliseconds is < 100 or > 30_000 ||
             AgentDrainDeadlineMilliseconds is < 100 or > 10_000 || AgentDrainDeadlineMilliseconds >= ShutdownDeadlineMilliseconds)
         {

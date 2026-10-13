@@ -7,7 +7,6 @@ public sealed record IpcEndpoint
     public string HttpsAddress { get; init; } = "";
     public string ClientCertificatePath { get; init; } = "";
     public string TrustedCertificatePath { get; init; } = "";
-    public string IdentityTokenPath { get; init; } = "";
 
     public void Validate()
     {
@@ -20,6 +19,5 @@ public sealed record IpcEndpoint
             if (!Uri.TryCreate(HttpsAddress, UriKind.Absolute, out var address) || !string.Equals(address.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) || !string.Equals(address.AbsolutePath, "/", StringComparison.Ordinal) || address.UserInfo.Length != 0 || address.Query.Length != 0 || address.Fragment.Length != 0) throw new InvalidDataException("Remote Application transport requires an HTTPS authority.");
             if (ClientCertificatePath.Length == 0 || TrustedCertificatePath.Length == 0) throw new InvalidDataException("Remote Application transport requires mutual TLS enrollment.");
         }
-        if (IdentityTokenPath.Length == 0 || !Path.IsPathFullyQualified(IdentityTokenPath)) throw new InvalidDataException("Private transport requires a scoped identity token file.");
     }
 }

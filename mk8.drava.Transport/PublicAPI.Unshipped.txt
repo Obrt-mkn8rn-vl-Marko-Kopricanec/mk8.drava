@@ -1,6 +1,6 @@
 #nullable enable
 Mk8.Drava.Transport.Clients.ApplicationChannel
-Mk8.Drava.Transport.Clients.ApplicationChannel.ApplicationChannel(Mk8.Drava.Configuration.IpcEndpoint! endpoint) -> void
+Mk8.Drava.Transport.Clients.ApplicationChannel.ApplicationChannel(Mk8.Drava.Configuration.IpcEndpoint! endpoint, Mk8.Drava.Configuration.SecretText! identityToken) -> void
 Mk8.Drava.Transport.Clients.ApplicationChannel.Credentials.get -> Grpc.Core.Metadata!
 Mk8.Drava.Transport.Clients.ApplicationChannel.Dispose() -> void
 Mk8.Drava.Transport.Clients.ApplicationChannel.Invoker.get -> Grpc.Core.CallInvoker!
@@ -975,7 +975,7 @@ Mk8.Drava.Transport.Relay.NodeAgentLocalClient
 Mk8.Drava.Transport.Relay.NodeAgentLocalClient.ApplyAsync(Mk8.Drava.Contracts.Registration.V1.RegistrationCommand! command, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Mk8.Drava.Contracts.Registration.V1.NodeRelayEndpoint!>
 Mk8.Drava.Transport.Relay.NodeAgentLocalClient.Descriptor.get -> Mk8.Drava.Configuration.NodeAgentDescriptor!
 Mk8.Drava.Transport.Relay.NodeAgentLocalClient.Dispose() -> void
-Mk8.Drava.Transport.Relay.NodeAgentLocalClient.NodeAgentLocalClient(Mk8.Drava.Configuration.NodeAgentDescriptor! descriptor) -> void
+Mk8.Drava.Transport.Relay.NodeAgentLocalClient.NodeAgentLocalClient(Mk8.Drava.Configuration.NodeAgentDescriptor! descriptor, Mk8.Drava.Configuration.SecretText! identityToken) -> void
 Mk8.Drava.Transport.Relay.NodeCertificateTrust
 Mk8.Drava.Transport.Relay.RelayDuplexStream
 Mk8.Drava.Transport.Relay.RelayDuplexStream.RelayDuplexStream() -> void
@@ -1059,5 +1059,3 @@ const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingTrustModeFieldNumb
 Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprint.get -> string!
 Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprint.set -> void
 const Mk8.Drava.Transport.Protocol.V1.PresentationPlan.ServingRootFingerprintFieldNumber = 13 -> int
-Mk8.Drava.Transport.Clients.PrivateIpcIdentityFile
-static Mk8.Drava.Transport.Clients.PrivateIpcIdentityFile.Read(string! path) -> string!

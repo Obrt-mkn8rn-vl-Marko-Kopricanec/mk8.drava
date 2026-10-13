@@ -14,14 +14,14 @@ internal static class RuntimeInitializer
         var bootstrap = services.GetRequiredService<ApplicationBootstrap>();
         var result = await services.GetRequiredService<IProxyConfigurationLoader>().LoadAsync(cancellationToken).ConfigureAwait(false);
         if (result is not ProxyConfigurationLoadResult.LoadedResult loaded)
-            throw new InvalidDataException("The optional manual configuration is invalid: " + string.Join(" ", result.Errors));
+            throw new InvalidDataException("The optional manual configuration is invalid: " + string.Join(' ', result.Errors));
         var options = new List<ListenerOptions>();
         if (bootstrap.HttpPort > 0) options.Add(new ListenerOptions { Name = "http", Address = bootstrap.IngressAddress, Port = bootstrap.HttpPort });
         if (bootstrap.HttpsPort > 0) options.Add(new ListenerOptions { Name = "https", Address = bootstrap.IngressAddress, Port = bootstrap.HttpsPort, Transport = "https", Protocols = "http1andhttp2" });
         var security = services.GetRequiredService<IProxyAdminSecurityOptionsReader>().Read();
-        var urls = bootstrap.ManagementPort > 0 ? new[] { $"https://admin.{bootstrap.Controller!.Domain}:{bootstrap.ManagementPort}" } : [];
+        var urls = bootstrap.ManagementPort > 0 ? new[] { $"https://admin.{bootstrap.Controller!.Domain}:{bootstrap.ManagementPort.ToString(System.Globalization.CultureInfo.InvariantCulture)}" } : [];
         var administrator = new RuntimeAdminSecurityOptions(urls, RequireAuthentication: true, HasConfiguredToken: security.Token is not null, security.Token,
-            TokenEnvironmentVariable: "DISABLED", TokenSource: security.Token is null ? "not-configured" : "private-file", RecentAuditCapacity: 1024);
+            TokenEnvironmentVariable: "DISABLED", TokenSource: security.Token is null ? "not-configured" : "portable-collection", RecentAuditCapacity: 1024);
         var snapshot = loaded.Snapshot.WithAdminSecurity(administrator).WithListenersAndRoutes(ProxyConfigurationRuntimeMapper.ToRuntimeListeners(options), loaded.Snapshot.Routes);
         services.GetRequiredService<ProxyConfigurationStore>().Replace(snapshot);
     }

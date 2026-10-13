@@ -108,13 +108,9 @@ internal static class ConfiguredSiteRestore
         {
             throw new InvalidDataException("Restored controller and Gateway enrollment/serving policy must agree.");
         }
-        if (application.AdministratorTokenPath.Length != 0 && string.Equals(application.AdministratorTokenPath, application.Listen.IdentityTokenPath, StringComparison.Ordinal))
-        {
-            throw new InvalidDataException("Administrator and private IPC credentials require distinct files.");
-        }
+        if (!application.IpcToken.Equals(gateway.ApplicationToken))
+            throw new InvalidDataException("Restored private IPC credentials must agree.");
         var placements = ValidatePlacements(request);
-        RequireMaterial(application.Listen.IdentityTokenPath, credential: true, request, placements);
-        RequireMaterial(application.AdministratorTokenPath, credential: true, request, placements);
         if (application.Controller is { } owner) RequireControllerMaterial(owner, request, placements);
         return placements;
     }

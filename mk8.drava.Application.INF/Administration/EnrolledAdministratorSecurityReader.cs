@@ -1,5 +1,5 @@
 using Mk8.Drava.Application.BLL.ControlPlane.AdminAuthentication;
-using Mk8.Drava.Application.DAL.Administration;
+using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application.INF.Administration;
 
@@ -7,10 +7,10 @@ public sealed class EnrolledAdministratorSecurityReader : IProxyAdminSecurityOpt
 {
     private readonly string? _token;
 
-    public EnrolledAdministratorSecurityReader(string tokenPath)
+    public EnrolledAdministratorSecurityReader(SecretText token)
     {
-        ArgumentNullException.ThrowIfNull(tokenPath);
-        _token = tokenPath.Length == 0 ? null : AdministratorCredentialFile.Read(tokenPath);
+        ArgumentNullException.ThrowIfNull(token);
+        _token = token.IsEmpty ? null : token.RequireToken();
     }
 
     public ProxyAdminSecurityOptionsReadResult Read() => ProxyAdminSecurityOptionsReadResult.FromActiveConfiguration(requireAuthentication: true, _token, recentAuditCapacity: 1024);

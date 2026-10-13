@@ -4,14 +4,13 @@ namespace Mk8.Drava.Application.Installation;
 
 internal sealed record SiteInitializationBundle(ApplicationBootstrap Application, GatewayBootstrap Gateway, NodeEnrollmentProfile Enrollment)
 {
-    public static SiteInitializationBundle Create(SiteInitializationOptions options, string fingerprint)
+    public static SiteInitializationBundle Create(SiteInitializationOptions options, string fingerprint, SecretText ipcToken, SecretText administratorToken)
     {
         var destination = options.DestinationDirectory;
         var applicationState = Path.Combine(destination, "application");
         var ipc = new IpcEndpoint
         {
             UnixSocketPath = Path.Combine(applicationState, "app.sock"),
-            IdentityTokenPath = Path.Combine(destination, "gateway.token"),
         };
         var controller = new ControllerBootstrap
         {
@@ -25,12 +24,12 @@ internal sealed record SiteInitializationBundle(ApplicationBootstrap Application
         {
             SiteId = options.SiteId, NodeId = options.NodeId, StateDirectory = applicationState, Listen = ipc,
             IngressAddress = options.BindAddress, HttpPort = options.HttpPort, HttpsPort = options.HttpsPort,
-            ManagementPort = options.ManagementPort, AdministratorTokenPath = Path.Combine(applicationState, "administrator.token"), Controller = controller,
+            ManagementPort = options.ManagementPort, IpcToken = ipcToken, AdministratorToken = administratorToken, Controller = controller,
         };
         var gateway = new GatewayBootstrap
         {
             SiteId = options.SiteId, BindAddress = options.BindAddress, StateDirectory = Path.Combine(destination, "gateway"),
-            Application = ipc, HttpPort = options.HttpPort, HttpsPort = options.HttpsPort, RegistrationPort = options.RegistrationPort,
+            Application = ipc, ApplicationToken = ipcToken, HttpPort = options.HttpPort, HttpsPort = options.HttpsPort, RegistrationPort = options.RegistrationPort,
             ManagementPort = options.ManagementPort, DiscoveryEnabled = options.DiscoveryEnabled, Plan = options.GatewayPlan,
             EnrollmentRootFingerprint = fingerprint,
         };

@@ -13,7 +13,8 @@ public sealed record ApplicationBootstrap
     public int HttpPort { get; init; } = 80;
     public int HttpsPort { get; init; } = 443;
     public int ManagementPort { get; init; }
-    public string AdministratorTokenPath { get; init; } = "";
+    public SecretText IpcToken { get; init; } = SecretText.Empty;
+    public SecretText AdministratorToken { get; init; } = SecretText.Empty;
     public int MaxConcurrentExchanges { get; init; } = 256;
     public bool ForwardingDiagnostics { get; init; }
     public bool TransportDiagnostics { get; init; }
@@ -30,10 +31,15 @@ public sealed record ApplicationBootstrap
         if (MaxConcurrentExchanges is < 1 or > 4096) throw new InvalidDataException("Invalid Application exchange admission limit.");
         PrivateHttp2.Validate();
         Listen.Validate();
+        _ = IpcToken.RequireToken();
+        if (!AdministratorToken.IsEmpty)
+        {
+            _ = AdministratorToken.RequireToken();
+            if (AdministratorToken.Equals(IpcToken)) throw new InvalidDataException("Administrator and private IPC credentials must be distinct.");
+        }
         Controller?.Validate();
-        if (ManagementPort is < 0 or > 65535 || (ManagementPort > 0 && (Controller is null || AdministratorTokenPath.Length == 0 || ManagementPort == HttpPort || ManagementPort == HttpsPort || ManagementPort == Controller.RegistrationPort)))
+        if (ManagementPort is < 0 or > 65535 || (ManagementPort > 0 && (Controller is null || AdministratorToken.IsEmpty || ManagementPort == HttpPort || ManagementPort == HttpsPort || ManagementPort == Controller.RegistrationPort)))
             throw new InvalidDataException("Management requires a distinct enrolled listener and administrator credential.");
-        if (AdministratorTokenPath.Length > 0 && !Path.IsPathFullyQualified(AdministratorTokenPath)) throw new InvalidDataException("Administrator credential path must be absolute.");
         if (Controller is not null && (Controller.RegistrationPort == HttpPort || Controller.RegistrationPort == HttpsPort))
             throw new InvalidDataException("Registration and serving ports must be distinct.");
     }
