@@ -107,7 +107,7 @@ public sealed class PendingServingPlanTests
             ServingCertificatePath = Path.Combine(fixture.Application.StateDirectory, "public.pfx"),
             DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", Credential = new SecretText(new string('A', 48)) },
             Acme = new AcmeIssuanceSettings { Enabled = true, TermsAccepted = true, DirectoryUrl = new Uri("https://development-ca.example/directory"), ContactEmails = ["ops@example.org"],
-                AccountKeyPath = Path.Combine(fixture.Application.StateDirectory, "account.pem"), CleanupJournalPath = Path.Combine(fixture.Application.StateDirectory, "cleanup.json"), PinnedServingRootPath = Path.Combine(fixture.Application.StateDirectory, "public-root.der"), },
+                AccountKey = Mk8.Drava.UnitTests.DevelopmentAcmeServer.CreateAccountKey(), CleanupJournalPath = Path.Combine(fixture.Application.StateDirectory, "cleanup.json"), PinnedServingRootPath = Path.Combine(fixture.Application.StateDirectory, "public-root.der"), },
         },
     };
 

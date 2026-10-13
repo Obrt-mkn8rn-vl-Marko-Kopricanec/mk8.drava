@@ -5,7 +5,7 @@ public sealed record AcmeIssuanceSettings
     public bool Enabled { get; init; }
     public Uri? DirectoryUrl { get; init; }
     public bool UseStaging { get; init; }
-    public string AccountKeyPath { get; init; } = "";
+    public SecretText AccountKey { get; init; } = SecretText.Empty;
     public string CleanupJournalPath { get; init; } = "";
     public NativeDnsManagementSettings? NativeManagement { get; init; }
     public int NativeDnsTtlSeconds { get; init; } = 300;
@@ -25,7 +25,7 @@ public sealed record AcmeIssuanceSettings
         if (!Enabled) return;
         servingTrust.Validate();
         if (ContactEmails is null) throw new InvalidDataException("Automatic issuance requires owner contact email addresses.");
-        RequirePrivatePath(AccountKeyPath);
+        _ = AccountKey.RequirePrivateP256Key();
         var native = string.Equals(dns.Provider, "mk8.dns", StringComparison.Ordinal);
         if (native)
         {
@@ -36,11 +36,9 @@ public sealed record AcmeIssuanceSettings
             RequirePrivatePath(CleanupJournalPath);
             if (NativeManagement is not null) throw new InvalidDataException("Native DNS01 settings cannot accompany another provider.");
         }
-        if (!native && string.Equals(AccountKeyPath, CleanupJournalPath, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-            throw new InvalidDataException("Account key and cleanup journal require separate private files.");
         _ = RequireDirectoryUrl();
         if (string.Equals(servingTrust.Mode, "site-ca", StringComparison.Ordinal) || (!native && !string.Equals(dns.Provider, "cloudflare", StringComparison.Ordinal)) ||
-            !Path.IsPathFullyQualified(AccountKeyPath) || (!native && !Path.IsPathFullyQualified(CleanupJournalPath)) || !TermsAccepted || ContactEmails.Count is < 1 or > 8)
+            (!native && !Path.IsPathFullyQualified(CleanupJournalPath)) || !TermsAccepted || ContactEmails.Count is < 1 or > 8)
         {
             throw new InvalidDataException("Automatic public issuance requires an approved HTTPS directory, DNS01 scope, private account key, contacts and accepted terms.");
         }

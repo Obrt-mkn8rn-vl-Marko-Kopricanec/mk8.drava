@@ -33,7 +33,7 @@ public sealed record ControllerBootstrap
         Acme.Validate(ServingTrust, DnsPublication);
         if (Acme.Enabled)
         {
-            var paths = new[] { CertificateAuthorityPath, ServingCertificatePath, Acme.AccountKeyPath, Acme.CleanupJournalPath, Acme.PinnedServingRootPath };
+            var paths = new[] { CertificateAuthorityPath, ServingCertificatePath, Acme.CleanupJournalPath, Acme.PinnedServingRootPath };
             var unique = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             foreach (var path in paths)
                 if (path.Length != 0 && !unique.Add(Path.GetFullPath(path))) throw new InvalidDataException("Automatic issuance material and private enrollment require distinct files.");
@@ -45,11 +45,16 @@ public sealed record ControllerBootstrap
         if (RegistrationPort is < 1 or > 65535) throw new InvalidDataException("Invalid registration listener port.");
         if (PublicAddresses.Count > 64) throw new InvalidDataException("Too many public addresses.");
         foreach (var address in PublicAddresses)
+        {
             if (!System.Net.IPAddress.TryParse(address, out var parsed) || parsed.Equals(System.Net.IPAddress.Any) || parsed.Equals(System.Net.IPAddress.IPv6Any))
                 throw new InvalidDataException("Public addresses require concrete Gateway endpoint literals.");
+        }
+
         _ = DnsObservationEndpoint.Parse(DnsServerAddress, DnsServerPort);
         if (string.Equals(DnsPublication.Provider, "mk8.dns", StringComparison.Ordinal) &&
             (!System.Net.IPAddress.TryParse(DnsServerAddress, out var authority) || authority.Equals(System.Net.IPAddress.Any) || authority.Equals(System.Net.IPAddress.IPv6Any) || PublicAddresses.Count == 0))
+        {
             throw new InvalidDataException("Native DNS requires an explicit authority observation address and approved public Gateway addresses.");
+        }
     }
 }

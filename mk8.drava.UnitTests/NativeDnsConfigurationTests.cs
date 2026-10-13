@@ -44,7 +44,7 @@ public sealed class NativeDnsConfigurationTests
         var records = Profile();
         var settings = new DnsPublicationSettings { Provider = "mk8.dns", NativeManagement = records, RequestTimeoutSeconds = 20 };
         var acme = records with { ProfileId = Guid.NewGuid(), Credential = new SecretText(new string('B', 42) + "A"), Scopes = [new NativeDnsOwnerScope("_acme-challenge.site.test", 16)] };
-        var issuance = new AcmeIssuanceSettings { Enabled = true, DirectoryUrl = new Uri("https://ca.invalid/directory"), AccountKeyPath = Path.Combine(Path.GetTempPath(), "account.key"), TermsAccepted = true,
+        var issuance = new AcmeIssuanceSettings { Enabled = true, DirectoryUrl = new Uri("https://ca.invalid/directory"), AccountKey = DevelopmentAcmeServer.CreateAccountKey(), TermsAccepted = true,
             NativeManagement = acme, ContactEmails = ["owner@site.test"], CleanupTimeoutSeconds = 20, };
         var trust = new ServingTrustSettings { Mode = "system" };
         issuance.Validate(trust, settings);

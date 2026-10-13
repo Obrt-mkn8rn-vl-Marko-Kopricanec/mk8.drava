@@ -51,10 +51,14 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
     private bool MatchesPolicy(AcmeCertificateIssueRequest request)
     {
         if (!request.TermsAccepted || !string.Equals(request.DirectoryUrl, _policy.Directory.AbsoluteUri, StringComparison.Ordinal) ||
-            request.Domains.Count is < 1 or > 2 || request.ContactEmails.Count != _policy.ContactEmails.Count) return false;
+            request.Domains.Count is < 1 or > 2 || request.ContactEmails.Count != _policy.ContactEmails.Count)
+        {
+            return false;
+        }
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var domain in request.Domains)
-            if (!seen.Add(domain) || !string.Equals(domain, _policy.SiteDomain, StringComparison.Ordinal) && !string.Equals(domain, "*." + _policy.SiteDomain, StringComparison.Ordinal)) return false;
+            if (!seen.Add(domain) || (!string.Equals(domain, _policy.SiteDomain, StringComparison.Ordinal) && !string.Equals(domain, "*." + _policy.SiteDomain, StringComparison.Ordinal))) return false;
         for (var i = 0; i < request.ContactEmails.Count; i++)
             if (!string.Equals(request.ContactEmails[i], _policy.ContactEmails[i], StringComparison.Ordinal)) return false;
         return true;
@@ -62,12 +66,12 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
 
     private async ValueTask<AcmeCertificateIssueResult> IssueOwnedAsync(AcmeCertificateIssueRequest request, CancellationToken cancellationToken)
     {
+        var accountKey = AcmeAccountKeyReader.Read(_policy.AccountKey);
         await _dns.RecoverAsync(cancellationToken).ConfigureAwait(false);
-        var accountKey = await AcmeAccountKeyStore.OpenAsync(_policy.AccountKeyPath, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         using var operation = new AcmeOperationHttpClient(_policy.Directory, _policy.RequestTimeout, cancellationToken, _handler);
         var context = new AcmeContext(_policy.Directory, accountKey, new AcmeHttpClient(_policy.Directory, operation.Client), badNonceRetryCount: 1);
-        var account = await context.NewAccount(_policy.ContactEmails.Select(static email => "mailto:" + email).ToList(), termsOfServiceAgreed: true).ConfigureAwait(false);
+        var account = await context.NewAccount([.. _policy.ContactEmails.Select(static email => "mailto:" + email)], termsOfServiceAgreed: true).ConfigureAwait(false);
         if ((await account.Resource().ConfigureAwait(false)).Status != AccountStatus.Valid)
             throw new InvalidDataException("The ACME account is not valid.");
         var domains = request.Domains.ToList();
@@ -76,7 +80,7 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
         RequireIdentifiers(resource, domains);
         if (resource.Status is not (OrderStatus.Pending or OrderStatus.Ready)) throw new InvalidDataException("The new ACME order is not issuable.");
         var authorizations = (await order.Authorizations().ConfigureAwait(false)).ToArray();
-        if (authorizations.Length > 8 || resource.Status == OrderStatus.Pending && authorizations.Length == 0)
+        if (authorizations.Length > 8 || (resource.Status == OrderStatus.Pending && authorizations.Length == 0))
             throw new InvalidDataException("ACME authorizations exceed the bounded approved order.");
         foreach (var authorization in authorizations)
             await AuthorizeAsync(authorization, accountKey, domains, cancellationToken).ConfigureAwait(false);
@@ -103,18 +107,21 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
         if (challenges.Length > 8) throw new InvalidDataException("The ACME authorization exceeds its challenge bound.");
         IChallengeContext? selected = null;
         foreach (var challenge in challenges)
+        {
             if (string.Equals(challenge.Type, "dns-01", StringComparison.Ordinal))
             {
                 if (selected is not null) throw new InvalidDataException("ACME returned ambiguous DNS challenges.");
                 selected = challenge;
             }
+        }
+
         if (selected is null || selected.Token.Length is < 22 or > 256 || selected.Token.Any(static c => !char.IsAsciiLetterOrDigit(c) && c is not '-' and not '_'))
             throw new InvalidDataException("ACME requires one bounded DNS challenge token.");
         var record = await _dns.PublishAsync("_acme-challenge." + identifier, accountKey.DnsTxt(selected.Token), Guid.NewGuid().ToString("N"), cancellationToken).ConfigureAwait(false);
         try
         {
             while (!await _dns.IsPropagatedAsync(record, cancellationToken).ConfigureAwait(false))
-                await Task.Delay(_policy.PollInterval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(_policy.PollInterval, TimeProvider.System, cancellationToken).ConfigureAwait(false);
             await selected.Validate().ConfigureAwait(false);
             while (true)
             {
@@ -123,7 +130,7 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
                     throw new InvalidDataException("ACME changed its approved authorization identifier.");
                 if (resource.Status == AuthorizationStatus.Valid) break;
                 if (resource.Status != AuthorizationStatus.Pending) throw new InvalidDataException("ACME rejected the authorization.");
-                await Task.Delay(_policy.PollInterval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(_policy.PollInterval, TimeProvider.System, cancellationToken).ConfigureAwait(false);
             }
         }
         finally
@@ -144,7 +151,7 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
             if (resource.Status == (final ? OrderStatus.Valid : OrderStatus.Ready)) return;
             if (final ? resource.Status != OrderStatus.Processing : resource.Status != OrderStatus.Pending)
                 throw new InvalidDataException("ACME returned an unexpected order state.");
-            await Task.Delay(_policy.PollInterval, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(_policy.PollInterval, TimeProvider.System, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -153,15 +160,20 @@ internal sealed class CertesDns01CertificateIssuer : IAcmeCertificateIssuer, IDi
         if (resource.Identifiers is null || resource.Identifiers.Count != domains.Count) throw new InvalidDataException("ACME changed its order identifiers.");
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var identifier in resource.Identifiers)
+        {
             if (identifier.Type != IdentifierType.Dns || !domains.Contains(identifier.Value, StringComparer.Ordinal) || !seen.Add(identifier.Value))
                 throw new InvalidDataException("ACME changed its approved DNS identifiers.");
+        }
     }
 
     private static string RequireAuthorization(Authorization resource, List<string> domains)
     {
         if (resource.Identifier is null || resource.Identifier.Type != IdentifierType.Dns ||
             !domains.Contains((resource.Wildcard == true ? "*." : "") + resource.Identifier.Value, StringComparer.Ordinal))
+        {
             throw new InvalidDataException("ACME authorization is outside the approved order.");
+        }
+
         return resource.Identifier.Value;
     }
 

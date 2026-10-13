@@ -24,7 +24,7 @@ public sealed class AcmeIssuanceSettingsTests
     [InlineData("fragment")]
     [InlineData("account")]
     [InlineData("journal")]
-    [InlineData("collision")]
+    [InlineData("account-absent")]
     [InlineData("contacts")]
     [InlineData("email")]
     [InlineData("terms")]
@@ -47,9 +47,9 @@ public sealed class AcmeIssuanceSettingsTests
             "userinfo" => settings with { DirectoryUrl = new Uri("https://secret@ca.example/directory") },
             "query" => settings with { DirectoryUrl = new Uri("https://ca.example/directory?secret=value") },
             "fragment" => settings with { DirectoryUrl = new Uri("https://ca.example/directory#fragment") },
-            "account" => settings with { AccountKeyPath = "relative.pem" },
+            "account" => settings with { AccountKey = new SecretText("invalid.pem") },
             "journal" => settings with { CleanupJournalPath = "relative.json" },
-            "collision" => settings with { CleanupJournalPath = settings.AccountKeyPath },
+            "account-absent" => settings with { AccountKey = SecretText.Empty },
             "contacts" => settings with { ContactEmails = [] },
             "email" => settings with { ContactEmails = ["ops@ example.org"] },
             "terms" => settings with { TermsAccepted = false },
@@ -79,6 +79,6 @@ public sealed class AcmeIssuanceSettingsTests
     private static AcmeIssuanceSettings Approved() => new()
     {
         Enabled = true, TermsAccepted = true, DirectoryUrl = new Uri("https://ca.example/directory"), ContactEmails = ["ops@example.org"],
-        AccountKeyPath = Path.GetFullPath("account.pem"), CleanupJournalPath = Path.GetFullPath("cleanup.json"),
+        AccountKey = DevelopmentAcmeServer.CreateAccountKey(), CleanupJournalPath = Path.GetFullPath("cleanup.json"),
     };
 }

@@ -397,8 +397,8 @@ Mk8.Drava.Configuration.AcmeIssuanceSettings.Enabled.get -> bool
 Mk8.Drava.Configuration.AcmeIssuanceSettings.Enabled.init -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.DirectoryUrl.get -> System.Uri?
 Mk8.Drava.Configuration.AcmeIssuanceSettings.DirectoryUrl.init -> void
-Mk8.Drava.Configuration.AcmeIssuanceSettings.AccountKeyPath.get -> string!
-Mk8.Drava.Configuration.AcmeIssuanceSettings.AccountKeyPath.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.AccountKey.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.AccountKey.init -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.CleanupJournalPath.get -> string!
 Mk8.Drava.Configuration.AcmeIssuanceSettings.CleanupJournalPath.init -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.ContactEmails.get -> System.Collections.Generic.IReadOnlyList<string!>!
@@ -532,3 +532,4 @@ Mk8.Drava.Configuration.NativeDnsManagementSettings.Credential.init -> void
 Mk8.Drava.Configuration.NativeDnsManagementSettings.ProfileId.get -> System.Guid
 Mk8.Drava.Configuration.NativeDnsManagementSettings.ProfileId.init -> void
 Mk8.Drava.Configuration.NativeDnsManagementSettings.DecodeCredential() -> byte[]!
+Mk8.Drava.Configuration.SecretText.RequirePrivateP256Key() -> string!

@@ -29,8 +29,9 @@ public sealed class OwnerAcmeStatusTests
         var status = provider.GetRequiredService<ProxyAcmeAdministrationService>().GetStatus();
         Assert.NotNull(status); Assert.True(status.Enabled); Assert.Equal(bootstrap.Controller.Acme.RequireDirectoryUrl().AbsoluteUri, status.DirectoryUrl);
         Assert.Equal(useStaging, status.UseStaging);
-        Assert.Collection(status.Certificates, certificate => { Assert.Equal("site", certificate.CertificateId); Assert.False(certificate.Active); Assert.Equal(Domains, certificate.Domains); });
-        Assert.False(File.Exists(bootstrap.Controller.Acme.AccountKeyPath)); Assert.False(File.Exists(bootstrap.Controller.Acme.CleanupJournalPath + ".lock"));
+        var certificate = DevelopmentCardinality.RequireSingle(status.Certificates);
+        Assert.Equal("site", certificate.CertificateId); Assert.False(certificate.Active); Assert.Equal(Domains, certificate.Domains);
+        Assert.False(File.Exists(Path.Combine(bootstrap.StateDirectory, "account.pem"))); Assert.False(File.Exists(bootstrap.Controller.Acme.CleanupJournalPath + ".lock"));
         Assert.Null(plans.ReadPublicationProof());
     }
 
@@ -50,13 +51,11 @@ public sealed class OwnerAcmeStatusTests
         services.AddOwnerAcmeLifecycle(bootstrap, plans, new SqliteAcmeCertificateStatusPersistence(repository, bootstrap.Controller.Domain, bootstrap.Controller.Acme.RequireDirectoryUrl()));
         var provider = services.BuildServiceProvider(); await using var providerLifetime = provider.ConfigureAwait(true);
         var status = provider.GetRequiredService<ProxyAcmeAdministrationService>().GetStatus(); Assert.NotNull(status);
-        Assert.Collection(status.Certificates, certificate =>
-        {
-            Assert.True(certificate.Active); Assert.Equal("acme", certificate.Source);
-            var before = new DateTimeOffset(material.Leaf.NotBefore.ToUniversalTime()); var after = new DateTimeOffset(material.Leaf.NotAfter.ToUniversalTime());
-            Assert.Equal(before, certificate.NotBeforeUtc); Assert.Equal(after, certificate.NotAfterUtc);
-            Assert.Equal(after.Subtract(TimeSpan.FromTicks((after - before).Ticks / 3)), certificate.RenewalDueAtUtc);
-        });
+        var certificate = DevelopmentCardinality.RequireSingle(status.Certificates);
+        Assert.True(certificate.Active); Assert.Equal("acme", certificate.Source);
+        var before = new DateTimeOffset(material.Leaf.NotBefore.ToUniversalTime()); var after = new DateTimeOffset(material.Leaf.NotAfter.ToUniversalTime());
+        Assert.Equal(before, certificate.NotBeforeUtc); Assert.Equal(after, certificate.NotAfterUtc);
+        Assert.Equal(after.Subtract(TimeSpan.FromTicks((after - before).Ticks / 3)), certificate.RenewalDueAtUtc);
         Assert.Null(plans.ReadPublicationProof());
     }
 }

@@ -5,13 +5,14 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.UnitTests;
 
 internal sealed class DevelopmentAcmeServer : HttpMessageHandler
 {
     private readonly DevelopmentAcmeDnsProvider _dns;
-    private readonly string _accountPath;
+    private readonly string _configuredAccountPublicKey;
     private readonly X509Certificate2 _root;
     private readonly X509Certificate2 _intermediate;
     private readonly HashSet<int> _validated = [];
@@ -29,10 +30,15 @@ internal sealed class DevelopmentAcmeServer : HttpMessageHandler
     public int Finalizations { get; private set; }
     public string AccountPublicKey { get; private set; } = "";
     public byte[] RootCertificate { get; }
+    public SecretText ExpectedAccountKey { get; }
 
-    public DevelopmentAcmeServer(DevelopmentAcmeDnsProvider dns, string accountPath)
+    public DevelopmentAcmeServer(DevelopmentAcmeDnsProvider dns, SecretText accountKey)
     {
-        _dns = dns; _accountPath = accountPath;
+        _dns = dns;
+        ExpectedAccountKey = accountKey;
+        using var configured = ECDsa.Create();
+        configured.ImportFromPem(accountKey.RequirePrivateP256Key());
+        _configuredAccountPublicKey = PublicKeyIdentity(configured.ExportParameters(includePrivateParameters: false));
         var now = DateTimeOffset.UtcNow;
         using var rootKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var rootRequest = Authority("CN=development-acme-root", rootKey, 1);
@@ -51,7 +57,6 @@ internal sealed class DevelopmentAcmeServer : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested(); Requests++;
-        if (!File.Exists(_accountPath)) throw new InvalidDataException("Account key was not persisted before ACME network access.");
         var path = request.RequestUri!.AbsolutePath;
         if (request.Method == HttpMethod.Get && string.Equals(path, "/directory", StringComparison.Ordinal))
             return Reply(new { newNonce = Endpoint("/nonce"), newAccount = Endpoint("/account"), newOrder = Endpoint("/new-order") });
@@ -81,7 +86,7 @@ internal sealed class DevelopmentAcmeServer : HttpMessageHandler
             var index = Index(path);
             var identifier = _domains[index].StartsWith("*.", StringComparison.Ordinal) ? _domains[index][2..] : _domains[index];
             var digest = Encode(SHA256.HashData(Encoding.ASCII.GetBytes(Token(index) + "." + _thumbprint)));
-            if (!_dns.Records.Any(r => string.Equals(r.Host, "_acme-challenge." + identifier, StringComparison.Ordinal) && string.Equals(r.Value, digest, StringComparison.Ordinal)) || _dns.Proofs == 0)
+            if (!_dns.Records.Exists(r => string.Equals(r.Host, "_acme-challenge." + identifier, StringComparison.Ordinal) && string.Equals(r.Value, digest, StringComparison.Ordinal)) || _dns.Proofs == 0)
                 throw new InvalidDataException("ACME was notified before challenge publication and propagation proof.");
             Validations++; _validated.Add(index);
             return Reply(new { type = "dns-01", url = Endpoint(path), status = RejectAuthorization ? "invalid" : "valid", token = Token(index) });
@@ -124,19 +129,37 @@ internal sealed class DevelopmentAcmeServer : HttpMessageHandler
         using var header = JsonDocument.Parse(Decode(encoded));
         if (!string.Equals(header.RootElement.GetProperty("url").GetString(), uri.AbsoluteUri, StringComparison.Ordinal) ||
             !string.Equals(header.RootElement.GetProperty("alg").GetString(), "ES256", StringComparison.Ordinal))
+        {
             throw new InvalidDataException("Development ACME received an invalid protected request.");
+        }
+
         if (header.RootElement.TryGetProperty("jwk", out var jwk))
         {
             var parameters = new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = new ECPoint { X = Decode(jwk.GetProperty("x").GetString()!), Y = Decode(jwk.GetProperty("y").GetString()!) } };
-            var identity = Convert.ToHexString(SHA256.HashData(parameters.Q.X!.Concat(parameters.Q.Y!).ToArray()));
+            var identity = PublicKeyIdentity(parameters);
+            if (!string.Equals(identity, _configuredAccountPublicKey, StringComparison.Ordinal)) throw new InvalidDataException("ACME request did not use the configured account identity.");
             if (AccountPublicKey.Length != 0 && !string.Equals(identity, AccountPublicKey, StringComparison.Ordinal)) throw new InvalidDataException("ACME account key changed.");
             AccountPublicKey = identity;
             var canonical = JsonSerializer.Serialize(new { crv = "P-256", kty = "EC", x = jwk.GetProperty("x").GetString(), y = jwk.GetProperty("y").GetString() });
             _thumbprint = Encode(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
             _account?.Dispose(); _account = ECDsa.Create(parameters);
         }
-        if (_account is null || !_account.VerifyData(Encoding.ASCII.GetBytes(encoded + "." + jws.GetProperty("payload").GetString()), Decode(jws.GetProperty("signature").GetString()!), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation))
+        if (_account?.VerifyData(Encoding.ASCII.GetBytes(encoded + "." + jws.GetProperty("payload").GetString()), Decode(jws.GetProperty("signature").GetString()!), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation) != true)
             throw new InvalidDataException("Development ACME request signature is invalid.");
+    }
+
+    // Each disposable fixture provisions its own synthetic key; no deployment account is inferred.
+    public static SecretText CreateAccountKey()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        return new SecretText(key.ExportPkcs8PrivateKeyPem());
+    }
+
+    private static string PublicKeyIdentity(ECParameters parameters)
+    {
+        var x = parameters.Q.X ?? throw new InvalidDataException("ACME public key lacks its X coordinate.");
+        var y = parameters.Q.Y ?? throw new InvalidDataException("ACME public key lacks its Y coordinate.");
+        return Convert.ToHexString(SHA256.HashData([.. x, .. y]));
     }
 
     private void SignRequest(byte[] bytes)
@@ -151,9 +174,9 @@ internal sealed class DevelopmentAcmeServer : HttpMessageHandler
         var approvedNames = new SubjectAlternativeNameBuilder();
         foreach (var name in names) approvedNames.AddDnsName(name);
         request.CertificateExtensions.Add(approvedNames.Build());
-        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
-        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, true));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, 0, critical: true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], critical: true));
         var now = DateTimeOffset.UtcNow;
         using var leaf = request.Create(_intermediate, now.AddMinutes(-3), now.AddDays(7), RandomNumberGenerator.GetBytes(16));
         _certificate = leaf.ExportCertificatePem() + "\n" + _intermediate.ExportCertificatePem();
@@ -172,13 +195,13 @@ internal sealed class DevelopmentAcmeServer : HttpMessageHandler
     private static string Token(int index) => "development_acme_token_" + index.ToString(CultureInfo.InvariantCulture);
     private static int Index(string path) => int.Parse(path.AsSpan(path.LastIndexOf('/') + 1), CultureInfo.InvariantCulture);
     private static string Encode(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    private static byte[] Decode(string value) => Convert.FromBase64String(value.Replace('-', '+').Replace('_', '/').PadRight(value.Length + (4 - value.Length % 4) % 4, '='));
+    private static byte[] Decode(string value) => Convert.FromBase64String(value.Replace('-', '+').Replace('_', '/').PadRight(value.Length + ((4 - (value.Length % 4)) % 4), '='));
     private static CertificateRequest Authority(string name, ECDsa key, int pathLength)
     {
         var request = new CertificateRequest(name, key, HashAlgorithmName.SHA256);
-        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, true, pathLength, true));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
-        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: true, pathLength, critical: true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, critical: true));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
         return request;
     }
 
