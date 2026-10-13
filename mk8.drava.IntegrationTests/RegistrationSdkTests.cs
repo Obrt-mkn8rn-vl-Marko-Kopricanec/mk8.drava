@@ -96,7 +96,8 @@ public sealed class RegistrationSdkTests(ITestOutputHelper output)
     {
         Assert.Equal(15, state.Status!.LeaseSeconds);
         Assert.Equal(4, state.Status.RenewAfterSeconds);
-        var plan = Mk8.Drava.Transport.Protocol.V1.PresentationPlan.Parser.ParseFrom(await File.ReadAllBytesAsync(proxy.GatewayPlanPath, cancellationToken).ConfigureAwait(false));
+        var plan = await proxy.ReadGatewayPlanAsync(cancellationToken).ConfigureAwait(false);
+        Assert.NotNull(plan);
         Assert.Equal(6U, plan.AcknowledgmentLeaseSeconds);
         Assert.Equal(7U, plan.LeafLifetimeDays);
         await Task.Delay(TimeSpan.FromSeconds(8), cancellationToken).ConfigureAwait(false);

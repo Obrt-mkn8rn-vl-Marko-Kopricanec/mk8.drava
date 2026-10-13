@@ -20,12 +20,12 @@ public sealed class GatewayLifecycleTests
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
         using var absent = await proxy.Client.GetAsync(new Uri("/", UriKind.Relative)).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, absent.StatusCode);
-        Assert.False(File.Exists(proxy.GatewayPlanPath));
+        Assert.Null(await proxy.ReadGatewayPlanAsync().ConfigureAwait(true));
         await proxy.StartApplicationAsync().ConfigureAwait(true);
         await WaitForRecoveredAsync(proxy.Client).ConfigureAwait(true);
         if (enrolled)
         {
-            Assert.True(File.Exists(proxy.GatewayPlanPath));
+            Assert.NotNull(await proxy.ReadGatewayPlanAsync().ConfigureAwait(true));
             // The manual route uses its existing host. Its HTTP endpoint proves recovery; TLS liveness proves the late certificate bind.
             using var tlsLive = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.TlsPort, "probe.site.test");
             Assert.Equal("running", await tlsLive.Client.GetStringAsync(new Uri("/_drava/live", UriKind.Relative)).ConfigureAwait(true));
@@ -42,7 +42,7 @@ public sealed class GatewayLifecycleTests
         var proxy = await TwoProcessProxy.StartAsync(backend.Port, enrolledSite: enrolled).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         await WaitForRecoveredAsync(proxy.Client).ConfigureAwait(true);
-        var issued = enrolled ? await File.ReadAllBytesAsync(proxy.ApplicationPlanPath).ConfigureAwait(true) : null;
+        var issued = enrolled ? await proxy.ReadApplicationPlanAsync().ConfigureAwait(true) : null;
         await proxy.StopApplicationAsync().ConfigureAwait(true);
         using var live = await proxy.Client.GetAsync(new Uri("/_drava/live", UriKind.Relative)).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
@@ -50,7 +50,7 @@ public sealed class GatewayLifecycleTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, absent.StatusCode);
         await proxy.StartApplicationAsync().ConfigureAwait(true);
         await WaitForRecoveredAsync(proxy.Client).ConfigureAwait(true);
-        if (enrolled) Assert.Equal(issued, await File.ReadAllBytesAsync(proxy.ApplicationPlanPath).ConfigureAwait(true));
+        if (enrolled) Assert.Equal(issued, await proxy.ReadApplicationPlanAsync().ConfigureAwait(true));
         await proxy.StopApplicationAsync().ConfigureAwait(true);
         await proxy.RestartGatewayAsync().ConfigureAwait(true);
         if (enrolled)

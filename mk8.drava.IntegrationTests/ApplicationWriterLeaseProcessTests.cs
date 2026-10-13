@@ -13,7 +13,7 @@ public sealed class ApplicationWriterLeaseProcessTests
     {
         var proxy = await TwoProcessProxy.StartAsync(TwoProcessProxy.UnusedPort(), manualRoute: false).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
-        var bootstrap = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(proxy.ApplicationPlanPath)!, "..", "application.json"));
+        var bootstrap = proxy.ApplicationBootstrapPath;
         var second = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), bootstrap);
         await using var secondLifetime = second.ConfigureAwait(true);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));

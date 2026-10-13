@@ -18,14 +18,18 @@ public sealed class ServingPlanLifecycleTests
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var root = fixture.Authority.PublicCertificate;
         fixture.Clock.Advance(new DateTimeOffset(root.NotAfter.ToUniversalTime()).Subtract(TimeSpan.FromDays(10)) - fixture.Clock.GetUtcNow());
-        using var plans = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var initial = plans.Read("local");
         fixture.Clock.Advance(TimeSpan.FromDays(elapsedDays));
         Assert.True(plans.Acknowledge(Acknowledgment(initial)));
         await Assert.ThrowsAsync<InvalidOperationException>(() => plans.RenewIfRequiredAsync(CancellationToken.None).AsTask()).ConfigureAwait(true);
         Assert.Equal(initial.ToByteArray(), plans.Read("local").ToByteArray());
         Assert.True(plans.IsAcknowledged);
-        using var restored = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var restoredRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var restoredRoleLifetime = restoredRole.ConfigureAwait(true);
+        using var restored = await ServingPlanState.OpenAsync(restoredRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         Assert.Equal(initial.ToByteArray(), restored.Read("local").ToByteArray());
         Assert.False(restored.IsAcknowledged);
     }
@@ -35,7 +39,9 @@ public sealed class ServingPlanLifecycleTests
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         var bootstrap = fixture.Application with { Controller = fixture.Application.Controller! with { ServingPlan = DevelopmentLifecycleSettings.Fast.Serving } };
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var initial = plans.Read("local");
         Assert.Equal(6U, initial.AcknowledgmentLeaseSeconds);
         Assert.InRange(DateTimeOffset.FromUnixTimeSeconds(initial.ValidUntilUnixSeconds) - fixture.Clock.GetUtcNow(), TimeSpan.FromDays(7).Subtract(TimeSpan.FromSeconds(1)), TimeSpan.FromDays(7));
@@ -47,7 +53,9 @@ public sealed class ServingPlanLifecycleTests
         await plans.RenewIfRequiredAsync(CancellationToken.None).ConfigureAwait(true);
         var renewed = plans.Read("local");
         Assert.Equal(2UL, renewed.Generation);
-        using var restored = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var restoredRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var restoredRoleLifetime = restoredRole.ConfigureAwait(true);
+        using var restored = await ServingPlanState.OpenAsync(restoredRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         Assert.Equal(renewed.ToByteArray(), restored.Read("local").ToByteArray());
         Assert.False(restored.IsAcknowledged);
         Assert.Equal(TimeSpan.FromSeconds(2), GatewayPlanService.RefreshDelay(DevelopmentLifecycleSettings.Fast.Gateway, renewed));
@@ -57,12 +65,16 @@ public sealed class ServingPlanLifecycleTests
     public async Task PreviouslySavedPlanWithoutPolicyFieldsMigratesToANewGenerationAsync()
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
-        using var plans = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var legacy = plans.Read("local");
         legacy.AcknowledgmentLeaseSeconds = 0; legacy.LeafLifetimeDays = 0;
         legacy.ContentSha256 = ByteString.CopyFrom(PresentationPlanDigest.Compute(legacy));
-        await Mk8.Drava.Application.DAL.Publication.GatewayMaterialStore.WriteAsync(fixture.Application.StateDirectory, legacy.ToByteArray(), CancellationToken.None).ConfigureAwait(true);
-        using var restored = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        await new Mk8.Drava.Application.DAL.Publication.GatewayMaterialStore(plansRole).WriteAsync(legacy.ToByteArray(), plansRole.Configuration.Controller!.ServingCertificate, CancellationToken.None).ConfigureAwait(true);
+        var restoredRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var restoredRoleLifetime = restoredRole.ConfigureAwait(true);
+        using var restored = await ServingPlanState.OpenAsync(restoredRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var migrated = restored.Read("local");
         Assert.Equal(2UL, migrated.Generation);
         Assert.Equal(30U, migrated.AcknowledgmentLeaseSeconds);
@@ -75,7 +87,9 @@ public sealed class ServingPlanLifecycleTests
     public async Task RetainedGenerationLimitRejectsOnlyReplacementThatWouldExceedLiveOwnershipAsync()
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
-        using var plans = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var initial = plans.Read("local");
         using var state = new GatewayMaterialState(2);
         InstallOwned(state, initial, fixture.Gateway);
@@ -98,7 +112,9 @@ public sealed class ServingPlanLifecycleTests
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         byte[] material;
-        using (var plans = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true))
+        var plansRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using (plansRole.ConfigureAwait(true))
+        using (var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true))
         {
             var plan = plans.Read("local");
             material = plan.ToByteArray();
@@ -107,7 +123,9 @@ public sealed class ServingPlanLifecycleTests
             plan.Generation = 999;
             Assert.Equal(1UL, plans.Read("local").Generation);
         }
-        using var restored = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var restoredRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var restoredRoleLifetime = restoredRole.ConfigureAwait(true);
+        using var restored = await ServingPlanState.OpenAsync(restoredRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         Assert.Equal(material, restored.Read("local").ToByteArray());
         Assert.False(restored.IsAcknowledged);
         Assert.Null(restored.ReadPublicationProof());
@@ -117,7 +135,9 @@ public sealed class ServingPlanLifecycleTests
     public async Task HeartbeatExpiresMonotonicallyAndRenewalRequiresItsNewExactGenerationAsync()
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
-        using var plans = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var prior = plans.Read("local");
         plans.Acknowledge(Acknowledgment(prior));
         fixture.Clock.Advance(TimeSpan.FromSeconds(31));
@@ -132,7 +152,9 @@ public sealed class ServingPlanLifecycleTests
         Assert.False(plans.IsAcknowledged);
         Assert.Throws<InvalidDataException>(() => plans.Acknowledge(Acknowledgment(prior)));
         Assert.True(plans.Acknowledge(Acknowledgment(renewed)));
-        using var restored = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var restoredRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var restoredRoleLifetime = restoredRole.ConfigureAwait(true);
+        using var restored = await ServingPlanState.OpenAsync(restoredRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         Assert.Equal(renewed.ToByteArray(), restored.Read("local").ToByteArray());
         Assert.False(restored.IsAcknowledged);
     }
@@ -141,7 +163,9 @@ public sealed class ServingPlanLifecycleTests
     public async Task ReplacedCertificateRemainsOwnedUntilItsConnectionLeaseEndsAsync()
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
-        using var plans = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var prior = plans.Read("local");
         using var state = new GatewayMaterialState();
         InstallOwned(state, prior, fixture.Gateway);

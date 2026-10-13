@@ -33,8 +33,10 @@ public sealed class AcmeHostedPipelineTests
         using var server = new DevelopmentAcmeServer(dns, DevelopmentAcmeServer.CreateAccountKey());
         using var publicRoot = X509CertificateLoader.LoadCertificate(server.RootCertificate);
         var directory = fixture.Application.StateDirectory;
-        var (bootstrap, gateway) = await PreparePublicationGatewayAsync(fixture, server, publicRoot).ConfigureAwait(true);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, TimeProvider.System, CancellationToken.None).ConfigureAwait(true);
+        var (bootstrap, gateway) = PreparePublicationGateway(fixture, server, publicRoot);
+        var role = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(role, fixture.Authority, TimeProvider.System, CancellationToken.None).ConfigureAwait(true);
         var pending = plans.Read("local"); Assert.True(pending.ServingPending);
         var gatewayPath = await PreparePendingGatewayAsync(gateway, pending, directory).ConfigureAwait(true);
         var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), gatewayPath);
@@ -57,8 +59,7 @@ public sealed class AcmeHostedPipelineTests
                 await Task.Delay(50, deadline.Token).ConfigureAwait(true);
             }
             Assert.Equal(checked((long)current.Generation), plans.ReadPublicationProof()!.Generation);
-            var cached = PresentationPlan.Parser.ParseFrom(await File.ReadAllBytesAsync(Path.Combine(gateway.StateDirectory, "serving.plan"), deadline.Token).ConfigureAwait(true));
-            Assert.Equal(current.Generation, cached.Generation); Assert.Equal(current.ContentSha256, cached.ContentSha256);
+            await AssertPersistedGatewayMaterialAsync(process, gateway, current, deadline.Token).ConfigureAwait(true);
             await AssertIssuedTlsAsync(gateway, current, publicRoot, privateRoot, node, deadline.Token).ConfigureAwait(true);
         }
         finally
@@ -72,12 +73,29 @@ public sealed class AcmeHostedPipelineTests
         }
     }
 
+    private static async Task AssertPersistedGatewayMaterialAsync(DevelopmentProcess process, GatewayBootstrap gateway,
+        PresentationPlan current, CancellationToken cancellationToken)
+    {
+        var cachedRole = await PortableConfiguration.LoadRoleDocumentAsync<GatewayBootstrap>(process.PortableDocumentPath, cancellationToken).ConfigureAwait(true);
+        await using var cachedRoleLifetime = cachedRole.ConfigureAwait(true);
+        var cachedBytes = cachedRole.ReadMaterial().Reveal(128, 128 * 1024);
+        try
+        {
+            var cached = PresentationPlan.Parser.ParseFrom(cachedBytes);
+            Assert.Equal(current.Generation, cached.Generation); Assert.Equal(current.ContentSha256, cached.ContentSha256);
+        }
+        finally { CryptographicOperations.ZeroMemory(cachedBytes); }
+        Assert.False(File.Exists(Path.Combine(gateway.StateDirectory, "serving.plan")));
+    }
+
     private static async Task<string> PreparePendingGatewayAsync(GatewayBootstrap gateway, PresentationPlan pending, string directory)
     {
-        using (var cache = new GatewayPlanCache(gateway.StateDirectory))
-            await cache.WriteAsync(pending, CancellationToken.None).ConfigureAwait(true);
         var gatewayPath = Path.Combine(directory, "gateway.json");
         await PortableFixtureFile.WriteAsync(gatewayPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
+        var role = await PortableConfiguration.LoadRoleDocumentAsync<GatewayBootstrap>(gatewayPath, CancellationToken.None).ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var cache = new GatewayPlanCache(role);
+        await cache.WriteAsync(pending, CancellationToken.None).ConfigureAwait(true);
         return gatewayPath;
     }
 
@@ -85,7 +103,9 @@ public sealed class AcmeHostedPipelineTests
         X509Certificate2 privateRoot, X509Certificate2 node, CancellationToken cancellationToken)
     {
         var privateBefore = await PublicServingChainProcessTests.ReadCertificateAsync(gateway.RegistrationPort, "register.site.test", privateRoot, node, requireIntermediate: false, cancellationToken).ConfigureAwait(true);
-        using var pendingClient = new DevelopmentSiteClient(bootstrap.Controller!.Acme.PinnedServingRootPath, gateway.HttpsPort, "svc.site.test");
+        var rootPath = Path.Combine(bootstrap.StateDirectory, "public-root.der");
+        await WriteProtectedAsync(rootPath, bootstrap.Controller!.Acme.PinnedServingRoot.Reveal(1, 65536)).ConfigureAwait(true);
+        using var pendingClient = new DevelopmentSiteClient(rootPath, gateway.HttpsPort, "svc.site.test");
         await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             using var response = await pendingClient.Client.GetAsync(new Uri("/_drava/live", UriKind.Relative), cancellationToken).ConfigureAwait(false);
@@ -110,7 +130,7 @@ public sealed class AcmeHostedPipelineTests
         return current;
     }
 
-    private static async Task<(ApplicationBootstrap Application, GatewayBootstrap Gateway)> PreparePublicationGatewayAsync(
+    private static (ApplicationBootstrap Application, GatewayBootstrap Gateway) PreparePublicationGateway(
         DevelopmentServingPlanFixture fixture, DevelopmentAcmeServer server, X509Certificate2 publicRoot)
     {
         var directory = fixture.Application.StateDirectory;
@@ -129,7 +149,6 @@ public sealed class AcmeHostedPipelineTests
             Listen = ipc, HttpPort = gateway.HttpPort, HttpsPort = gateway.HttpsPort, ManagementPort = gateway.ManagementPort,
         };
         bootstrap = bootstrap with { Controller = bootstrap.Controller! with { RegistrationPort = gateway.RegistrationPort } };
-        await WriteProtectedAsync(bootstrap.Controller.Acme.PinnedServingRootPath, server.RootCertificate).ConfigureAwait(true);
         return (bootstrap, gateway);
     }
 
@@ -173,8 +192,9 @@ public sealed class AcmeHostedPipelineTests
         var dns = new DevelopmentAcmeDnsProvider();
         using var server = new DevelopmentAcmeServer(dns, DevelopmentAcmeServer.CreateAccountKey());
         var bootstrap = PublicBootstrap(fixture, server);
-        await WriteProtectedAsync(bootstrap.Controller!.Acme.PinnedServingRootPath, server.RootCertificate).ConfigureAwait(true);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, TimeProvider.System, CancellationToken.None).ConfigureAwait(true);
+        var role = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(role, fixture.Authority, TimeProvider.System, CancellationToken.None).ConfigureAwait(true);
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
         var lifecycle = new AcmeServingLifecycle(bootstrap, plans); var history = History(repository, bootstrap);
@@ -187,7 +207,8 @@ public sealed class AcmeHostedPipelineTests
         Assert.Equal(2, dns.Published); Assert.Equal(2, dns.Removed); Assert.Empty(dns.Records);
         var current = plans.Read("local"); Assert.False(current.ServingPending); Assert.Equal(pending.Generation + 1, current.Generation);
         Assert.Null(plans.ReadPublicationProof());
-        using var validated = new ValidatedServingPlan(current, fixture.Gateway with { ServingTrust = bootstrap.Controller.ServingTrust }, TimeProvider.System, requireCurrent: true);
+        var controller = bootstrap.Controller ?? throw new InvalidOperationException("The fixture requires a controller.");
+        using var validated = new ValidatedServingPlan(current, fixture.Gateway with { ServingTrust = controller.ServingTrust }, TimeProvider.System, requireCurrent: true);
         Assert.True(validated.HasServingCertificate);
         var persisted = RequireOne(await history.ReadAsync(CancellationToken.None).ConfigureAwait(true)); Assert.Equal("succeeded", persisted.LastResult);
         Assert.True(persisted.NextAttemptNotBeforeUtc > DateTimeOffset.UtcNow.AddDays(3));
@@ -204,7 +225,9 @@ public sealed class AcmeHostedPipelineTests
         var dns = new DevelopmentAcmeDnsProvider { BlockProof = true };
         using var server = new DevelopmentAcmeServer(dns, DevelopmentAcmeServer.CreateAccountKey());
         var bootstrap = PublicBootstrap(fixture, server);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, TimeProvider.System, CancellationToken.None).ConfigureAwait(true);
+        var role = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(role, fixture.Authority, TimeProvider.System, CancellationToken.None).ConfigureAwait(true);
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
         var lifecycle = new AcmeServingLifecycle(bootstrap, plans); var history = History(repository, bootstrap);
@@ -233,7 +256,9 @@ public sealed class AcmeHostedPipelineTests
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var material = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow());
         var bootstrap = PendingServingPlanTests.PublicApplication(fixture, material);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var role = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(role, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
         var services = Services(bootstrap); services.AddOwnerAcmeLifecycle(bootstrap, plans, History(repository, bootstrap));
@@ -258,7 +283,9 @@ public sealed class AcmeHostedPipelineTests
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         var bootstrap = fixture.Application;
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var role = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(role, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
         Assert.Null(bootstrap.Controller!.Acme.DirectoryUrl);
@@ -276,10 +303,9 @@ public sealed class AcmeHostedPipelineTests
         return fixture.Application with { Controller = fixture.Application.Controller! with
         {
             ServingTrust = new ServingTrustSettings { Mode = "pinned", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256) },
-            ServingCertificatePath = Path.Combine(directory, "public.pfx"),
             DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", Credential = new SecretText(new string('A', 48)), },
             Acme = new AcmeIssuanceSettings { Enabled = true, TermsAccepted = true, DirectoryUrl = new Uri("https://ca.example/directory"), ContactEmails = ["ops@example.org"],
-                AccountKey = server.ExpectedAccountKey, CleanupJournalPath = Path.Combine(directory, "cleanup.json"), PinnedServingRootPath = Path.Combine(directory, "public-root.der"), },
+                AccountKey = server.ExpectedAccountKey, CleanupJournalPath = Path.Combine(directory, "cleanup.json"), PinnedServingRoot = new SecretBytes(server.RootCertificate), },
         }, };
     }
 

@@ -19,7 +19,9 @@ public sealed class PendingGatewayProcessTests
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var publicMaterial = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow());
         var application = PendingServingPlanTests.PublicApplication(fixture, publicMaterial);
-        using var plans = await ServingPlanState.OpenAsync(application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var role = await fixture.OpenRoleAsync(application).ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(role, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var directory = fixture.Application.StateDirectory;
         using var root = fixture.Authority.PublicCertificate; var rootPath = Path.Combine(directory, "private-root.der"); await File.WriteAllBytesAsync(rootPath, root.RawData).ConfigureAwait(true);
         using var node = fixture.Authority.IssueNode("node", ["127.0.0.1"]); var nodePath = Path.Combine(directory, "node.pfx");
@@ -30,8 +32,13 @@ public sealed class PendingGatewayProcessTests
         foreach (var listener in plan.Listeners)
             listener.Port = checked((uint)(listener.Id switch { "http" => gateway.HttpPort, "https" => gateway.HttpsPort, "registration" => gateway.RegistrationPort, _ => throw new InvalidOperationException("Unexpected listener.") }));
         plan.ContentSha256 = Google.Protobuf.ByteString.CopyFrom(Mk8.Drava.Transport.Protocol.PresentationPlanDigest.Compute(plan));
-        using (var cache = new GatewayPlanCache(directory)) await cache.WriteAsync(plan, CancellationToken.None).ConfigureAwait(true);
         var bootstrapPath = Path.Combine(directory, "pending-gateway.json"); await PortableFixtureFile.WriteAsync(bootstrapPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
+        var gatewayRole = await PortableConfiguration.LoadRoleDocumentAsync<GatewayBootstrap>(bootstrapPath, CancellationToken.None).ConfigureAwait(true);
+        await using (gatewayRole.ConfigureAwait(true))
+        {
+            using var cache = new GatewayPlanCache(gatewayRole);
+            await cache.WriteAsync(plan, CancellationToken.None).ConfigureAwait(true);
+        }
         var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), bootstrapPath);
         await using var processLifetime = process.ConfigureAwait(true);
         using var privateClient = new DevelopmentSiteClient(rootPath, gateway.RegistrationPort, "register.site.test", nodePath);

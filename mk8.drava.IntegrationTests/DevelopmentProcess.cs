@@ -10,7 +10,9 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
     private readonly Task _stdout;
     private readonly Task _stderr;
     private readonly StringBuilder _log = new();
-    private int _disposed;
+    private readonly Lock _retirementGate = new();
+    private Task<string?>? _retirementTask;
+    private string? _retainedDirectory;
 
     public DevelopmentProcess(string assemblyPath, string bootstrapPath, string bootstrapOption = "--portable-service", IReadOnlyDictionary<string, string>? environment = null)
     {
@@ -74,6 +76,9 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
 
     public bool HasExited => _process.HasExited;
 
+    internal string PortableDocumentPath => Path.Combine(_outputDirectory
+        ?? throw new InvalidOperationException("This fixture has no portable installation."), "Environment", ".env");
+
     public DevelopmentProcessMemory ReadMemory()
     {
         _process.Refresh();
@@ -108,14 +113,54 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
         }
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD003", Justification = "The stdout/stderr tasks are started and owned by this process fixture. Teardown joins them before disposing their Process-owned readers; the fixture captures no UI context.")]
-    public async ValueTask DisposeAsync()
+    public async Task<string> RetirePortableAsync(string destinationDirectory)
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
-        if (!_process.HasExited) _process.Kill(entireProcessTree: true);
-        await _process.WaitForExitAsync().ConfigureAwait(false);
-        await Task.WhenAll(_stdout, _stderr).ConfigureAwait(false);
-        _process.Dispose();
-        if (_outputDirectory is not null) Directory.Delete(_outputDirectory, recursive: true);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+        if (_outputDirectory is null || !Path.IsPathFullyQualified(destinationDirectory))
+            throw new InvalidOperationException("Portable retirement requires an owned installation and an absolute destination.");
+        return await RetireAsync(destinationDirectory).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("The development installation was retired without a retained collection.");
+    }
+
+    public async ValueTask DisposeAsync() => _ = await RetireAsync(destinationDirectory: null).ConfigureAwait(false);
+
+    private ValueTask<string?> RetireAsync(string? destinationDirectory)
+    {
+        lock (_retirementGate)
+        {
+            if (_retirementTask is not null)
+            {
+                if (destinationDirectory is not null && !string.Equals(destinationDirectory, _retainedDirectory, StringComparison.Ordinal))
+                    throw new InvalidOperationException("The development installation already has another retirement destination.");
+                return new ValueTask<string?>(_retirementTask);
+            }
+            _retainedDirectory = destinationDirectory;
+            _retirementTask = RetireCoreAsync(destinationDirectory);
+            return new ValueTask<string?>(_retirementTask);
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD003", Justification = "The stdout/stderr tasks are started and owned by this process fixture. Teardown joins them before disposing their Process-owned readers; the fixture captures no UI context.")]
+    private async Task<string?> RetireCoreAsync(string? destinationDirectory)
+    {
+        try
+        {
+            if (!_process.HasExited) _process.Kill(entireProcessTree: true);
+            await _process.WaitForExitAsync().ConfigureAwait(false);
+            await Task.WhenAll(_stdout, _stderr).ConfigureAwait(false);
+            if (destinationDirectory is null) return null;
+            Directory.CreateDirectory(destinationDirectory);
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(destinationDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var document = PortableDocumentPath;
+            var retained = Path.Combine(destinationDirectory, ".env");
+            File.Copy(document, retained, overwrite: true);
+            File.Copy(Path.Combine(Path.GetDirectoryName(document)!, ".installation.key"), Path.Combine(destinationDirectory, ".installation.key"), overwrite: true);
+            return retained;
+        }
+        finally
+        {
+            _process.Dispose();
+            if (_outputDirectory is not null) Directory.Delete(_outputDirectory, recursive: true);
+        }
     }
 }

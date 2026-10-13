@@ -15,8 +15,18 @@ public static class PortableConfiguration
     public static Task<T> LoadAsync<T>(CancellationToken cancellationToken) where T : class =>
         LoadDocumentAsync<T>(StartupPath([]), cancellationToken);
 
-    // Test fixtures own independent disposable output roots. Production callers use LoadAsync.
+    public static Task<PortableRole<T>> LoadRoleAsync<T>(CancellationToken cancellationToken) where T : class =>
+        LoadRoleDocumentAsync<T>(StartupPath([]), cancellationToken);
+
+    // Test fixtures own independent disposable output roots. Production callers use fixed startup paths.
     internal static async Task<T> LoadDocumentAsync<T>(string path, CancellationToken cancellationToken) where T : class
+    {
+        var role = await LoadRoleDocumentAsync<T>(path, cancellationToken).ConfigureAwait(false);
+        await using var roleLifetime = role.ConfigureAwait(false);
+        return role.Configuration;
+    }
+
+    internal static async Task<PortableRole<T>> LoadRoleDocumentAsync<T>(string path, CancellationToken cancellationToken) where T : class
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         cancellationToken.ThrowIfCancellationRequested();
@@ -38,13 +48,14 @@ public static class PortableConfiguration
         options.File.Import = SecretFileImport.None;
         options.File.Recovery = SecretFileRecovery.None;
         options.File.Protection = SecretFileProtection.InstallationBoundAesGcm;
-        var snapshot = await new SupprocomSecretFileStore(options).LoadAsync(cancellationToken).ConfigureAwait(false);
+        var store = new SupprocomSecretFileStore(options);
+        var snapshot = await store.LoadAsync(cancellationToken).ConfigureAwait(false);
         InstallationDocumentGuard.Require(path, 1, 4 * 1024 * 1024);
         InstallationDocumentGuard.Require(keyPath, 32, 64);
         if (!snapshot.TryGetValue(Key<T>(), out var value) || string.IsNullOrWhiteSpace(value))
             throw new InvalidDataException("The portable collection does not contain the requested role configuration.");
         cancellationToken.ThrowIfCancellationRequested();
-        return BootstrapFile.Parse<T>(System.Text.Encoding.UTF8.GetBytes(value));
+        return new PortableRole<T>(BootstrapFile.Parse<T>(System.Text.Encoding.UTF8.GetBytes(value)), store, path, value, snapshot);
     }
 
     public static string Serialize<T>(T value) => SerializeDocument<T>(BootstrapFile.Serialize(value));

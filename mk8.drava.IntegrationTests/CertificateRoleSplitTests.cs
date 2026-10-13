@@ -17,7 +17,9 @@ public sealed class CertificateRoleSplitTests
     public async Task NewPlanContainsSeparateServingAndPrivateListenerKeysAsync()
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
-        using var state = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var role = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var state = await ServingPlanState.OpenAsync(role, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var plan = state.Read("local");
         Assert.Equal(2, plan.Certificates.Count);
         Assert.Equal("site", plan.Certificates[0].CertificateId);
@@ -49,14 +51,22 @@ public sealed class CertificateRoleSplitTests
     public async Task LegacySingleCertificatePlanMigratesWithAFreshGenerationAndAcknowledgmentAsync()
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
-        using var initial = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var initialRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var initialRoleLifetime = initialRole.ConfigureAwait(true);
+        using var initial = await ServingPlanState.OpenAsync(initialRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var legacy = initial.Read("local");
         legacy.Certificates.RemoveAt(1);
         legacy.ContentSha256 = Google.Protobuf.ByteString.CopyFrom(Mk8.Drava.Transport.Protocol.PresentationPlanDigest.Compute(legacy));
         using (var recovered = new Mk8.Drava.Transport.Certificates.ValidatedServingPlan(legacy, fixture.Gateway, fixture.Clock, requireCurrent: true))
             Assert.Same(recovered.ServingCertificate, recovered.EnrollmentCertificate);
-        await Mk8.Drava.Application.DAL.Publication.GatewayMaterialStore.WriteAsync(fixture.Application.StateDirectory, Google.Protobuf.MessageExtensions.ToByteArray(legacy), CancellationToken.None).ConfigureAwait(true);
-        using var migrated = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var store = new Mk8.Drava.Application.DAL.Publication.GatewayMaterialStore(initialRole);
+        var legacyBytes = Google.Protobuf.MessageExtensions.ToByteArray(legacy);
+        var controller = initialRole.Configuration.Controller ?? throw new InvalidOperationException("The fixture requires a controller.");
+        try { await store.WriteAsync(legacyBytes, controller.ServingCertificate, CancellationToken.None).ConfigureAwait(true); }
+        finally { CryptographicOperations.ZeroMemory(legacyBytes); }
+        var migratedRole = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var migratedRoleLifetime = migratedRole.ConfigureAwait(true);
+        using var migrated = await ServingPlanState.OpenAsync(migratedRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var replacement = migrated.Read("local");
         Assert.Equal(legacy.Generation + 1, replacement.Generation);
         Assert.Equal(2, replacement.Certificates.Count);
@@ -77,7 +87,9 @@ public sealed class CertificateRoleSplitTests
     public async Task RecomputedDigestCannotAuthorizeInvalidPrivateMaterialAsync(string corruption)
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
-        using var state = await ServingPlanState.OpenAsync(fixture.Application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var role = await fixture.OpenRoleAsync().ConfigureAwait(true);
+        await using var roleLifetime = role.ConfigureAwait(true);
+        using var state = await ServingPlanState.OpenAsync(role, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var plan = state.Read("local");
         switch (corruption)
         {

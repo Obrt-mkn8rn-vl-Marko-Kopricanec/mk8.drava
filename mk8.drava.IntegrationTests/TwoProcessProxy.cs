@@ -9,6 +9,8 @@ using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.DAL.Registry;
 using Mk8.Drava.Application.DAL.Acme;
+using Mk8.Drava.Application.DAL.Publication;
+using Mk8.Drava.Transport.Protocol.V1;
 
 namespace Mk8.Drava.IntegrationTests;
 
@@ -17,6 +19,8 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     private readonly string _directory;
     private DevelopmentProcess? _application;
     private DevelopmentProcess _gateway;
+    private string _applicationDocumentPath;
+    private string _gatewayDocumentPath;
     public int Port { get; }
     public IpcEndpoint Ipc { get; }
     public HttpClient Client { get; }
@@ -29,24 +33,47 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public string RootCertificatePath => Path.Combine(_directory, "site-root.der");
     public string NodeCertificatePath => Path.Combine(_directory, "node.pfx");
     public string NodeAgentDescriptorPath => Path.Combine(_directory, "node.agent.json");
-    public string ApplicationBootstrapPath => Path.Combine(_directory, "application.json");
+    public string ApplicationBootstrapPath => _application?.PortableDocumentPath ?? _applicationDocumentPath;
+    public string GatewayBootstrapPath => _gateway.PortableDocumentPath;
     public string EnrolledNodeId { get; private set; } = "local";
     public string NodeRelayAddress { get; private set; } = "127.0.0.1";
     public Task WritePolicyAsync(string json) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "noconf.json"), json);
 
     public async Task RestartAsync()
     {
-        await _gateway.DisposeAsync().ConfigureAwait(false);
-        if (_application is not null) await _application.DisposeAsync().ConfigureAwait(false);
+        _gatewayDocumentPath = await RetainDocumentAsync(_gateway, "gateway").ConfigureAwait(false);
+        if (_application is not null)
+        {
+            _applicationDocumentPath = await RetainDocumentAsync(_application, "application").ConfigureAwait(false);
+        }
         var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "noconf-tests", Path.GetFileName(_directory))).FullName;
         await File.WriteAllTextAsync(Path.Combine(evidence, "gateway-before-restart.log"), _gateway.CapturedLog).ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-restart.log"), _application?.CapturedLog ?? "").ConfigureAwait(false);
-        _application = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), Path.Combine(_directory, "application.json"));
-        _gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), Path.Combine(_directory, "gateway.json"));
+        _application = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), _applicationDocumentPath);
+        _gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), _gatewayDocumentPath);
         await WaitUntilBoundAsync().ConfigureAwait(false);
     }
-    public string ApplicationPlanPath => Path.Combine(_directory, "app", "gateway-serving.plan");
-    public string GatewayPlanPath => Path.Combine(_directory, "gateway", "serving.plan");
+    public async Task<byte[]?> ReadApplicationPlanAsync(CancellationToken cancellationToken = default)
+    {
+        var role = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(ApplicationBootstrapPath, cancellationToken).ConfigureAwait(false);
+        await using var roleLifetime = role.ConfigureAwait(false);
+        return new GatewayMaterialStore(role).Read();
+    }
+
+    public async Task<PresentationPlan?> ReadGatewayPlanAsync(CancellationToken cancellationToken = default)
+    {
+        var role = await PortableConfiguration.LoadRoleDocumentAsync<GatewayBootstrap>(GatewayBootstrapPath, cancellationToken).ConfigureAwait(false);
+        await using var roleLifetime = role.ConfigureAwait(false);
+        var material = role.ReadMaterial();
+        if (material.Length == 0) return null;
+        var bytes = material.Reveal(128, 128 * 1024);
+        try { return PresentationPlan.Parser.ParseFrom(bytes); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
+
+    private Task<string> RetainDocumentAsync(DevelopmentProcess process, string role) =>
+        process.RetirePortableAsync(Path.Combine(_directory, role + "-installation"));
+
     internal string GatewayLog => _gateway.CapturedLog;
     internal string ApplicationLog => _application?.CapturedLog ?? "";
     internal string EvidenceId => Path.GetFileName(_directory);
@@ -57,7 +84,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public async Task StopApplicationAsync()
     {
         if (_application is null) return;
-        await _application.DisposeAsync().ConfigureAwait(false);
+        _applicationDocumentPath = await RetainDocumentAsync(_application, "application").ConfigureAwait(false);
         var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "recovery-tests", Path.GetFileName(_directory))).FullName;
         await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-stop.log"), _application.CapturedLog).ConfigureAwait(false);
         _application = null;
@@ -66,16 +93,16 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public async Task StartApplicationAsync()
     {
         if (_application is not null) throw new InvalidOperationException("Development Application is already started.");
-        _application = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), Path.Combine(_directory, "application.json"));
+        _application = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), _applicationDocumentPath);
         await WaitUntilBoundAsync().ConfigureAwait(false);
     }
 
     public async Task RestartGatewayAsync()
     {
-        await _gateway.DisposeAsync().ConfigureAwait(false);
+        _gatewayDocumentPath = await RetainDocumentAsync(_gateway, "gateway").ConfigureAwait(false);
         var evidence = Directory.CreateDirectory(Path.Combine(FindRoot(), "artifacts", "recovery-tests", Path.GetFileName(_directory))).FullName;
         await File.WriteAllTextAsync(Path.Combine(evidence, "gateway-before-restart.log"), _gateway.CapturedLog).ConfigureAwait(false);
-        _gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), Path.Combine(_directory, "gateway.json"));
+        _gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), _gatewayDocumentPath);
         await WaitUntilBoundAsync().ConfigureAwait(false);
     }
 
@@ -88,6 +115,8 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     private TwoProcessProxy(string directory, int port, IpcEndpoint ipc, DevelopmentProcess? application, DevelopmentProcess gateway)
     {
         _directory = directory;
+        _applicationDocumentPath = Path.Combine(directory, "application.json");
+        _gatewayDocumentPath = Path.Combine(directory, "gateway.json");
         Port = port;
         Ipc = ipc;
         _application = application;

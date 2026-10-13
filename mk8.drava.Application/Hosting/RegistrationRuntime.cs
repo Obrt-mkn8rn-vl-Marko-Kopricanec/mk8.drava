@@ -38,10 +38,11 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
         Relay = relay; _relayRoot = relayRoot; _relayController = relayController;
     }
 
-    public static async ValueTask<RegistrationRuntime> OpenAsync(ApplicationBootstrap bootstrap, DestinationAvailabilityStore availability,
+    public static async ValueTask<RegistrationRuntime> OpenAsync(PortableRole<ApplicationBootstrap> role, DestinationAvailabilityStore availability,
         TimeProvider clock, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(bootstrap);
+        ArgumentNullException.ThrowIfNull(role);
+        var bootstrap = role.Configuration;
         ArgumentNullException.ThrowIfNull(availability);
         ArgumentNullException.ThrowIfNull(clock);
         var controller = bootstrap.Controller ?? throw new InvalidOperationException("Controller configuration is missing.");
@@ -60,7 +61,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
             await registry.InitializeAsync(cancellationToken).ConfigureAwait(false);
             using var root = authority.PublicCertificate;
             verifier = new EnrollmentVerifier(root, registry, clock);
-            plans = await ServingPlanState.OpenAsync(bootstrap, authority, clock, cancellationToken).ConfigureAwait(false);
+            plans = await ServingPlanState.OpenAsync(role, authority, clock, cancellationToken).ConfigureAwait(false);
             var handler = new SignedRegistrationHandler(bootstrap.SiteId, registry, availability, verifier, new EnrollmentChallenges(clock), clock, plans, RegistrationPolicyMapping.ToPolicy(controller.Registration));
             relayRoot = authority.PublicCertificate;
             relayController = authority.IssueController(bootstrap.SiteId, Guid.NewGuid().ToString("N"));

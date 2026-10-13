@@ -11,7 +11,7 @@ public sealed record AcmeIssuanceSettings
     public int NativeDnsTtlSeconds { get; init; } = 300;
     public IReadOnlyList<string> ContactEmails { get; init; } = [];
     public bool TermsAccepted { get; init; }
-    public string PinnedServingRootPath { get; init; } = "";
+    public SecretBytes PinnedServingRoot { get; init; } = SecretBytes.Empty;
     public int RequestTimeoutSeconds { get; init; } = 5;
     public int OperationTimeoutSeconds { get; init; } = 300;
     public int PollIntervalSeconds { get; init; } = 2;
@@ -43,8 +43,8 @@ public sealed record AcmeIssuanceSettings
             throw new InvalidDataException("Automatic public issuance requires an approved HTTPS directory, DNS01 scope, private account key, contacts and accepted terms.");
         }
 
-        if (string.Equals(servingTrust.Mode, "pinned", StringComparison.Ordinal) ? !Path.IsPathFullyQualified(PinnedServingRootPath) : PinnedServingRootPath.Length != 0)
-            throw new InvalidDataException("Pinned public issuance requires an independently owner-approved root file; system serving trust uses the host root store.");
+        if (string.Equals(servingTrust.Mode, "pinned", StringComparison.Ordinal) ? PinnedServingRoot.Length == 0 : PinnedServingRoot.Length != 0)
+            throw new InvalidDataException("Pinned public issuance requires an independently owner-approved root value; system serving trust uses the host root store.");
         foreach (var email in ContactEmails)
         {
             if (email is null || email.Length is < 3 or > 254 || !email.Contains('@', StringComparison.Ordinal) || email.Any(static c => !char.IsAscii(c) || char.IsWhiteSpace(c) || char.IsControl(c)))

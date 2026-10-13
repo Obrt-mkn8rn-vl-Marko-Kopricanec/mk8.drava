@@ -386,8 +386,8 @@ Mk8.Drava.Configuration.GatewayBootstrap.ServingTrust.get -> Mk8.Drava.Configura
 Mk8.Drava.Configuration.GatewayBootstrap.ServingTrust.init -> void
 Mk8.Drava.Configuration.ControllerBootstrap.ServingTrust.get -> Mk8.Drava.Configuration.ServingTrustSettings!
 Mk8.Drava.Configuration.ControllerBootstrap.ServingTrust.init -> void
-Mk8.Drava.Configuration.ControllerBootstrap.ServingCertificatePath.get -> string!
-Mk8.Drava.Configuration.ControllerBootstrap.ServingCertificatePath.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.ServingCertificate.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.ControllerBootstrap.ServingCertificate.init -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings
 Mk8.Drava.Configuration.AcmeIssuanceSettings.AcmeIssuanceSettings() -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.<Clone>$() -> Mk8.Drava.Configuration.AcmeIssuanceSettings!
@@ -405,8 +405,8 @@ Mk8.Drava.Configuration.AcmeIssuanceSettings.ContactEmails.get -> System.Collect
 Mk8.Drava.Configuration.AcmeIssuanceSettings.ContactEmails.init -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.TermsAccepted.get -> bool
 Mk8.Drava.Configuration.AcmeIssuanceSettings.TermsAccepted.init -> void
-Mk8.Drava.Configuration.AcmeIssuanceSettings.PinnedServingRootPath.get -> string!
-Mk8.Drava.Configuration.AcmeIssuanceSettings.PinnedServingRootPath.init -> void
+Mk8.Drava.Configuration.AcmeIssuanceSettings.PinnedServingRoot.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.AcmeIssuanceSettings.PinnedServingRoot.init -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.RequestTimeoutSeconds.get -> int
 Mk8.Drava.Configuration.AcmeIssuanceSettings.RequestTimeoutSeconds.init -> void
 Mk8.Drava.Configuration.AcmeIssuanceSettings.OperationTimeoutSeconds.get -> int
@@ -549,3 +549,9 @@ static Mk8.Drava.Configuration.PortableCertificate.LoadPublic(Mk8.Drava.Configur
 static Mk8.Drava.Configuration.PortableCertificate.LoadPrivate(Mk8.Drava.Configuration.SecretBytes! material) -> System.Security.Cryptography.X509Certificates.X509Certificate2!
 static Mk8.Drava.Configuration.PortableCertificate.LoadAuthority(Mk8.Drava.Configuration.SecretBytes! material, string! expectedFingerprint, System.TimeProvider! clock) -> System.Security.Cryptography.X509Certificates.X509Certificate2!
 static Mk8.Drava.Configuration.PortableCertificate.ExportPrivate(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> Mk8.Drava.Configuration.SecretBytes!
+static Mk8.Drava.Configuration.PortableConfiguration.LoadRoleAsync<T>(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Mk8.Drava.Configuration.PortableRole<T!>!>!
+Mk8.Drava.Configuration.PortableRole<T>
+Mk8.Drava.Configuration.PortableRole<T>.Configuration.get -> T!
+Mk8.Drava.Configuration.PortableRole<T>.ReadMaterial() -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.PortableRole<T>.WriteMaterialAsync(Mk8.Drava.Configuration.SecretBytes! material, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Mk8.Drava.Configuration.PortableRole<T>.DisposeAsync() -> System.Threading.Tasks.ValueTask

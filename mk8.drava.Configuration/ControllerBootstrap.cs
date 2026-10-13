@@ -14,7 +14,7 @@ public sealed record ControllerBootstrap
     public RegistrationSettings Registration { get; init; } = new();
     public ServingPlanSettings ServingPlan { get; init; } = new();
     public ServingTrustSettings ServingTrust { get; init; } = new();
-    public string ServingCertificatePath { get; init; } = "";
+    public SecretBytes ServingCertificate { get; init; } = SecretBytes.Empty;
     public AcmeIssuanceSettings Acme { get; init; } = new();
 
     public void Validate()
@@ -26,8 +26,8 @@ public sealed record ControllerBootstrap
     internal void ValidateConfiguration()
     {
         Relay.Validate(); Registration.Validate(); ServingPlan.Validate(); ServingTrust.Validate();
-        if (string.Equals(ServingTrust.Mode, "site-ca", StringComparison.Ordinal) ? ServingCertificatePath.Length != 0 : !Path.IsPathFullyQualified(ServingCertificatePath))
-            throw new InvalidDataException("Public serving trust requires an absolute protected certificate path; site CA mode issues its own material.");
+        if (string.Equals(ServingTrust.Mode, "site-ca", StringComparison.Ordinal) ? ServingCertificate.Length != 0 : (!Acme.Enabled && ServingCertificate.Length == 0))
+            throw new InvalidDataException("Public serving trust requires protected certificate material or explicit ACME; site CA mode issues its own material.");
         if (Domain.Length is < 3 or > 189 || !Domain.Contains('.', StringComparison.Ordinal)) throw new InvalidDataException("Site requires a fully qualified domain with room for its service label.");
         foreach (var label in Domain.Split('.'))
         {
@@ -37,13 +37,6 @@ public sealed record ControllerBootstrap
         }
         DnsPublication.Validate(Domain);
         Acme.Validate(ServingTrust, DnsPublication);
-        if (Acme.Enabled)
-        {
-            var paths = new[] { ServingCertificatePath, Acme.CleanupJournalPath, Acme.PinnedServingRootPath };
-            var unique = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-            foreach (var path in paths)
-                if (path.Length != 0 && !unique.Add(Path.GetFullPath(path))) throw new InvalidDataException("Automatic issuance material and private enrollment require distinct files.");
-        }
         if (EnrollmentRootFingerprint.Length != 64) throw new InvalidDataException("Site issuer requires its enrolled SHA-256 fingerprint.");
         foreach (var character in EnrollmentRootFingerprint)
             if (character is not (>= '0' and <= '9') and not (>= 'A' and <= 'F')) throw new InvalidDataException("Invalid issuer fingerprint.");

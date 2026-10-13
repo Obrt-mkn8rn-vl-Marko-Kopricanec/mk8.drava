@@ -1,7 +1,6 @@
 using Google.Protobuf;
 using System.Security.Cryptography;
 using Mk8.Drava.Application.Hosting;
-using Mk8.Drava.Application.DAL.Acme;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Gateway.Hosting;
 using Mk8.Drava.Presentation.Certificates;
@@ -20,7 +19,9 @@ public sealed class PendingServingPlanTests
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var publicMaterial = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow());
         var bootstrap = PublicApplication(fixture, publicMaterial);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var pending = plans.Read("local"); Assert.True(pending.ServingPending); Assert.Empty(pending.Certificates[0].Pfx);
         Assert.True(plans.Acknowledge(Acknowledgment(pending))); Assert.Null(plans.ReadPublicationProof()); Assert.False(plans.IsAcknowledged);
         using var validated = new ValidatedServingPlan(pending, fixture.Gateway with { ServingTrust = bootstrap.Controller!.ServingTrust }, fixture.Clock, requireCurrent: true);
@@ -32,7 +33,9 @@ public sealed class PendingServingPlanTests
         try { gateway.Install(material); material = null; }
         finally { material?.Dispose(); }
         using var lease = gateway.Acquire(); Assert.Null(lease.ServingContext); Assert.Null(lease.Certificate); Assert.NotNull(lease.EnrollmentContext);
-        using var restored = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var restoredRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var restoredRoleLifetime = restoredRole.ConfigureAwait(true);
+        using var restored = await ServingPlanState.OpenAsync(restoredRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         Assert.Equal(pending.ToByteArray(), restored.Read("local").ToByteArray()); Assert.Null(restored.ReadPublicationProof());
     }
 
@@ -41,31 +44,37 @@ public sealed class PendingServingPlanTests
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var publicMaterial = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow()); var bootstrap = PublicApplication(fixture, publicMaterial);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var pending = plans.Read("local"); plans.Acknowledge(Acknowledgment(pending));
-        await PrivateCertificateFile.WriteNewAsync(bootstrap.Controller!.ServingCertificatePath, publicMaterial.Pfx, CancellationToken.None).ConfigureAwait(true);
-        await plans.RenewIfRequiredAsync(CancellationToken.None).ConfigureAwait(true);
+        await plans.PublishIssuedCertificateAsync(publicMaterial.Pfx, CancellationToken.None).ConfigureAwait(true);
         var issued = plans.Read("local"); Assert.False(issued.ServingPending); Assert.Equal(pending.Generation + 1, issued.Generation); Assert.Null(plans.ReadPublicationProof());
-        using var validated = new ValidatedServingPlan(issued, fixture.Gateway with { ServingTrust = bootstrap.Controller.ServingTrust }, fixture.Clock, requireCurrent: true);
+        using var validated = new ValidatedServingPlan(issued, fixture.Gateway with { ServingTrust = bootstrap.Controller!.ServingTrust }, fixture.Clock, requireCurrent: true);
         Assert.True(validated.HasServingCertificate); Assert.Equal(publicMaterial.Leaf.RawData, validated.ServingCertificate.RawData);
+        Assert.Throws<InvalidDataException>(() => plans.Acknowledge(Acknowledgment(pending)));
         Assert.True(plans.Acknowledge(Acknowledgment(issued))); Assert.NotNull(plans.ReadPublicationProof());
     }
 
     [Fact]
-    public async Task InvalidCandidateAndMissingOwnerFileRetainAcceptedPublicMaterialAsync()
+    public async Task InvalidCandidateAndEmptyStartupCertificateRetainAcceptedPublicMaterialAsync()
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var publicMaterial = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow()); var bootstrap = PublicApplication(fixture, publicMaterial);
-        await PrivateCertificateFile.WriteNewAsync(bootstrap.Controller!.ServingCertificatePath, publicMaterial.Pfx, CancellationToken.None).ConfigureAwait(true);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        await plans.PublishIssuedCertificateAsync(publicMaterial.Pfx, CancellationToken.None).ConfigureAwait(true);
         var accepted = plans.Read("local"); plans.Acknowledge(Acknowledgment(accepted));
-        await File.WriteAllBytesAsync(bootstrap.Controller.ServingCertificatePath, new byte[256]).ConfigureAwait(true);
-        await Assert.ThrowsAsync<System.Security.Cryptography.CryptographicException>(() => plans.RenewIfRequiredAsync(CancellationToken.None).AsTask()).ConfigureAwait(true);
+        await Assert.ThrowsAsync<System.Security.Cryptography.CryptographicException>(() => plans.PublishIssuedCertificateAsync(new byte[256], CancellationToken.None).AsTask()).ConfigureAwait(true);
         Assert.Equal(accepted.ToByteArray(), plans.Read("local").ToByteArray()); Assert.True(plans.IsAcknowledged);
-        File.Delete(bootstrap.Controller.ServingCertificatePath); fixture.Clock.Advance(TimeSpan.FromDays(24));
+        Assert.Equal(0, plansRole.Configuration.Controller!.ServingCertificate.Length);
+        fixture.Clock.Advance(TimeSpan.FromDays(24));
         plans.Acknowledge(Acknowledgment(accepted)); await plans.RenewIfRequiredAsync(CancellationToken.None).ConfigureAwait(true);
         Assert.Equal(accepted.ToByteArray(), plans.Read("local").ToByteArray()); Assert.True(plans.IsAcknowledged);
-        using var restored = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var restoredRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var restoredRoleLifetime = restoredRole.ConfigureAwait(true);
+        using var restored = await ServingPlanState.OpenAsync(restoredRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         Assert.Equal(accepted.ToByteArray(), restored.Read("local").ToByteArray());
     }
 
@@ -82,7 +91,9 @@ public sealed class PendingServingPlanTests
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var publicMaterial = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow()); var bootstrap = PublicApplication(fixture, publicMaterial);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var plan = plans.Read("local"); var trust = bootstrap.Controller!.ServingTrust;
         switch (fault)
         {
@@ -104,10 +115,9 @@ public sealed class PendingServingPlanTests
         Controller = fixture.Application.Controller! with
         {
             ServingTrust = new ServingTrustSettings { Mode = "pinned", RootFingerprint = material.Root.GetCertHashString(HashAlgorithmName.SHA256) },
-            ServingCertificatePath = Path.Combine(fixture.Application.StateDirectory, "public.pfx"),
             DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", Credential = new SecretText(new string('A', 48)) },
             Acme = new AcmeIssuanceSettings { Enabled = true, TermsAccepted = true, DirectoryUrl = new Uri("https://development-ca.example/directory"), ContactEmails = ["ops@example.org"],
-                AccountKey = Mk8.Drava.UnitTests.DevelopmentAcmeServer.CreateAccountKey(), CleanupJournalPath = Path.Combine(fixture.Application.StateDirectory, "cleanup.json"), PinnedServingRootPath = Path.Combine(fixture.Application.StateDirectory, "public-root.der"), },
+                AccountKey = Mk8.Drava.UnitTests.DevelopmentAcmeServer.CreateAccountKey(), CleanupJournalPath = Path.Combine(fixture.Application.StateDirectory, "cleanup.json"), PinnedServingRoot = new SecretBytes(material.Root.RawData), },
         },
     };
 

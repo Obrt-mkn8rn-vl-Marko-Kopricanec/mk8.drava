@@ -54,7 +54,10 @@ internal static class Program
     {
         using var startup = new ApplicationStartupProgress();
         startup.Enter(ApplicationStartupPhase.BootstrapRead);
-        var bootstrap = await BootstrapFile.LoadAsync<ApplicationBootstrap>(bootstrapPath, CancellationToken.None).ConfigureAwait(false);
+        if (!string.Equals(bootstrapPath, PortableConfiguration.StartupPath([]), StringComparison.Ordinal)) throw new InvalidDataException("Application requires its fixed installation-local collection.");
+        var role = await PortableConfiguration.LoadRoleAsync<ApplicationBootstrap>(CancellationToken.None).ConfigureAwait(false);
+        await using var roleLifetime = role.ConfigureAwait(false);
+        var bootstrap = role.Configuration;
         bootstrap.Validate();
         startup.Enter(ApplicationStartupPhase.PrivateStateOpen);
         var privateState = await PrivateApplicationState.OpenAsync(bootstrap, CancellationToken.None).ConfigureAwait(false);
@@ -76,7 +79,7 @@ internal static class Program
         builder.Services.RemoveAll<DestinationAvailabilityStore>();
         builder.Services.AddSingleton(availability);
         startup.Enter(ApplicationStartupPhase.RegistrationStateOpen);
-        var registration = bootstrap.Controller is null ? null : await RegistrationRuntime.OpenAsync(bootstrap, availability, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
+        var registration = bootstrap.Controller is null ? null : await RegistrationRuntime.OpenAsync(role, availability, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
         try
         {
             ConfigureServices(builder, bootstrap, registration);

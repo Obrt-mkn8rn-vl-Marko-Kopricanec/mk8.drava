@@ -161,10 +161,8 @@ internal static class ConfiguredSiteRestore
 
     private static void RequireControllerMaterial(ControllerBootstrap controller, ConfiguredSiteRestoreRequest request, Dictionary<string, string> placements)
     {
-        RequireMaterial(controller.ServingCertificatePath, credential: true, request, placements);
         if (!controller.Acme.Enabled) return;
         RequireMaterial(controller.Acme.CleanupJournalPath, credential: true, request, placements);
-        RequireMaterial(controller.Acme.PinnedServingRootPath, credential: false, request, placements);
     }
 
     private static void CreateParents(string staging, string directory, HashSet<string> directories)

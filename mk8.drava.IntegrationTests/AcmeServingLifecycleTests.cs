@@ -1,6 +1,6 @@
-using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.Hosting;
 using Mk8.Drava.Application.BLL.ControlPlane.Acme;
+using Mk8.Drava.Configuration;
 using Xunit;
 
 namespace Mk8.Drava.IntegrationTests;
@@ -13,9 +13,9 @@ public sealed class AcmeServingLifecycleTests
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var publicMaterial = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow());
         var bootstrap = PendingServingPlanTests.PublicApplication(fixture, publicMaterial);
-        await File.WriteAllBytesAsync(bootstrap.Controller!.Acme.PinnedServingRootPath, publicMaterial.Root.RawData).ConfigureAwait(true);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(bootstrap.Controller.Acme.PinnedServingRootPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        var plansRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var lifecycle = new AcmeServingLifecycle(bootstrap, plans);
         var pendingInput = Assert.IsType<AcmeRenewalConfigurationInputReadResult.AvailableResult>(lifecycle.ReadInput()); Assert.Null(pendingInput.Input.Certificates[0].ActiveCertificate);
         var material = await lifecycle.WriteAndLoadAsync(new AcmeCertificateMaterialWriteRequest("owner-serving", "site", ["site.test", "*.site.test"], bootstrap.StateDirectory, fixture.Clock.GetUtcNow(), publicMaterial.Pfx), CancellationToken.None).ConfigureAwait(true);
@@ -36,8 +36,12 @@ public sealed class AcmeServingLifecycleTests
     {
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var publicMaterial = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow());
+        using var foreign = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow());
         var bootstrap = PendingServingPlanTests.PublicApplication(fixture, publicMaterial);
-        using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        bootstrap = bootstrap with { Controller = bootstrap.Controller! with { Acme = bootstrap.Controller.Acme with { PinnedServingRoot = new SecretBytes(foreign.Root.RawData) } } };
+        var plansRole = await fixture.OpenRoleAsync(bootstrap).ConfigureAwait(true);
+        await using var plansRoleLifetime = plansRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(plansRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var lifecycle = new AcmeServingLifecycle(bootstrap, plans);
         var request = new AcmeCertificateMaterialWriteRequest("owner-serving", "site", ["site.test", "*.site.test"], bootstrap.StateDirectory, fixture.Clock.GetUtcNow(), publicMaterial.Pfx);
         var material = await lifecycle.WriteAndLoadAsync(request, CancellationToken.None).ConfigureAwait(true);

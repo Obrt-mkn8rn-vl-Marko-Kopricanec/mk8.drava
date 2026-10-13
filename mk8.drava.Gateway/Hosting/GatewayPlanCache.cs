@@ -1,61 +1,46 @@
 using Google.Protobuf;
+using Mk8.Drava.Configuration;
 using Mk8.Drava.Transport.Protocol.V1;
 
 namespace Mk8.Drava.Gateway.Hosting;
 
 internal sealed class GatewayPlanCache : IDisposable
 {
-    private readonly string _directory;
     private readonly FileStream _lock;
-    private string PlanPath => Path.Combine(_directory, "serving.plan");
+    private readonly PortableRole<GatewayBootstrap> _role;
 
-    public GatewayPlanCache(string directory)
+    public GatewayPlanCache(PortableRole<GatewayBootstrap> role)
     {
+        ArgumentNullException.ThrowIfNull(role);
+        _role = role;
+        var directory = role.Configuration.StateDirectory;
         RequirePath(directory);
         Directory.CreateDirectory(directory);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        _directory = directory;
         var path = Path.Combine(directory, "gateway.lock");
         RequirePath(path);
         _lock = GatewayWriterLease.Acquire(path);
     }
 
-    public async ValueTask<PresentationPlan?> ReadAsync(CancellationToken cancellationToken)
+    public ValueTask<PresentationPlan?> ReadAsync(CancellationToken cancellationToken)
     {
-        RequirePath(PlanPath);
-        if (!File.Exists(PlanPath)) return null;
-        if (!OperatingSystem.IsWindows() && (File.GetUnixFileMode(PlanPath) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-            UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None)
-        {
-            throw new InvalidDataException("Gateway material must be private.");
-        }
-        var input = new FileStream(PlanPath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 4096, useAsync: true);
-        await using var inputLifetime = input.ConfigureAwait(false);
-        if (input.Length is < 128 or > 128 * 1024) throw new InvalidDataException("Cached presentation plan exceeds its bound.");
-        var bytes = new byte[checked((int)input.Length)];
-        await input.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
-        return PresentationPlan.Parser.ParseFrom(bytes);
+        cancellationToken.ThrowIfCancellationRequested();
+        var material = _role.ReadMaterial();
+        if (material.Length == 0) return ValueTask.FromResult<PresentationPlan?>(null);
+        var bytes = material.Reveal(128, 128 * 1024);
+        try { return ValueTask.FromResult<PresentationPlan?>(PresentationPlan.Parser.ParseFrom(bytes)); }
+        finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(bytes); }
     }
 
     public async ValueTask WriteAsync(PresentationPlan plan, CancellationToken cancellationToken)
     {
-        RequirePath(PlanPath);
         var bytes = plan.ToByteArray();
-        if (bytes.Length is < 128 or > 128 * 1024) throw new InvalidDataException("Presentation plan exceeds its cache bound.");
-        var temporary = PlanPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None, Options = FileOptions.Asynchronous | FileOptions.WriteThrough };
-            if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-            var output = new FileStream(temporary, options);
-            await using (output.ConfigureAwait(false))
-            {
-                await output.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-                await output.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-            File.Move(temporary, PlanPath, overwrite: true);
+            if (bytes.Length is < 128 or > 128 * 1024) throw new InvalidDataException("Presentation plan exceeds its cache bound.");
+            await _role.WriteMaterialAsync(new SecretBytes(bytes), cancellationToken).ConfigureAwait(false);
         }
-        finally { File.Delete(temporary); }
+        finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(bytes); }
     }
 
     private static void RequirePath(string path)

@@ -1,11 +1,13 @@
 using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Configuration;
+using Supprocom.Secrets;
 
 namespace Mk8.Drava.IntegrationTests;
 
 internal sealed class DevelopmentServingPlanFixture : IDisposable
 {
     private readonly string _directory;
+    private string? _configurationDocument;
     public PlanClock Clock { get; } = new();
     public LocalSiteCertificateAuthority Authority { get; }
     public ApplicationBootstrap Application { get; }
@@ -31,6 +33,29 @@ internal sealed class DevelopmentServingPlanFixture : IDisposable
             catch { authority.Dispose(); throw; }
         }
         catch { Directory.Delete(directory, recursive: true); throw; }
+    }
+
+    public async Task<PortableRole<ApplicationBootstrap>> OpenRoleAsync(ApplicationBootstrap? bootstrap = null)
+    {
+        var configuration = bootstrap ?? Application;
+        var document = BootstrapFile.Serialize(configuration);
+        var path = Path.Combine(_directory, ".env");
+        if (_configurationDocument is null)
+        {
+            await PortableFixtureFile.WriteAsync(path, PortableConfiguration.SerializeDocument<ApplicationBootstrap>(document)).ConfigureAwait(false);
+        }
+        else if (!string.Equals(document, _configurationDocument, StringComparison.Ordinal))
+        {
+            // A fresh startup snapshot changes only configuration, retaining the accepted material slot.
+            var store = new SupprocomSecretFileStore(new SupprocomSecretFileOptions
+            {
+                Directory = _directory, Protection = SecretFileProtection.InstallationBoundAesGcm,
+            }, "Production");
+            await store.SetAsync("Drava:ApplicationBootstrap", document, CancellationToken.None).ConfigureAwait(false);
+        }
+        var role = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(path, CancellationToken.None).ConfigureAwait(false);
+        _configurationDocument = document;
+        return role;
     }
 
     public void Dispose() { Authority.Dispose(); Directory.Delete(_directory, recursive: true); }

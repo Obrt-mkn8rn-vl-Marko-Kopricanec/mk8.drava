@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="../mk8.drava.Application.BLL/mk8.drava.Application.BLL.csproj" />
     <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+    <ProjectReference Include="../mk8.drava.Configuration/mk8.drava.Configuration.csproj" />
     <PackageReference Include="YamlDotNet" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Data.Sqlite" />

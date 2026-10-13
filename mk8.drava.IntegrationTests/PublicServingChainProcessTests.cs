@@ -65,8 +65,6 @@ public sealed class PublicServingChainProcessTests
     private static async Task<(GatewayBootstrap Gateway, string BootstrapPath)> PrepareGatewayAsync(DevelopmentServingPlanFixture fixture, DevelopmentPublicServingCertificate publicMaterial)
     {
         var trust = new ServingTrustSettings { Mode = "pinned", RootFingerprint = publicMaterial.Root.GetCertHashString(HashAlgorithmName.SHA256) };
-        var publicPath = Path.Combine(fixture.Application.StateDirectory, "public.pfx");
-        await Mk8.Drava.Application.DAL.Acme.PrivateCertificateFile.WriteNewAsync(publicPath, publicMaterial.Pfx, CancellationToken.None).ConfigureAwait(true);
         var gatewayDirectory = Path.Combine(fixture.Application.StateDirectory, "gateway");
         var ipc = OperatingSystem.IsWindows() ? new IpcEndpoint { NamedPipeName = "drava_" + Guid.NewGuid().ToString("N") }
             : new IpcEndpoint { UnixSocketPath = Path.Combine(fixture.Application.StateDirectory, "absent.sock") };
@@ -79,13 +77,19 @@ public sealed class PublicServingChainProcessTests
         var application = fixture.Application with
         {
             HttpPort = gateway.HttpPort, HttpsPort = gateway.HttpsPort, ManagementPort = gateway.ManagementPort,
-            Controller = fixture.Application.Controller! with { RegistrationPort = gateway.RegistrationPort, ServingTrust = trust, ServingCertificatePath = publicPath },
+            Controller = fixture.Application.Controller! with { RegistrationPort = gateway.RegistrationPort, ServingTrust = trust, ServingCertificate = new SecretBytes(publicMaterial.Pfx) },
         };
-        using var plans = await ServingPlanState.OpenAsync(application, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
-        using (var cache = new GatewayPlanCache(gatewayDirectory))
-            await cache.WriteAsync(plans.Read("local"), CancellationToken.None).ConfigureAwait(true);
-        var bootstrapPath = Path.Combine(fixture.Application.StateDirectory, "gateway.json");
+        var applicationRole = await fixture.OpenRoleAsync(application).ConfigureAwait(true);
+        await using var applicationRoleLifetime = applicationRole.ConfigureAwait(true);
+        using var plans = await ServingPlanState.OpenAsync(applicationRole, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
+        Directory.CreateDirectory(gatewayDirectory);
+        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(gatewayDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var bootstrapPath = Path.Combine(gatewayDirectory, ".env");
         await PortableFixtureFile.WriteAsync(bootstrapPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
+        var gatewayRole = await PortableConfiguration.LoadRoleDocumentAsync<GatewayBootstrap>(bootstrapPath, CancellationToken.None).ConfigureAwait(true);
+        await using var gatewayRoleLifetime = gatewayRole.ConfigureAwait(true);
+        using (var cache = new GatewayPlanCache(gatewayRole))
+            await cache.WriteAsync(plans.Read("local"), CancellationToken.None).ConfigureAwait(true);
         return (gateway, bootstrapPath);
     }
 

@@ -22,14 +22,16 @@ internal static class Program
 
     public static async Task Main(string[] args)
     {
-        var configurationPath = PortableConfiguration.StartupPath(args);
+        _ = PortableConfiguration.StartupPath(args);
         using var startup = new GatewayStartupProgress();
         startup.Enter(GatewayStartupPhase.BootstrapRead);
-        var bootstrap = await BootstrapFile.LoadAsync<GatewayBootstrap>(configurationPath, CancellationToken.None).ConfigureAwait(false);
+        var role = await PortableConfiguration.LoadRoleAsync<GatewayBootstrap>(CancellationToken.None).ConfigureAwait(false);
+        await using var roleLifetime = role.ConfigureAwait(false);
+        var bootstrap = role.Configuration;
         bootstrap.Validate();
         startup.Enter(GatewayStartupPhase.PrivateChannelOpen);
         using var channel = new ApplicationChannel(bootstrap.Application, bootstrap.ApplicationToken);
-        using var cache = new GatewayPlanCache(bootstrap.StateDirectory);
+        using var cache = new GatewayPlanCache(role);
         using var material = new GatewayMaterialState(bootstrap.Plan.MaximumRetainedGenerations);
         var enrolled = bootstrap.EnrollmentRootFingerprint.Length != 0;
         if (!enrolled && bootstrap.HttpsPort != 0) throw new InvalidDataException("TLS presentation requires enrolled site trust.");

@@ -53,7 +53,7 @@ public sealed class AcmeIssuanceSettingsTests
             "contacts" => settings with { ContactEmails = [] },
             "email" => settings with { ContactEmails = ["ops@ example.org"] },
             "terms" => settings with { TermsAccepted = false },
-            "system-root" => settings with { PinnedServingRootPath = Path.GetFullPath("public-root.der") },
+            "system-root" => settings with { PinnedServingRoot = new SecretBytes([1]) },
             "request" => settings with { RequestTimeoutSeconds = 31 },
             "operation" => settings with { OperationTimeoutSeconds = 601 },
             "poll" => settings with { PollIntervalSeconds = 0 },
@@ -73,7 +73,7 @@ public sealed class AcmeIssuanceSettingsTests
     {
         var settings = Approved(); var dns = new DnsPublicationSettings { Provider = "cloudflare" };
         settings.Validate(new ServingTrustSettings { Mode = "system" }, dns);
-        (settings with { PinnedServingRootPath = Path.GetFullPath("public-root.der") }).Validate(new ServingTrustSettings { Mode = "pinned", RootFingerprint = new string('A', 64) }, dns);
+        (settings with { PinnedServingRoot = new SecretBytes([1]) }).Validate(new ServingTrustSettings { Mode = "pinned", RootFingerprint = new string('A', 64) }, dns);
     }
 
     private static AcmeIssuanceSettings Approved() => new()
