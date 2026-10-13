@@ -38,7 +38,13 @@ public sealed class PrivateSiteWorkspace : IDisposable
     {
         if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Site initialization requires Unix permissions.");
         var path = Inside(relativePath);
-        Directory.CreateDirectory(path, DirectoryMode);
+        // The Unix mode overload applies to the leaf, not implicit parents.
+        var current = StagingDirectory;
+        foreach (var component in Path.GetRelativePath(StagingDirectory, path).Split(Path.DirectorySeparatorChar))
+        {
+            current = Path.Combine(current, component);
+            Directory.CreateDirectory(current, DirectoryMode);
+        }
         return path;
     }
 

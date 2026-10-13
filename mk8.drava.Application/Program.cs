@@ -36,27 +36,18 @@ internal static class Program
             await Recovery.RegistryRecoveryCommand.RunAsync(args, CancellationToken.None).ConfigureAwait(false);
             return;
         }
-        if (args.Length == 2 && string.Equals(args[0], "--initialize-site", StringComparison.Ordinal) && Path.IsPathFullyQualified(args[1]))
+        if (args is ["--initialize-site"])
         {
-            var fingerprint = await Installation.SiteInitializer.InitializeAsync(args[1], CancellationToken.None).ConfigureAwait(false);
+            var fingerprint = await Installation.SiteInitializer.InitializeAsync(PortableConfiguration.StartupPath([]), CancellationToken.None).ConfigureAwait(false);
             Console.WriteLine(fingerprint);
             return;
         }
-        if (args.Length == 2 && string.Equals(args[0], "--node-agent-bootstrap", StringComparison.Ordinal) && Path.IsPathFullyQualified(args[1]))
+        if (args is ["--node-agent"])
         {
-            await NodeAgentHost.RunAsync(args[1]).ConfigureAwait(false);
+            await NodeAgentHost.RunAsync(PortableConfiguration.StartupPath([])).ConfigureAwait(false);
             return;
         }
-        if (args.Length == 5 && string.Equals(args[0], "--initialize-ca", StringComparison.Ordinal) && string.Equals(args[3], "--site", StringComparison.Ordinal))
-        {
-            if (!string.Equals(args[1], "--path", StringComparison.Ordinal)) throw new ArgumentException("Issuer initialization requires --path.", nameof(args));
-            var fingerprint = await LocalSiteCertificateAuthority.InitializeAsync(args[2], args[4], TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
-            Console.WriteLine(fingerprint);
-            return;
-        }
-        if (args.Length != 2 || !string.Equals(args[0], "--bootstrap", StringComparison.Ordinal) || !Path.IsPathFullyQualified(args[1]))
-            throw new ArgumentException("Use --bootstrap with an absolute Application bootstrap file.", nameof(args));
-        await RunApplicationAsync(args[1]).ConfigureAwait(false);
+        await RunApplicationAsync(PortableConfiguration.StartupPath(args)).ConfigureAwait(false);
     }
 
     private static async Task RunApplicationAsync(string bootstrapPath)
@@ -69,11 +60,16 @@ internal static class Program
         var privateState = await PrivateApplicationState.OpenAsync(bootstrap, CancellationToken.None).ConfigureAwait(false);
         await using var privateStateLifetime = privateState.ConfigureAwait(false);
         startup.Enter(ApplicationStartupPhase.ServiceConfiguration);
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+        var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions { Args = [], EnvironmentName = "Production", ContentRootPath = AppContext.BaseDirectory });
+        builder.WebHost.UseKestrelCore().UseSockets();
+        builder.Services.AddRouting();
+        builder.Logging.AddSimpleConsole();
+        if (bootstrap.ForwardingDiagnostics) builder.Logging.AddFilter("Mk8.Drava.Application.INF.Proxy.Forwarding", LogLevel.Debug);
+        if (bootstrap.TransportDiagnostics) builder.Logging.AddFilter("Mk8.Drava.Application.Transport", LogLevel.Debug);
         // Structured proxy access events provide the safe path. Framework request
         // start/finish events also print QueryString and must not duplicate them.
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
-        builder.Configuration["Mdrava:DataDirectory"] = bootstrap.StateDirectory;
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { ["Mdrava:DataDirectory"] = bootstrap.StateDirectory });
         builder.Services.AddSingleton(bootstrap);
         builder.Services.AddProxyApplication(builder.Configuration);
         var availability = new DestinationAvailabilityStore(TimeProvider.System);

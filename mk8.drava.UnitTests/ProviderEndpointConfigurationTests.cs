@@ -49,10 +49,10 @@ public sealed class ProviderEndpointConfigurationTests
         var acmePath = Path.Combine(directory.Path, "acme.json");
         var dns = Settings();
         var acme = new AcmeIssuanceSettings { DirectoryUrl = new Uri("https://ca.invalid/directory"), UseStaging = useStaging };
-        await File.WriteAllTextAsync(dnsPath, BootstrapFile.Serialize(dns)).ConfigureAwait(true);
-        await File.WriteAllTextAsync(acmePath, BootstrapFile.Serialize(acme)).ConfigureAwait(true);
-        var loadedDns = await BootstrapFile.LoadAsync<DnsPublicationSettings>(dnsPath, CancellationToken.None).ConfigureAwait(true);
-        var loadedAcme = await BootstrapFile.LoadAsync<AcmeIssuanceSettings>(acmePath, CancellationToken.None).ConfigureAwait(true);
+        await File.WriteAllTextAsync(dnsPath, PortableConfiguration.Serialize(dns)).ConfigureAwait(true);
+        await File.WriteAllTextAsync(acmePath, PortableConfiguration.Serialize(acme)).ConfigureAwait(true);
+        var loadedDns = await PortableConfiguration.LoadDocumentAsync<DnsPublicationSettings>(dnsPath, CancellationToken.None).ConfigureAwait(true);
+        var loadedAcme = await PortableConfiguration.LoadDocumentAsync<AcmeIssuanceSettings>(acmePath, CancellationToken.None).ConfigureAwait(true);
         loadedDns.Validate("site.test");
         Assert.Equal(dns.ApiBaseUrl, loadedDns.RequireApiBaseUrl());
         Assert.Equal(acme.DirectoryUrl, loadedAcme.RequireDirectoryUrl());

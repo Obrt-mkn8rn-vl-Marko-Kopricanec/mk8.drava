@@ -8,7 +8,8 @@ using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application.Recovery;
 
-// Preparation never starts listeners, generates credentials, restores leases or performs DNS/ACME writes.
+// Preparation never starts listeners, generates service credentials, restores leases or performs DNS/ACME writes.
+// Each new role receives its own provider-managed installation protection key.
 internal static class ConfiguredSiteRestore
 {
     public static async ValueTask<ConfiguredSiteRestoreResult> PrepareAsync(ConfiguredSiteRestoreRequest input, CancellationToken cancellationToken)
@@ -34,19 +35,7 @@ internal static class ConfiguredSiteRestore
             File.Move(Path.Combine(recoveredPath, "files", file.Name), target, overwrite: false);
         }
         Directory.Delete(recoveredPath, recursive: true);
-        var applicationBytes = Encoding.UTF8.GetBytes(BootstrapFile.Serialize(request.Application));
-        var gatewayBytes = Encoding.UTF8.GetBytes(BootstrapFile.Serialize(request.Gateway));
-        var receipt = new ConfiguredSiteRestoreReceipt(1, request.ExpectedManifestSha256, result.Receipt.Registry,
-            result.Receipt.Files, request.Placements, Convert.ToHexString(SHA256.HashData(applicationBytes)), Convert.ToHexString(SHA256.HashData(gatewayBytes)));
-        var receiptBytes = Encoding.UTF8.GetBytes(BootstrapFile.Serialize(receipt));
-        await workspace.WriteAsync("application.json", applicationBytes, cancellationToken).ConfigureAwait(false);
-        await workspace.WriteAsync("gateway.json", gatewayBytes, cancellationToken).ConfigureAwait(false);
-        await workspace.WriteAsync("recovery.json", receiptBytes, cancellationToken).ConfigureAwait(false);
-        foreach (var name in new[] { "application.json", "gateway.json", "recovery.json" })
-        {
-            var file = PrivateOwnerFile.AcquireLease(Path.Combine(workspace.StagingDirectory, name));
-            await using (file.ConfigureAwait(false)) { RandomAccess.FlushToDisk(file.SafeFileHandle); }
-        }
+        var prepared = await WriteRoleDocumentsAsync(workspace, request, result, directories, cancellationToken).ConfigureAwait(false);
         foreach (var directory in directories.OrderByDescending(static path => path.Length)) PrivateOwnerFile.SynchronizeDirectory(directory);
         cancellationToken.ThrowIfCancellationRequested();
         workspace.Publish();
@@ -54,6 +43,39 @@ internal static class ConfiguredSiteRestore
         catch (Exception exception) when (exception is IOException or InvalidDataException)
         {
             throw new IOException("Configured restore was published but synchronization failed; inspect before retrying.", exception);
+        }
+        return prepared;
+    }
+
+    private static async ValueTask<ConfiguredSiteRestoreResult> WriteRoleDocumentsAsync(PrivateSiteWorkspace workspace,
+        ConfiguredSiteRestoreRequest request, SiteRecoveryResult result, HashSet<string> directories, CancellationToken cancellationToken)
+    {
+        const string applicationDocument = "roles/application/Environment/.env";
+        const string gatewayDocument = "roles/gateway/Environment/.env";
+        directories.Add(workspace.CreateDirectory("roles"));
+        directories.Add(workspace.CreateDirectory(Path.Combine("roles", "application")));
+        directories.Add(workspace.CreateDirectory(Path.Combine("roles", "gateway")));
+        var applicationEnvironment = workspace.CreateDirectory(Path.Combine("roles", "application", "Environment"));
+        var gatewayEnvironment = workspace.CreateDirectory(Path.Combine("roles", "gateway", "Environment"));
+        directories.Add(applicationEnvironment);
+        directories.Add(gatewayEnvironment);
+        await workspace.WriteAsync(applicationDocument, Encoding.UTF8.GetBytes(PortableConfiguration.Serialize(request.Application)), cancellationToken).ConfigureAwait(false);
+        await workspace.WriteAsync(gatewayDocument, Encoding.UTF8.GetBytes(PortableConfiguration.Serialize(request.Gateway)), cancellationToken).ConfigureAwait(false);
+        // Protect before recording bytes. Loading the published role must not change its receipt.
+        var applicationPath = Path.Combine(workspace.StagingDirectory, applicationDocument);
+        var gatewayPath = Path.Combine(workspace.StagingDirectory, gatewayDocument);
+        _ = await PortableConfiguration.LoadDocumentAsync<ApplicationBootstrap>(applicationPath, cancellationToken).ConfigureAwait(false);
+        _ = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(gatewayPath, cancellationToken).ConfigureAwait(false);
+        var applicationBytes = await File.ReadAllBytesAsync(applicationPath, cancellationToken).ConfigureAwait(false);
+        var gatewayBytes = await File.ReadAllBytesAsync(gatewayPath, cancellationToken).ConfigureAwait(false);
+        var receipt = new ConfiguredSiteRestoreReceipt(1, request.ExpectedManifestSha256, result.Receipt.Registry,
+            result.Receipt.Files, request.Placements, Convert.ToHexString(SHA256.HashData(applicationBytes)), Convert.ToHexString(SHA256.HashData(gatewayBytes)));
+        var receiptBytes = Encoding.UTF8.GetBytes(BootstrapFile.Serialize(receipt));
+        await workspace.WriteAsync("recovery.json", receiptBytes, cancellationToken).ConfigureAwait(false);
+        foreach (var name in new[] { applicationDocument, gatewayDocument, "roles/application/Environment/.installation.key", "roles/gateway/Environment/.installation.key", "recovery.json" })
+        {
+            var file = PrivateOwnerFile.AcquireLease(Path.Combine(workspace.StagingDirectory, name));
+            await using (file.ConfigureAwait(false)) { RandomAccess.FlushToDisk(file.SafeFileHandle); }
         }
         return new ConfiguredSiteRestoreResult(receipt, Convert.ToHexString(SHA256.HashData(receiptBytes)));
     }

@@ -51,3 +51,4 @@ Mk8.Drava.Registration.DravaRegistrationOptions.RenewJitterPercent.init -> void
 Mk8.Drava.Registration.DravaRegistrationOptions.ShutdownDeadlineMilliseconds.get -> int
 Mk8.Drava.Registration.DravaRegistrationOptions.ShutdownDeadlineMilliseconds.init -> void
 static Mk8.Drava.Registration.DravaRegistrationOptions.LoadEnrollmentAsync(string! path, string! serviceId, string! readinessPath, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Mk8.Drava.Registration.DravaRegistrationOptions!>!
+static Mk8.Drava.Registration.DravaRegistrationOptions.FromEnrollment(Mk8.Drava.Configuration.NodeEnrollmentProfile! profile, string! serviceId, string! readinessPath) -> Mk8.Drava.Registration.DravaRegistrationOptions!

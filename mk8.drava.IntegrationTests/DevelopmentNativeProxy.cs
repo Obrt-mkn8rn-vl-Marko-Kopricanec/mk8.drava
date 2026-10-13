@@ -17,6 +17,7 @@ internal sealed class DevelopmentNativeProxy : IAsyncDisposable
         Port = port;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The local process is disposed on startup failure and transferred to the returned IAsyncDisposable fixture on success; its private constructor only assigns fields. CA2000 does not model this async ownership transfer.")]
     public static async Task<DevelopmentNativeProxy> StartAsync(int originPort)
     {
         var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "drava_native_" + Guid.NewGuid().ToString("N"))).FullName;
@@ -34,7 +35,9 @@ internal sealed class DevelopmentNativeProxy : IAsyncDisposable
             process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.CompatibilityTests"), directory, "--development-native-reference");
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await WaitForListenerAsync(process, port, deadline.Token).ConfigureAwait(false);
-            return new DevelopmentNativeProxy(directory, process, port);
+            var result = new DevelopmentNativeProxy(directory, process, port);
+            process = null;
+            return result;
         }
         catch
         {

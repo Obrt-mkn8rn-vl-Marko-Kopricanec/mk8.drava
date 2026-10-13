@@ -65,8 +65,16 @@
           "Grpc.Core.Api": "2.84.0"
         }
       },
+      "System.IO.FileSystem.AccessControl": {
+        "type": "Transitive",
+        "resolved": "5.0.0",
+        "contentHash": "SxHB3nuNrpptVk+vZ/F+7OHEpoHUIKKMl02bUmYHQr1r+glbZQxs7pRtsf4ENO29TVm2TH3AEeep2fJcy92oYw=="
+      },
       "mk8.drava.configuration": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Supprocom.Secrets": "[0.1.4, )"
+        }
       },
       "mk8.drava.contracts": {
         "type": "Project"
@@ -134,6 +142,15 @@
         "requested": "[1.0.21, )",
         "resolved": "1.0.21",
         "contentHash": "rXdSM868bKQzlRxC4iS40VgmOLouRNPstV4WyfciGNQ6hKqxbVTNC6FimcIzmh4u1zlaTaz3kFee0BkV04uyiA=="
+      },
+      "Supprocom.Secrets": {
+        "type": "CentralTransitive",
+        "requested": "[0.1.4, )",
+        "resolved": "0.1.4",
+        "contentHash": "0yZfw62CAuoC9pIrSZ1nXt8/QHIaDiCwdfDXXCX3mM3nCuiTHVEh4/Jv8wL6Htlwr20YOZpLRUeBymlx79ebPg==",
+        "dependencies": {
+          "System.IO.FileSystem.AccessControl": "5.0.0"
+        }
       }
     }
   }

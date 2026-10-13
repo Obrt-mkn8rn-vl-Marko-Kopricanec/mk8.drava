@@ -17,23 +17,11 @@ public static class BootstrapFile
         Converters = { new JsonStringEnumConverter(allowIntegerValues: false) },
     };
 
-    public static async Task<T> LoadAsync<T>(string path, CancellationToken cancellationToken) where T : class
+    public static Task<T> LoadAsync<T>(string path, CancellationToken cancellationToken) where T : class
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        var file = new FileInfo(path);
-        if (!file.Exists || file.Length > MaximumBytes) throw new InvalidDataException("Bootstrap file is absent or exceeds its size bound.");
-        var bytes = new byte[MaximumBytes + 1];
-        var input = File.OpenRead(path);
-        await using var inputLifetime = input.ConfigureAwait(false);
-        var count = 0;
-        while (count < bytes.Length)
-        {
-            var read = await input.ReadAsync(bytes.AsMemory(count), cancellationToken).ConfigureAwait(false);
-            if (read == 0) break;
-            count += read;
-        }
-        if (count > MaximumBytes) throw new InvalidDataException("Bootstrap file exceeds its size bound.");
-        return Parse<T>(bytes.AsMemory(0, count));
+        if (!string.Equals(path, PortableConfiguration.StartupPath([]), StringComparison.Ordinal))
+            throw new InvalidDataException("Separate bootstrap files are unsupported; use the installation-local Supprocom collection.");
+        return PortableConfiguration.LoadAsync<T>(cancellationToken);
     }
 
     public static T Parse<T>(ReadOnlyMemory<byte> bytes) where T : class

@@ -39,16 +39,16 @@ public sealed class ConfiguredSiteRestoreTests
             };
         }
         var result = await ConfiguredSiteRestore.PrepareAsync(request, CancellationToken.None).ConfigureAwait(true);
-        var application = await BootstrapFile.LoadAsync<ApplicationBootstrap>(Path.Combine(destination, "application.json"), CancellationToken.None).ConfigureAwait(true);
-        var restoredGateway = await BootstrapFile.LoadAsync<GatewayBootstrap>(Path.Combine(destination, "gateway.json"), CancellationToken.None).ConfigureAwait(true);
+        var application = await PortableConfiguration.LoadDocumentAsync<ApplicationBootstrap>(Path.Combine(destination, "roles", "application", "Environment", ".env"), CancellationToken.None).ConfigureAwait(true);
+        var restoredGateway = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(Path.Combine(destination, "roles", "gateway", "Environment", ".env"), CancellationToken.None).ConfigureAwait(true);
         application.Validate(); restoredGateway.Validate();
         Assert.Equal(1, result.Receipt.SchemaVersion);
         Assert.Equal(Path.Combine(destination, "application"), application.StateDirectory, StringComparer.Ordinal);
         Assert.Equal(application.Listen, restoredGateway.Application);
         Assert.Equal(backup.Receipt.Registry.RegistryRevision + 1, result.Receipt.Registry.RegistryRevision);
         Assert.Equal(Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(destination, "recovery.json"), CancellationToken.None).ConfigureAwait(true))), result.ReceiptSha256, StringComparer.Ordinal);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(destination, "application.json"), CancellationToken.None).ConfigureAwait(true))), result.Receipt.ApplicationBootstrapSha256, StringComparer.Ordinal);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(destination, "gateway.json"), CancellationToken.None).ConfigureAwait(true))), result.Receipt.GatewayBootstrapSha256, StringComparer.Ordinal);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(destination, "roles", "application", "Environment", ".env"), CancellationToken.None).ConfigureAwait(true))), result.Receipt.ApplicationBootstrapSha256, StringComparer.Ordinal);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(destination, "roles", "gateway", "Environment", ".env"), CancellationToken.None).ConfigureAwait(true))), result.Receipt.GatewayBootstrapSha256, StringComparer.Ordinal);
         Assert.False(File.Exists(application.Listen.UnixSocketPath));
         Assert.Empty(Directory.GetFileSystemEntries(restoredGateway.StateDirectory));
         Assert.False(Directory.Exists(Path.Combine(destination, "recovered")));

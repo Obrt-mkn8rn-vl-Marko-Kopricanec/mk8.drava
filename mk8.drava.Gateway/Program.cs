@@ -22,11 +22,10 @@ internal static class Program
 
     public static async Task Main(string[] args)
     {
-        if (args.Length != 2 || !string.Equals(args[0], "--bootstrap", StringComparison.Ordinal) || !Path.IsPathFullyQualified(args[1]))
-            throw new ArgumentException("Use --bootstrap with an absolute Gateway bootstrap file.", nameof(args));
+        var configurationPath = PortableConfiguration.StartupPath(args);
         using var startup = new GatewayStartupProgress();
         startup.Enter(GatewayStartupPhase.BootstrapRead);
-        var bootstrap = await BootstrapFile.LoadAsync<GatewayBootstrap>(args[1], CancellationToken.None).ConfigureAwait(false);
+        var bootstrap = await BootstrapFile.LoadAsync<GatewayBootstrap>(configurationPath, CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
         startup.Enter(GatewayStartupPhase.PrivateChannelOpen);
         using var channel = new ApplicationChannel(bootstrap.Application);
@@ -64,7 +63,11 @@ internal static class Program
     private static WebApplicationBuilder CreateBuilder(GatewayBootstrap bootstrap, ApplicationChannel channel, GatewayPlanCache cache,
         GatewayMaterialState material, bool enrolled)
     {
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+        var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions { Args = [], EnvironmentName = "Production", ContentRootPath = AppContext.BaseDirectory });
+        builder.WebHost.UseKestrelCore().UseSockets();
+        builder.Services.AddRouting();
+        builder.Logging.AddSimpleConsole();
+        if (bootstrap.UploadDiagnostics) builder.Logging.AddFilter("Mk8.Drava.Presentation.Proxy.GatewayUpload", LogLevel.Debug);
         // Structured proxy access events provide the safe path. Framework request
         // start/finish events also print QueryString and must not duplicate them.
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);

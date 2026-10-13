@@ -1,4 +1,3 @@
-using Mk8.Drava.Application.DAL.Storage;
 using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application.Recovery;
@@ -9,8 +8,8 @@ internal static class ConfiguredSiteRestoreCommand
 
     public static async Task RunAsync(string[] args, CancellationToken cancellationToken)
     {
-        if (args.Length != 2) throw new ArgumentException("Use --site-restore-configured with one private absolute request file.", nameof(args));
-        var request = BootstrapFile.Parse<ConfiguredSiteRestoreRequest>(PrivateOwnerFile.Read(args[1], 1, 1024 * 1024));
+        if (args.Length != 1) throw new ArgumentException("Configured recovery settings come only from the installation-local Supprocom collection.", nameof(args));
+        var request = await PortableConfiguration.LoadAsync<ConfiguredSiteRestoreRequest>(cancellationToken).ConfigureAwait(false);
         var result = await ConfiguredSiteRestore.PrepareAsync(request, cancellationToken).ConfigureAwait(false);
         Console.WriteLine(BootstrapFile.Serialize(result));
     }

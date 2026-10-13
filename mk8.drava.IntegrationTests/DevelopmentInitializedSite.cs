@@ -11,9 +11,9 @@ internal sealed class DevelopmentInitializedSite : IAsyncDisposable
     private DevelopmentProcess? _gateway;
     public string DirectoryPath { get; }
     public string OptionsPath { get; }
-    public string EnrollmentPath => Path.Combine(DirectoryPath, "node", "enrollment.json");
-    public string ApplicationPath => Path.Combine(DirectoryPath, "application.json");
-    public string GatewayPath => Path.Combine(DirectoryPath, "gateway.json");
+    public string EnrollmentPath => Path.Combine(DirectoryPath, "roles", "node", "Environment", ".env");
+    public string ApplicationPath => Path.Combine(DirectoryPath, "roles", "application", "Environment", ".env");
+    public string GatewayPath => Path.Combine(DirectoryPath, "roles", "gateway", "Environment", ".env");
     public string? InitializationLog { get; private set; }
     public JsonObject Options { get; }
 
@@ -41,22 +41,27 @@ internal sealed class DevelopmentInitializedSite : IAsyncDisposable
 
     public async Task<int> InitializeAsync(string? rawJson = null)
     {
-        await File.WriteAllTextAsync(OptionsPath, rawJson ?? Options.ToJsonString()).ConfigureAwait(false);
+        await File.WriteAllTextAsync(OptionsPath, PortableConfiguration.SerializeDocument<Mk8.Drava.Application.Installation.SiteInitializationOptions>(rawJson ?? Options.ToJsonString())).ConfigureAwait(false);
         var command = new DevelopmentProcess(Assembly("mk8.drava.Application"), OptionsPath, "--initialize-site");
         await using var lifetime = command.ConfigureAwait(false);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));
-        var exit = await command.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
-        await command.DisposeAsync().ConfigureAwait(false);
-        InitializationLog = command.CapturedLog;
-        return exit;
+        try
+        {
+            return await command.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            await command.DisposeAsync().ConfigureAwait(false);
+            InitializationLog = command.CapturedLog;
+        }
     }
 
     public async Task StartAsync()
     {
         _application = new DevelopmentProcess(Assembly("mk8.drava.Application"), ApplicationPath);
         _gateway = new DevelopmentProcess(Assembly("mk8.drava.Gateway"), GatewayPath);
-        var profile = await BootstrapFile.LoadAsync<NodeEnrollmentProfile>(EnrollmentPath, CancellationToken.None).ConfigureAwait(false);
-        var gateway = await BootstrapFile.LoadAsync<GatewayBootstrap>(GatewayPath, CancellationToken.None).ConfigureAwait(false);
+        var profile = await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(EnrollmentPath, CancellationToken.None).ConfigureAwait(false);
+        var gateway = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(GatewayPath, CancellationToken.None).ConfigureAwait(false);
         using var client = new DevelopmentSiteClient(profile.Site.RootCertificatePath, gateway.HttpsPort, "probe.site.test");
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         while (true)

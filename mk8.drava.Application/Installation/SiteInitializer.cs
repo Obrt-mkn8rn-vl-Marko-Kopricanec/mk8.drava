@@ -7,6 +7,7 @@ using Mk8.Drava.Application.DAL.Installation;
 using Mk8.Drava.Application.DAL.Registry;
 using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Configuration;
+using Mk8.Drava.Application.Hosting;
 
 namespace Mk8.Drava.Application.Installation;
 
@@ -14,24 +15,32 @@ internal static class SiteInitializer
 {
     public static async Task<string> InitializeAsync(string optionsPath, CancellationToken cancellationToken)
     {
+        using var startup = new ApplicationStartupProgress();
+        startup.Enter(ApplicationStartupPhase.BootstrapRead);
         var options = await BootstrapFile.LoadAsync<SiteInitializationOptions>(optionsPath, cancellationToken).ConfigureAwait(false);
         options.Validate();
+        startup.Enter(ApplicationStartupPhase.SiteWorkspaceOpen);
         using var workspace = PrivateSiteWorkspace.Create(options.DestinationDirectory);
         var applicationState = workspace.CreateDirectory("application");
         workspace.CreateDirectory("gateway");
         var nodeState = workspace.CreateDirectory("node");
         var issuerPath = Path.Combine(applicationState, "site-ca.pfx");
+        startup.Enter(ApplicationStartupPhase.SiteIssuerCreate);
         var fingerprint = await LocalSiteCertificateAuthority.InitializeAsync(issuerPath, options.SiteId, TimeProvider.System, cancellationToken).ConfigureAwait(false);
         using var authority = LocalSiteCertificateAuthority.Open(issuerPath, fingerprint, TimeProvider.System);
         using var root = authority.PublicCertificate;
         using var node = authority.IssueNode(options.NodeId, options.EndpointAddresses);
         await PrivateCertificateFile.WriteNewAsync(Path.Combine(nodeState, "node.pfx"), node.Export(X509ContentType.Pkcs12), cancellationToken).ConfigureAwait(false);
         await workspace.WriteAsync(Path.Combine("node", "site-root.der"), root.RawData, cancellationToken).ConfigureAwait(false);
+        startup.Enter(ApplicationStartupPhase.SiteNodeEnroll);
         await EnrollAsync(applicationState, options, node, cancellationToken).ConfigureAwait(false);
         var bundle = SiteInitializationBundle.Create(options, fingerprint);
+        startup.Enter(ApplicationStartupPhase.SiteConfigurationProtect);
         await WriteBundleAsync(workspace, bundle, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
+        startup.Enter(ApplicationStartupPhase.SitePublish);
         workspace.Publish();
+        startup.Enter(ApplicationStartupPhase.SiteInitializationComplete);
         return fingerprint;
     }
 
@@ -50,8 +59,14 @@ internal static class SiteInitializer
     {
         await workspace.WriteAsync("gateway.token", Encoding.UTF8.GetBytes(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))), cancellationToken).ConfigureAwait(false);
         await workspace.WriteAsync(Path.Combine("application", "administrator.token"), Encoding.UTF8.GetBytes(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))), cancellationToken).ConfigureAwait(false);
-        await workspace.WriteAsync("application.json", Encoding.UTF8.GetBytes(BootstrapFile.Serialize(bundle.Application)), cancellationToken).ConfigureAwait(false);
-        await workspace.WriteAsync("gateway.json", Encoding.UTF8.GetBytes(BootstrapFile.Serialize(bundle.Gateway)), cancellationToken).ConfigureAwait(false);
-        await workspace.WriteAsync(Path.Combine("node", "enrollment.json"), Encoding.UTF8.GetBytes(BootstrapFile.Serialize(bundle.Enrollment)), cancellationToken).ConfigureAwait(false);
+        workspace.CreateDirectory(Path.Combine("roles", "application", "Environment"));
+        workspace.CreateDirectory(Path.Combine("roles", "gateway", "Environment"));
+        workspace.CreateDirectory(Path.Combine("roles", "node", "Environment"));
+        await workspace.WriteAsync(Path.Combine("roles", "application", "Environment", ".env"), Encoding.UTF8.GetBytes(PortableConfiguration.Serialize(bundle.Application)), cancellationToken).ConfigureAwait(false);
+        await workspace.WriteAsync(Path.Combine("roles", "gateway", "Environment", ".env"), Encoding.UTF8.GetBytes(PortableConfiguration.Serialize(bundle.Gateway)), cancellationToken).ConfigureAwait(false);
+        await workspace.WriteAsync(Path.Combine("roles", "node", "Environment", ".env"), Encoding.UTF8.GetBytes(PortableConfiguration.Serialize(bundle.Enrollment)), cancellationToken).ConfigureAwait(false);
+        _ = await PortableConfiguration.LoadDocumentAsync<ApplicationBootstrap>(Path.Combine(workspace.StagingDirectory, "roles", "application", "Environment", ".env"), cancellationToken).ConfigureAwait(false);
+        _ = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(Path.Combine(workspace.StagingDirectory, "roles", "gateway", "Environment", ".env"), cancellationToken).ConfigureAwait(false);
+        _ = await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(Path.Combine(workspace.StagingDirectory, "roles", "node", "Environment", ".env"), cancellationToken).ConfigureAwait(false);
     }
 }

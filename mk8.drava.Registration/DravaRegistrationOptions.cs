@@ -28,6 +28,13 @@ public sealed record DravaRegistrationOptions
     {
         ArgumentNullException.ThrowIfNull(serviceId);
         var profile = await BootstrapFile.LoadAsync<NodeEnrollmentProfile>(path, cancellationToken).ConfigureAwait(false);
+        return FromEnrollment(profile, serviceId, readinessPath);
+    }
+
+    public static DravaRegistrationOptions FromEnrollment(NodeEnrollmentProfile profile, string serviceId, string readinessPath)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(serviceId);
         profile.Validate();
         RegistrationSiteTrust.RequireLabel(serviceId);
         if (!string.Equals(serviceId, profile.ServicePrefix, StringComparison.Ordinal) && !serviceId.StartsWith(profile.ServicePrefix + "-", StringComparison.Ordinal))
@@ -47,7 +54,9 @@ public sealed record DravaRegistrationOptions
         Site.Validate();
         if (PendingRetrySeconds is < 1 or > 60 || RenewJitterPercent is < 0 or > 25 || ShutdownDeadlineMilliseconds is < 100 or > 30_000 ||
             AgentDrainDeadlineMilliseconds is < 100 or > 10_000 || AgentDrainDeadlineMilliseconds >= ShutdownDeadlineMilliseconds)
+        {
             throw new InvalidDataException("Invalid SDK retry or shutdown settings.");
+        }
         RegistrationSiteTrust.RequireLabel(NodeId);
         RegistrationSiteTrust.RequireLabel(OwnerId);
         RegistrationSiteTrust.RequireLabel(ServiceId);

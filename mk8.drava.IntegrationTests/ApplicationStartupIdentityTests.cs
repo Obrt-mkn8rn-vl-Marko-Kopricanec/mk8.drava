@@ -29,7 +29,7 @@ public sealed class ApplicationStartupIdentityTests
                 Listen = new IpcEndpoint { UnixSocketPath = socket, IdentityTokenPath = token },
             };
             var path = Path.Combine(directory, "application.json");
-            await File.WriteAllTextAsync(path, BootstrapFile.Serialize(bootstrap), CancellationToken.None).ConfigureAwait(true);
+            await File.WriteAllTextAsync(path, PortableConfiguration.Serialize(bootstrap), CancellationToken.None).ConfigureAwait(true);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path);
             await using var lifetime = process.ConfigureAwait(true);

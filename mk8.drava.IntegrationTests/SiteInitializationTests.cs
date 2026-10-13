@@ -30,17 +30,17 @@ public sealed class SiteInitializationTests
         await using var siteLifetime = site.ConfigureAwait(true);
         Assert.Equal(0, await site.InitializeAsync().ConfigureAwait(true));
         AssertPrivateFiles(site.DirectoryPath);
-        var profile = await BootstrapFile.LoadAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true);
+        var profile = await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true);
         Assert.Contains(profile.Site.RootFingerprint, site.InitializationLog, StringComparison.Ordinal);
         var originalRoot = await File.ReadAllBytesAsync(profile.Site.RootCertificatePath).ConfigureAwait(true);
         var originalNode = await File.ReadAllBytesAsync(profile.Site.NodeCertificatePath).ConfigureAwait(true);
         await site.StartAsync().ConfigureAwait(true);
-        var options = await DravaRegistrationOptions.LoadEnrollmentAsync(site.EnrollmentPath, "svc-api", "/ready", CancellationToken.None).ConfigureAwait(true);
+        var options = DravaRegistrationOptions.FromEnrollment(await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true), "svc-api", "/ready");
         options = options with { PendingRetrySeconds = 1, RenewJitterPercent = 0 };
-        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("initialized-service"), registration: options).ConfigureAwait(true);
+        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("initialized-service", context.RequestAborted), registration: options).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         await WaitReadyAsync(upstream).ConfigureAwait(true);
-        var gateway = await BootstrapFile.LoadAsync<GatewayBootstrap>(site.GatewayPath, CancellationToken.None).ConfigureAwait(true);
+        var gateway = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(site.GatewayPath, CancellationToken.None).ConfigureAwait(true);
         using var business = new DevelopmentSiteClient(profile.Site.RootCertificatePath, gateway.HttpsPort, "svc-api.site.test");
         await AssertServedAsync(business.Client).ConfigureAwait(true);
         await AssertInitialGrantAsync(site, gateway, profile).ConfigureAwait(true);
@@ -111,7 +111,7 @@ public sealed class SiteInitializationTests
         if (string.Equals(scope, "port", StringComparison.Ordinal)) { site.Options["minimumPort"] = 100; site.Options["maximumPort"] = 100; }
         Assert.Equal(0, await site.InitializeAsync().ConfigureAwait(true));
         await site.StartAsync().ConfigureAwait(true);
-        var profile = await BootstrapFile.LoadAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true);
+        var profile = await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true);
         using var channel = new SiteRegistrationChannel(profile.Site, new DiscoveryCandidate(profile.GatewayAddresses[0], profile.RegistrationPort));
         await channel.VerifySiteAsync(CancellationToken.None).ConfigureAwait(true);
         var identity = new RegistrationIdentity
@@ -121,7 +121,7 @@ public sealed class SiteInitializationTests
             InstanceId = Guid.NewGuid().ToString("N"), BootId = Guid.NewGuid().ToString("N"),
         };
         var command = new RegistrationCommand { Operation = RegistrationOperation.Register, Identity = identity,
-            Advertisement = new ServiceAdvertisement { DeploymentId = "default", Address = "127.0.0.1", Port = TwoProcessProxy.UnusedPort(), ReadinessPath = "/ready" } };
+            Advertisement = new ServiceAdvertisement { DeploymentId = "default", Address = "127.0.0.1", Port = TwoProcessProxy.UnusedPort(), ReadinessPath = "/ready", }, };
         var rejected = await Assert.ThrowsAsync<RpcException>(() => channel.SubmitAsync(command, CancellationToken.None).AsTask()).ConfigureAwait(true);
         Assert.Equal(StatusCode.PermissionDenied, rejected.StatusCode);
     }
@@ -152,8 +152,8 @@ public sealed class SiteInitializationTests
         await using var siteLifetime = site.ConfigureAwait(true);
         Assert.Equal(0, await site.InitializeAsync().ConfigureAwait(true));
         await site.StartAsync().ConfigureAwait(true);
-        var options = await DravaRegistrationOptions.LoadEnrollmentAsync(site.EnrollmentPath, "svc-api", "/ready", CancellationToken.None).ConfigureAwait(true);
-        var gateway = await BootstrapFile.LoadAsync<GatewayBootstrap>(site.GatewayPath, CancellationToken.None).ConfigureAwait(true);
+        var options = DravaRegistrationOptions.FromEnrollment(await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true), "svc-api", "/ready");
+        var gateway = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(site.GatewayPath, CancellationToken.None).ConfigureAwait(true);
         using var administrator = new DevelopmentSiteClient(options.Site.RootCertificatePath, gateway.ManagementPort, "admin.site.test", options.Site.NodeCertificatePath);
         administrator.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await File.ReadAllTextAsync(Path.Combine(site.DirectoryPath, "application", "administrator.token")).ConfigureAwait(true));
         var policy = await administrator.Client.GetFromJsonAsync<PolicyStateResponse>(new Uri("/admin/drava/policy", UriKind.Relative)).ConfigureAwait(true);
@@ -164,10 +164,12 @@ public sealed class SiteInitializationTests
             Policy = JsonSerializer.SerializeToElement(new { services = new[] { new { serviceId = "svc-api", profile = new { host = "edge.site.test", pathPrefix = "/api/" } } } }),
         }).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
-        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("initialized-service"), registration: options with { PendingRetrySeconds = 1, RenewJitterPercent = 0 }).ConfigureAwait(true);
+        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("initialized-service", context.RequestAborted), registration: options with { PendingRetrySeconds = 1, RenewJitterPercent = 0 }).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         await WaitReadyAsync(upstream).ConfigureAwait(true);
-        Assert.Collection(upstream.RegistrationState.Status!.AssignedUrls, url => Assert.Equal($"https://edge.site.test:{gateway.HttpsPort}/api/", url));
+        var assignedUrls = upstream.RegistrationState.Status!.AssignedUrls;
+        DevelopmentCardinality.RequireSingle(assignedUrls);
+        Assert.Equal(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"https://edge.site.test:{gateway.HttpsPort}/api/"), assignedUrls[0]);
         using var business = new DevelopmentSiteClient(options.Site.RootCertificatePath, gateway.HttpsPort, "edge.site.test");
         using var response = await business.Client.GetAsync(new Uri("/api/echo", UriKind.Relative)).ConfigureAwait(true);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -185,8 +187,8 @@ public sealed class SiteInitializationTests
         site.Options["registration"]!["renewAfterSeconds"] = 30;
         Assert.Equal(0, await site.InitializeAsync().ConfigureAwait(true));
         await site.StartAsync().ConfigureAwait(true);
-        var options = await DravaRegistrationOptions.LoadEnrollmentAsync(site.EnrollmentPath, "svc-api", "/ready", CancellationToken.None).ConfigureAwait(true);
-        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("initialized-service"), registration: options with { PendingRetrySeconds = 1, RenewJitterPercent = 0 }).ConfigureAwait(true);
+        var options = DravaRegistrationOptions.FromEnrollment(await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true), "svc-api", "/ready");
+        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("initialized-service", context.RequestAborted), registration: options with { PendingRetrySeconds = 1, RenewJitterPercent = 0 }).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         await WaitReadyAsync(upstream).ConfigureAwait(true);
         var state = upstream.RegistrationState;
@@ -230,12 +232,11 @@ public sealed class SiteInitializationTests
         Assert.NotNull(state);
         using var certificate = X509CertificateLoader.LoadPkcs12FromFile(profile.Site.NodeCertificatePath, password: null, X509KeyStorageFlags.EphemeralKeySet);
         var fingerprint = certificate.GetCertHashString(HashAlgorithmName.SHA256);
-        Assert.Collection(state.Nodes, grant =>
-        {
-            Assert.Equal("local", grant.NodeId); Assert.Equal("development", grant.OwnerId); Assert.Equal("svc", grant.ServicePrefix);
-            Assert.Equal(fingerprint, grant.CertificateFingerprint);
-            Assert.False(grant.Revoked); Assert.Collection(grant.EndpointAddresses, address => Assert.Equal("127.0.0.1", address));
-        });
+        DevelopmentCardinality.RequireSingle(state.Nodes);
+        var grant = state.Nodes[0];
+        Assert.Equal("local", grant.NodeId); Assert.Equal("development", grant.OwnerId); Assert.Equal("svc", grant.ServicePrefix);
+        Assert.Equal(fingerprint, grant.CertificateFingerprint);
+        Assert.False(grant.Revoked); DevelopmentCardinality.RequireSingle(grant.EndpointAddresses); Assert.Equal("127.0.0.1", grant.EndpointAddresses[0], StringComparer.Ordinal);
     }
 
     private static void AssertPrivateFiles(string path)

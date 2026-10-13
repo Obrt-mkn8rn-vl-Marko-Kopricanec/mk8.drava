@@ -6,22 +6,70 @@ namespace Mk8.Drava.IntegrationTests;
 internal sealed class DevelopmentProcess : IAsyncDisposable
 {
     private readonly Process _process;
+    private readonly string? _outputDirectory;
     private readonly Task _stdout;
     private readonly Task _stderr;
     private readonly StringBuilder _log = new();
     private int _disposed;
 
-    public DevelopmentProcess(string assemblyPath, string bootstrapPath, string bootstrapOption = "--bootstrap", IReadOnlyDictionary<string, string>? environment = null)
+    public DevelopmentProcess(string assemblyPath, string bootstrapPath, string bootstrapOption = "--portable-service", IReadOnlyDictionary<string, string>? environment = null)
     {
+        var portable = bootstrapOption is "--portable-service" or "--node-agent" or "--initialize-site";
+        if (portable)
+        {
+            _outputDirectory = PrepareOutputRoot(assemblyPath, bootstrapPath);
+            assemblyPath = Path.Combine(_outputDirectory, Path.GetFileName(assemblyPath));
+        }
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         start.ArgumentList.Add(assemblyPath);
-        start.ArgumentList.Add(bootstrapOption);
-        start.ArgumentList.Add(bootstrapPath);
+        if (portable)
+        {
+            if (!string.Equals(bootstrapOption, "--portable-service", StringComparison.Ordinal)) start.ArgumentList.Add(bootstrapOption);
+        }
+        else
+        {
+            start.ArgumentList.Add(bootstrapOption);
+            start.ArgumentList.Add(bootstrapPath);
+        }
         if (environment is not null)
             foreach (var entry in environment) start.Environment[entry.Key] = entry.Value;
-        _process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the development process.");
+        try { _process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the development process."); }
+        catch
+        {
+            if (_outputDirectory is not null) Directory.Delete(_outputDirectory, recursive: true);
+            throw;
+        }
         _stdout = CaptureAsync(_process.StandardOutput);
         _stderr = CaptureAsync(_process.StandardError);
+    }
+
+    private static string PrepareOutputRoot(string assemblyPath, string documentPath)
+    {
+        var root = Directory.CreateTempSubdirectory("drava_role_").FullName;
+        try
+        {
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var source = Path.GetDirectoryName(assemblyPath) ?? throw new InvalidDataException("Development output directory is missing.");
+            foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(source, file);
+                if (relative.StartsWith("Environment" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) continue;
+                var target = Path.Combine(root, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(file, target);
+            }
+            var environment = Directory.CreateDirectory(Path.Combine(root, "Environment")).FullName;
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(environment, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.Copy(documentPath, Path.Combine(environment, ".env"));
+            var key = Path.Combine(Path.GetDirectoryName(documentPath)!, ".installation.key");
+            if (File.Exists(key)) File.Copy(key, Path.Combine(environment, ".installation.key"));
+            return root;
+        }
+        catch
+        {
+            Directory.Delete(root, recursive: true);
+            throw;
+        }
     }
 
     public bool HasExited => _process.HasExited;
@@ -68,5 +116,6 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
         await _process.WaitForExitAsync().ConfigureAwait(false);
         await Task.WhenAll(_stdout, _stderr).ConfigureAwait(false);
         _process.Dispose();
+        if (_outputDirectory is not null) Directory.Delete(_outputDirectory, recursive: true);
     }
 }

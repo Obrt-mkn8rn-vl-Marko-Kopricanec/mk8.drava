@@ -45,10 +45,10 @@ public sealed class LifecycleSettingsTests
     {
         var identity = RegistryTestFixture.Intent().Identity;
         var readiness = new ReadinessTracker(1, 2);
-        Assert.True(readiness.Record(identity, true));
-        Assert.True(readiness.Record(identity, false));
-        Assert.False(readiness.Record(identity, false));
-        Assert.True(readiness.Record(identity, true));
+        Assert.True(readiness.Record(identity, succeeded: true));
+        Assert.True(readiness.Record(identity, succeeded: false));
+        Assert.False(readiness.Record(identity, succeeded: false));
+        Assert.True(readiness.Record(identity, succeeded: true));
         using var fixture = new RelayTestFixture(TimeSpan.FromSeconds(15));
         fixture.Clock.Advance(TimeSpan.FromSeconds(14));
         Assert.Equal(fixture.Command.Identity.InstanceId, fixture.Authorize(fixture.Capability()).Endpoint.Identity.InstanceId);
@@ -89,8 +89,8 @@ public sealed class LifecycleSettingsTests
         var path = Path.Combine(Path.GetTempPath(), "drava_settings_" + Guid.NewGuid().ToString("N") + ".json");
         try
         {
-            await File.WriteAllTextAsync(path, json).ConfigureAwait(true);
-            var exception = await Record.ExceptionAsync(() => BootstrapFile.LoadAsync<GatewayBootstrap>(path, CancellationToken.None)).ConfigureAwait(true);
+            await File.WriteAllTextAsync(path, PortableConfiguration.SerializeDocument<GatewayBootstrap>(json)).ConfigureAwait(true);
+            var exception = await Record.ExceptionAsync(() => PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None)).ConfigureAwait(true);
             Assert.True(exception is InvalidDataException or System.Text.Json.JsonException);
         }
         finally { File.Delete(path); }

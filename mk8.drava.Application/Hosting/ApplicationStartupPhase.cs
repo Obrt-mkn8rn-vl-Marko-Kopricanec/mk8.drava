@@ -12,4 +12,10 @@ internal enum ApplicationStartupPhase
     AutomaticRoutesInitialize,
     ListenerStart,
     HostStarted,
+    SiteWorkspaceOpen,
+    SiteIssuerCreate,
+    SiteNodeEnroll,
+    SiteConfigurationProtect,
+    SitePublish,
+    SiteInitializationComplete,
 }

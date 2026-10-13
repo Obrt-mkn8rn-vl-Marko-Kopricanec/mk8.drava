@@ -47,7 +47,10 @@ internal static class NodeAgentHost
         var policy = RelayPolicyMapping.ToPolicy(bootstrap.Relay);
         using var admission = new SemaphoreSlim(policy.MaximumConcurrentConnections, policy.MaximumConcurrentConnections);
         var descriptorState = new NodeAgentDescriptorState();
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+        var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions { Args = [], EnvironmentName = "Production", ContentRootPath = AppContext.BaseDirectory });
+        builder.WebHost.UseKestrelCore().UseSockets();
+        builder.Services.AddRouting();
+        builder.Logging.AddSimpleConsole();
         builder.Services.AddGrpc(options => { options.MaxReceiveMessageSize = 64 * 1024; options.MaxSendMessageSize = 64 * 1024; });
         builder.Services.AddSingleton(_ => new NodeRelayService(authorizer, admission, policy));
         builder.Services.AddSingleton(_ => new NodeAgentLocalService(mappings, descriptorState, bootstrap));

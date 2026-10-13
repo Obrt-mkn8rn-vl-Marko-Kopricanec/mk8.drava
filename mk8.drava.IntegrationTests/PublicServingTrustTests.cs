@@ -25,8 +25,8 @@ public sealed class PublicServingTrustTests
         var json = JsonNode.Parse(BootstrapFile.Serialize(fixture.Gateway))!.AsObject();
         json["servingTrust"] = new JsonObject { ["mode"] = "pinned", ["rootFingerprint"] = material.Root.GetCertHashString(HashAlgorithmName.SHA256) };
         var path = Path.Combine(fixture.Application.StateDirectory, "public-gateway.json");
-        await File.WriteAllTextAsync(path, json.ToJsonString()).ConfigureAwait(true);
-        var gateway = await BootstrapFile.LoadAsync<GatewayBootstrap>(path, CancellationToken.None).ConfigureAwait(true);
+        await File.WriteAllTextAsync(path, PortableConfiguration.SerializeDocument<GatewayBootstrap>(json.ToJsonString())).ConfigureAwait(true);
+        var gateway = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(path, CancellationToken.None).ConfigureAwait(true);
         using var validated = new ValidatedServingPlan(plan, gateway, fixture.Clock, requireCurrent: true);
         Assert.Equal(material.Leaf.GetCertHashString(HashAlgorithmName.SHA256), validated.ServingCertificate.GetCertHashString(HashAlgorithmName.SHA256));
         using var privateNode = fixture.Authority.IssueNode("node", ["127.0.0.1"]);

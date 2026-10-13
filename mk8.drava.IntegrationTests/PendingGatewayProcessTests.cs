@@ -27,13 +27,13 @@ public sealed class PendingGatewayProcessTests
         using var node = fixture.Authority.IssueNode("node", ["127.0.0.1"]); var nodePath = Path.Combine(directory, "node.pfx");
         await PrivateCertificateFile.WriteNewAsync(nodePath, node.Export(X509ContentType.Pkcs12), CancellationToken.None).ConfigureAwait(true);
         var gateway = fixture.Gateway with { HttpPort = TwoProcessProxy.UnusedPort(), HttpsPort = TwoProcessProxy.UnusedPort(), RegistrationPort = TwoProcessProxy.UnusedPort(), DiscoveryEnabled = false,
-            ServingTrust = application.Controller!.ServingTrust, Application = new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "absent.sock"), IdentityTokenPath = token } };
+            ServingTrust = application.Controller!.ServingTrust, Application = new IpcEndpoint { UnixSocketPath = Path.Combine(directory, "absent.sock"), IdentityTokenPath = token, }, };
         var plan = plans.Read("local");
         foreach (var listener in plan.Listeners)
             listener.Port = checked((uint)(listener.Id switch { "http" => gateway.HttpPort, "https" => gateway.HttpsPort, "registration" => gateway.RegistrationPort, _ => throw new InvalidOperationException("Unexpected listener.") }));
         plan.ContentSha256 = Google.Protobuf.ByteString.CopyFrom(Mk8.Drava.Transport.Protocol.PresentationPlanDigest.Compute(plan));
         using (var cache = new GatewayPlanCache(directory)) await cache.WriteAsync(plan, CancellationToken.None).ConfigureAwait(true);
-        var bootstrapPath = Path.Combine(directory, "pending-gateway.json"); await File.WriteAllTextAsync(bootstrapPath, BootstrapFile.Serialize(gateway)).ConfigureAwait(true);
+        var bootstrapPath = Path.Combine(directory, "pending-gateway.json"); await File.WriteAllTextAsync(bootstrapPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
         var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), bootstrapPath);
         await using var processLifetime = process.ConfigureAwait(true);
         using var privateClient = new DevelopmentSiteClient(rootPath, gateway.RegistrationPort, "register.site.test", nodePath);

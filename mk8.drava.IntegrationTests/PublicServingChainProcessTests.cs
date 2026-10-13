@@ -88,7 +88,7 @@ public sealed class PublicServingChainProcessTests
         using (var cache = new GatewayPlanCache(gatewayDirectory))
             await cache.WriteAsync(plans.Read("local"), CancellationToken.None).ConfigureAwait(true);
         var bootstrapPath = Path.Combine(fixture.Application.StateDirectory, "gateway.json");
-        await File.WriteAllTextAsync(bootstrapPath, BootstrapFile.Serialize(gateway)).ConfigureAwait(true);
+        await File.WriteAllTextAsync(bootstrapPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
         return (gateway, bootstrapPath);
     }
 
@@ -110,7 +110,7 @@ public sealed class PublicServingChainProcessTests
         await connection.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
         string? fingerprint = null;
         var receivedIntermediate = false;
-        using var tls = new SslStream(connection.GetStream(), leaveInnerStreamOpen: false, (_, certificate, receivedChain, errors) =>
+        var tls = new SslStream(connection.GetStream(), leaveInnerStreamOpen: false, (_, certificate, receivedChain, errors) =>
         {
             if (certificate is null || (errors & (SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateNotAvailable)) != SslPolicyErrors.None) return false;
             using var leaf = X509CertificateLoader.LoadCertificate(certificate.GetRawCertData());
@@ -122,17 +122,20 @@ public sealed class PublicServingChainProcessTests
             chain.ChainPolicy.ApplicationPolicy.Add(new Oid("1.3.6.1.5.5.7.3.1"));
             var withoutIntermediate = chain.Build(leaf);
             if (receivedChain is not null)
+            {
                 foreach (var element in receivedChain.ChainElements)
                     if (!element.Certificate.RawData.AsSpan().SequenceEqual(leaf.RawData)) chain.ChainPolicy.ExtraStore.Add(element.Certificate);
+            }
             receivedIntermediate = !withoutIntermediate && chain.ChainPolicy.ExtraStore.Count > 0;
             if (!chain.Build(leaf)) return false;
             fingerprint = leaf.GetCertHashString(HashAlgorithmName.SHA256);
             return true;
         });
+        await using var tlsLifetime = tls.ConfigureAwait(false);
         await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
         {
             TargetHost = host,
-            ClientCertificates = clientCertificate is null ? null : new X509CertificateCollection { clientCertificate },
+            ClientCertificates = clientCertificate is null ? null : [clientCertificate],
             ApplicationProtocols = [clientCertificate is null ? SslApplicationProtocol.Http11 : SslApplicationProtocol.Http2],
         }, cancellationToken).ConfigureAwait(false);
         if (clientCertificate is null)

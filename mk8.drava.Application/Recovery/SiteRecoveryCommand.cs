@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Mk8.Drava.Application.BLL.ControlPlane.Backup;
 using Mk8.Drava.Application.DAL.Registry;
-using Mk8.Drava.Application.DAL.Storage;
+using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application.Recovery;
 
@@ -19,9 +19,8 @@ internal static class SiteRecoveryCommand
 
     public static async Task RunAsync(string[] args, CancellationToken cancellationToken)
     {
-        if (args.Length != 2) throw new ArgumentException("Use --site-backup or --site-restore with one private absolute request file.", nameof(args));
-        var bytes = PrivateOwnerFile.Read(args[1], 1, 65536);
-        var request = JsonSerializer.Deserialize<SiteRecoveryRequest>(bytes, Options) ?? throw new InvalidDataException("Missing site recovery request.");
+        if (args.Length != 1) throw new ArgumentException("Site recovery settings come only from the installation-local Supprocom collection.", nameof(args));
+        var request = await PortableConfiguration.LoadAsync<SiteRecoveryRequest>(cancellationToken).ConfigureAwait(false);
         if (request.SchemaVersion != 1) throw new InvalidDataException("Unsupported site recovery request schema.");
         var restoring = string.Equals(args[0], "--site-restore", StringComparison.Ordinal);
         if (restoring ? request.Files.Length != 0 || request.GatewayDirectory.Length != 0 : request.ApprovedFiles.Length != 0 || request.ExpectedManifestSha256.Length != 0)

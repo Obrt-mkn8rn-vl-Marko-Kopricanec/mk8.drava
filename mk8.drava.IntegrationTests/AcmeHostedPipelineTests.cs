@@ -68,7 +68,7 @@ public sealed class AcmeHostedPipelineTests
             await host.StopAsync(shutdown.Token).ConfigureAwait(true);
             var evidence = Path.Combine(TwoProcessProxy.FindRoot(), "artifacts", "acme-gateway-publication-tests", Path.GetFileName(directory));
             Directory.CreateDirectory(evidence);
-            await File.WriteAllTextAsync(Path.Combine(evidence, "gateway.log"), process.CapturedLog).ConfigureAwait(true);
+            await File.WriteAllTextAsync(Path.Combine(evidence, "gateway.log"), process.CapturedLog, CancellationToken.None).ConfigureAwait(true);
         }
     }
 
@@ -77,7 +77,7 @@ public sealed class AcmeHostedPipelineTests
         using (var cache = new GatewayPlanCache(gateway.StateDirectory))
             await cache.WriteAsync(pending, CancellationToken.None).ConfigureAwait(true);
         var gatewayPath = Path.Combine(directory, "gateway.json");
-        await File.WriteAllTextAsync(gatewayPath, BootstrapFile.Serialize(gateway)).ConfigureAwait(true);
+        await File.WriteAllTextAsync(gatewayPath, PortableConfiguration.Serialize(gateway)).ConfigureAwait(true);
         return gatewayPath;
     }
 
@@ -138,8 +138,8 @@ public sealed class AcmeHostedPipelineTests
     private static async Task AssertIssuedTlsAsync(GatewayBootstrap gateway, PresentationPlan current, X509Certificate2 publicRoot,
         X509Certificate2 privateRoot, X509Certificate2 node, CancellationToken cancellationToken)
     {
-        using var issued = X509CertificateLoader.LoadPkcs12(current.Certificates[0].Pfx.Span, null, X509KeyStorageFlags.EphemeralKeySet);
-        var serving = await PublicServingChainProcessTests.ReadCertificateAsync(gateway.HttpsPort, "svc.site.test", publicRoot, clientCertificate: null, requireIntermediate: true, cancellationToken).ConfigureAwait(true);
+        using var issued = X509CertificateLoader.LoadPkcs12(current.Certificates[0].Pfx.Span, password: null, X509KeyStorageFlags.EphemeralKeySet);
+        var serving = await PublicServingChainProcessTests.ReadCertificateAsync(gateway.HttpsPort, "svc.site.test", publicRoot, clientCertificate: null, requireIntermediate: true, cancellationToken: cancellationToken).ConfigureAwait(true);
         Assert.Equal(issued.GetCertHashString(HashAlgorithmName.SHA256), serving);
         var privateAfter = await PublicServingChainProcessTests.ReadCertificateAsync(gateway.RegistrationPort, "register.site.test", privateRoot, node, requireIntermediate: false, cancellationToken).ConfigureAwait(true);
         Assert.NotEqual(serving, privateAfter, StringComparer.Ordinal);
@@ -216,7 +216,7 @@ public sealed class AcmeHostedPipelineTests
         await service.StartAsync(CancellationToken.None).ConfigureAwait(true);
         try
         {
-            await dns.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+            await dns.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TimeProvider.System).ConfigureAwait(true);
             Assert.Equal("attempting", RequireOne(await history.ReadAsync(CancellationToken.None).ConfigureAwait(true)).LastResult);
         }
         finally
@@ -249,7 +249,7 @@ public sealed class AcmeHostedPipelineTests
             Assert.Same(lifecycle, provider.GetRequiredService<IAcmeRenewalScheduleInputSource>());
             Assert.IsType<OwnedDns01CertificateIssuer>(provider.GetRequiredService<IAcmeCertificateIssuer>());
             Assert.NotNull(provider.GetRequiredService<AcmeCertificateManager>());
-            Assert.Collection(provider.GetServices<IHostedService>().OfType<AcmeRenewalService>(), static service => Assert.NotNull(service));
+            DevelopmentCardinality.RequireSingle(provider.GetServices<IHostedService>().OfType<AcmeRenewalService>());
             Assert.False(File.Exists(bootstrap.Controller.Acme.AccountKeyPath));
         }
         using var reopened = new AcmeDns01CleanupJournal(bootstrap.Controller.Acme.CleanupJournalPath);
@@ -265,7 +265,7 @@ public sealed class AcmeHostedPipelineTests
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
         Assert.Null(bootstrap.Controller!.Acme.DirectoryUrl);
-        var services = Services(bootstrap); services.AddOwnerAcmeLifecycle(bootstrap, plans, null);
+        var services = Services(bootstrap); services.AddOwnerAcmeLifecycle(bootstrap, plans, history: null);
         var provider = services.BuildServiceProvider(); await using var providerLifetime = provider.ConfigureAwait(true);
         Assert.IsType<DisabledAcmeCertificateIssuer>(provider.GetRequiredService<IAcmeCertificateIssuer>());
         Assert.Empty(provider.GetServices<IHostedService>().OfType<AcmeRenewalService>());
@@ -280,15 +280,15 @@ public sealed class AcmeHostedPipelineTests
         {
             ServingTrust = new ServingTrustSettings { Mode = "pinned", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256) },
             ServingCertificatePath = Path.Combine(directory, "public.pfx"),
-            DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = Path.Combine(directory, "dns.token") },
+            DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = Path.Combine(directory, "dns.token"), },
             Acme = new AcmeIssuanceSettings { Enabled = true, TermsAccepted = true, DirectoryUrl = new Uri("https://ca.example/directory"), ContactEmails = ["ops@example.org"],
-                AccountKeyPath = Path.Combine(directory, "account.pem"), CleanupJournalPath = Path.Combine(directory, "cleanup.json"), PinnedServingRootPath = Path.Combine(directory, "public-root.der") },
-        } };
+                AccountKeyPath = Path.Combine(directory, "account.pem"), CleanupJournalPath = Path.Combine(directory, "cleanup.json"), PinnedServingRootPath = Path.Combine(directory, "public-root.der"), },
+        }, };
     }
 
     private static CertesDns01CertificateIssuer Issuer(ApplicationBootstrap bootstrap, DevelopmentAcmeDnsProvider dns, DevelopmentAcmeServer server) => new(
         new AcmeDns01IssuerPolicy { SiteDomain = bootstrap.Controller!.Domain, Directory = bootstrap.Controller.Acme.RequireDirectoryUrl(),
-            AccountKeyPath = bootstrap.Controller.Acme.AccountKeyPath, ContactEmails = bootstrap.Controller.Acme.ContactEmails, TermsAccepted = true, PollInterval = TimeSpan.FromMilliseconds(100) }, dns, () => server);
+            AccountKeyPath = bootstrap.Controller.Acme.AccountKeyPath, ContactEmails = bootstrap.Controller.Acme.ContactEmails, TermsAccepted = true, PollInterval = TimeSpan.FromMilliseconds(100), }, dns, () => server);
     private static SqliteAcmeCertificateStatusPersistence History(SqliteRegistryRepository repository, ApplicationBootstrap bootstrap) =>
         new(repository, bootstrap.Controller!.Domain, bootstrap.Controller.Acme.RequireDirectoryUrl());
     private static AcmeCertificateManager Manager(ApplicationBootstrap bootstrap, AcmeServingLifecycle lifecycle, IAcmeCertificateIssuer issuer, AcmeCertificateStatusStore status, LifecycleCounters counters) =>
@@ -306,7 +306,8 @@ public sealed class AcmeHostedPipelineTests
     }
     private static AcmeCertificateLifecycleStatus RequireOne(IReadOnlyList<AcmeCertificateLifecycleStatus> statuses)
     {
-        Assert.Collection(statuses, static status => Assert.NotNull(status));
+        DevelopmentCardinality.RequireSingle(statuses);
+        Assert.NotNull(statuses[0]);
         return statuses[0];
     }
     private sealed class LifecycleCounters : IProxyAcmeMetricsSink, IAcmeCertificateRenewalEventSink

@@ -15,6 +15,8 @@ public sealed record ApplicationBootstrap
     public int ManagementPort { get; init; }
     public string AdministratorTokenPath { get; init; } = "";
     public int MaxConcurrentExchanges { get; init; } = 256;
+    public bool ForwardingDiagnostics { get; init; }
+    public bool TransportDiagnostics { get; init; }
     public ControllerBootstrap? Controller { get; init; }
 
     public void Validate()

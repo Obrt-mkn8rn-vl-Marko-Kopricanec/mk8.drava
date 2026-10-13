@@ -16,6 +16,7 @@ public sealed record GatewayBootstrap
     public GatewayPlanSettings Plan { get; init; } = new();
     public ServingTrustSettings ServingTrust { get; init; } = new();
     public int MaxConcurrentExchanges { get; init; } = 256;
+    public bool UploadDiagnostics { get; init; }
     public int MaxHeaderBytes { get; init; } = 32 * 1024;
     public long MaxRequestBodyBytes { get; init; } = 100L * 1024 * 1024;
     public IReadOnlyList<GatewayRequestBodyLimit> RequestBodyLimits { get; init; } = [];
@@ -29,7 +30,9 @@ public sealed record GatewayBootstrap
         if (!System.Net.IPAddress.TryParse(BindAddress, out _)) throw new InvalidDataException("Gateway bind address must be an IP literal.");
         if (HttpPort is < 0 or > 65535 || HttpsPort is < 0 or > 65535 || RegistrationPort is < 1 or > 65535 || (HttpPort == 0 && HttpsPort == 0)) throw new InvalidDataException("Invalid Gateway listener ports.");
         if (ManagementPort is < 0 or > 65535 || (ManagementPort > 0 && EnrollmentRootFingerprint.Length == 0)) throw new InvalidDataException("Management requires an enrolled TLS listener.");
-        if (new[] { HttpPort, HttpsPort, RegistrationPort, ManagementPort }.Where(static port => port != 0).Distinct().Count() != new[] { HttpPort, HttpsPort, RegistrationPort, ManagementPort }.Count(static port => port != 0)) throw new InvalidDataException("Gateway listener ports must be distinct.");
+        var listenerPorts = new HashSet<int>();
+        foreach (var port in new[] { HttpPort, HttpsPort, RegistrationPort, ManagementPort })
+            if (port != 0 && !listenerPorts.Add(port)) throw new InvalidDataException("Gateway listener ports must be distinct.");
         if (MaxConcurrentExchanges is < 1 or > 4096 || MaxHeaderBytes is < 1024 or > 65536 || MaxRequestBodyBytes is < 0 or > 1L * 1024 * 1024 * 1024 * 1024 || FrameBytes is < 1024 or > 32768 || StreamWindowFrames is < 1 or > 8) throw new InvalidDataException("Invalid Gateway resource bounds.");
         ValidateBodyLimits();
         if (!Path.IsPathFullyQualified(StateDirectory)) throw new InvalidDataException("Gateway state directory must be absolute.");

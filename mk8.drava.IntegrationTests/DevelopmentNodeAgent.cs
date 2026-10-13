@@ -36,10 +36,10 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
             PrivateHttp2 = privateHttp2 ?? new PrivateHttp2Settings(),
         };
         var path = Path.Combine(directory, "agent.json");
-        await File.WriteAllTextAsync(path, BootstrapFile.Serialize(bootstrap)).ConfigureAwait(false);
+        await File.WriteAllTextAsync(path, PortableConfiguration.Serialize(bootstrap)).ConfigureAwait(false);
         var profile = proxy.NodeCertificatePath + ".agent.json";
-        var previous = File.Exists(profile) ? await BootstrapFile.LoadAsync<NodeAgentDescriptor>(profile, CancellationToken.None).ConfigureAwait(false) : null;
-        var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path, "--node-agent-bootstrap", environment);
+        var previous = File.Exists(profile) ? BootstrapFile.Parse<NodeAgentDescriptor>(await File.ReadAllBytesAsync(profile, CancellationToken.None).ConfigureAwait(false)) : null;
+        var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path, "--node-agent", environment);
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -48,7 +48,7 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
                 process.ThrowIfExited();
                 if (File.Exists(profile))
                 {
-                    var descriptor = await BootstrapFile.LoadAsync<NodeAgentDescriptor>(profile, timeout.Token).ConfigureAwait(false);
+                    var descriptor = BootstrapFile.Parse<NodeAgentDescriptor>(await File.ReadAllBytesAsync(profile, timeout.Token).ConfigureAwait(false));
                     descriptor.Validate();
                     if (previous is null || !string.Equals(previous.AgentBootId, descriptor.AgentBootId, StringComparison.Ordinal))
                         return new DevelopmentNodeAgent(process, proxy, descriptor, directory);

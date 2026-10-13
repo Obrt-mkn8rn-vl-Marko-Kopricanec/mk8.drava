@@ -502,3 +502,14 @@ override Mk8.Drava.Configuration.PrivateHttp2Settings.GetHashCode() -> int
 override Mk8.Drava.Configuration.PrivateHttp2Settings.ToString() -> string!
 static Mk8.Drava.Configuration.PrivateHttp2Settings.operator !=(Mk8.Drava.Configuration.PrivateHttp2Settings? left, Mk8.Drava.Configuration.PrivateHttp2Settings? right) -> bool
 static Mk8.Drava.Configuration.PrivateHttp2Settings.operator ==(Mk8.Drava.Configuration.PrivateHttp2Settings? left, Mk8.Drava.Configuration.PrivateHttp2Settings? right) -> bool
+Mk8.Drava.Configuration.PortableConfiguration
+static Mk8.Drava.Configuration.PortableConfiguration.LoadAsync<T>(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T!>!
+static Mk8.Drava.Configuration.PortableConfiguration.Serialize<T>(T value) -> string!
+static Mk8.Drava.Configuration.PortableConfiguration.SerializeDocument<T>(string! document) -> string!
+static Mk8.Drava.Configuration.PortableConfiguration.StartupPath(string![]! args) -> string!
+Mk8.Drava.Configuration.ApplicationBootstrap.ForwardingDiagnostics.get -> bool
+Mk8.Drava.Configuration.ApplicationBootstrap.ForwardingDiagnostics.init -> void
+Mk8.Drava.Configuration.ApplicationBootstrap.TransportDiagnostics.get -> bool
+Mk8.Drava.Configuration.ApplicationBootstrap.TransportDiagnostics.init -> void
+Mk8.Drava.Configuration.GatewayBootstrap.UploadDiagnostics.get -> bool
+Mk8.Drava.Configuration.GatewayBootstrap.UploadDiagnostics.init -> void
