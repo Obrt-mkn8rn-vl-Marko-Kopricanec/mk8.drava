@@ -10,6 +10,29 @@ internal static partial class InstallationDocumentGuard
 {
     public static void Require(string path, long minimumBytes, long maximumBytes)
     {
+        var parent = RequireLocation(path);
+        using var stream = Open(path, parent);
+        RequireLength(stream, minimumBytes, maximumBytes);
+    }
+
+    internal static void RequireDurabilitySupport()
+    {
+        if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Protected policy mutation requires the qualified Linux durability profile.");
+    }
+
+    internal static void Synchronize(string path, long minimumBytes, long maximumBytes)
+    {
+        RequireDurabilitySupport();
+        var parent = RequireLocation(path);
+        using var directory = OpenDirectory(parent);
+        using var stream = OpenRelativeFile(path, directory);
+        RequireLength(stream, minimumBytes, maximumBytes);
+        if (SynchronizeDescriptor(stream.SafeFileHandle) != 0) throw NativeFailure("Protected collection file synchronization failed.");
+        if (SynchronizeDescriptor(directory) != 0) throw NativeFailure("Protected collection directory synchronization failed.");
+    }
+
+    private static string RequireLocation(string path)
+    {
         if (!Path.IsPathFullyQualified(path) || !string.Equals(Path.GetFullPath(path), path, StringComparison.Ordinal) ||
             new FileInfo(path).LinkTarget is not null)
         {
@@ -18,7 +41,11 @@ internal static partial class InstallationDocumentGuard
         var parent = Path.GetDirectoryName(path) ?? throw new InvalidDataException("Portable collection requires a private parent.");
         for (var current = new DirectoryInfo(parent); current is not null; current = current.Parent)
             if (current.LinkTarget is not null) throw new InvalidDataException("Portable collection cannot traverse symbolic directories.");
-        using var stream = Open(path, parent);
+        return parent;
+    }
+
+    private static void RequireLength(FileStream stream, long minimumBytes, long maximumBytes)
+    {
         if (stream.Length < minimumBytes || stream.Length > maximumBytes)
             throw new InvalidDataException("Portable collection exceeds its file bounds.");
     }
@@ -27,11 +54,22 @@ internal static partial class InstallationDocumentGuard
     {
         if (OperatingSystem.IsWindows()) return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Portable collection requires the supported Linux or Windows file profile.");
+        using var directory = OpenDirectory(parent);
+        return OpenRelativeFile(path, directory);
+    }
+
+    private static SafeFileHandle OpenDirectory(string parent)
+    {
         var descriptor = OpenDescriptor(parent, 0xB0000); // O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC.
         if (descriptor < 0) throw NativeFailure("Portable collection parent could not be opened.");
-        using var directory = new SafeFileHandle((IntPtr)descriptor, ownsHandle: true);
-        RequireStatus(directory, directory: true);
-        descriptor = OpenRelative(directory, Path.GetFileName(path), 0xA0800); // O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, read-only.
+        var directory = new SafeFileHandle((IntPtr)descriptor, ownsHandle: true);
+        try { RequireStatus(directory, directory: true); return directory; }
+        catch { directory.Dispose(); throw; }
+    }
+
+    private static FileStream OpenRelativeFile(string path, SafeFileHandle directory)
+    {
+        var descriptor = OpenRelative(directory, Path.GetFileName(path), 0xA0800); // O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, read-only.
         if (descriptor < 0) throw NativeFailure("Portable collection file could not be opened without following a link.");
         SafeFileHandle? handle = new((IntPtr)descriptor, ownsHandle: true);
         try
@@ -58,6 +96,10 @@ internal static partial class InstallationDocumentGuard
     }
 
     private static IOException NativeFailure(string message) => new(message, new Win32Exception(Marshal.GetLastPInvokeError()));
+
+    [LibraryImport("libc", EntryPoint = "fsync", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+    private static partial int SynchronizeDescriptor(SafeFileHandle descriptor);
 
     [LibraryImport("libc", EntryPoint = "open", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]

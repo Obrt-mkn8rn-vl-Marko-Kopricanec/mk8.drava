@@ -564,3 +564,18 @@ Mk8.Drava.Configuration.UpstreamTrustMaterial.Id.init -> void
 Mk8.Drava.Configuration.UpstreamTrustMaterial.Certificate.get -> Mk8.Drava.Configuration.SecretBytes!
 Mk8.Drava.Configuration.UpstreamTrustMaterial.Certificate.init -> void
 Mk8.Drava.Configuration.UpstreamTrustMaterial.Validate() -> void
+Mk8.Drava.Configuration.PortablePolicyArchive
+Mk8.Drava.Configuration.PortablePolicyArchive.PortablePolicyArchive(string! document) -> void
+static Mk8.Drava.Configuration.PortablePolicyArchive.Empty.get -> Mk8.Drava.Configuration.PortablePolicyArchive!
+Mk8.Drava.Configuration.PortablePolicyArchive.IsEmpty.get -> bool
+Mk8.Drava.Configuration.PortablePolicyArchive.Reveal() -> string!
+Mk8.Drava.Configuration.PortablePolicyArchive.Equals(Mk8.Drava.Configuration.PortablePolicyArchive? other) -> bool
+override Mk8.Drava.Configuration.PortablePolicyArchive.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.PortablePolicyArchive.GetHashCode() -> int
+override Mk8.Drava.Configuration.PortablePolicyArchive.ToString() -> string!
+Mk8.Drava.Configuration.PortablePolicyDocuments
+Mk8.Drava.Configuration.PortablePolicyDocuments.ConfiguredSource.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.PortablePolicyDocuments.Archive.get -> Mk8.Drava.Configuration.PortablePolicyArchive!
+Mk8.Drava.Configuration.PortableRole<T>.ReadPolicyDocuments() -> Mk8.Drava.Configuration.PortablePolicyDocuments!
+Mk8.Drava.Configuration.PortableRole<T>.RefreshPolicyDocumentsAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Mk8.Drava.Configuration.PortablePolicyDocuments!>
+Mk8.Drava.Configuration.PortableRole<T>.WritePolicyArchiveAsync(Mk8.Drava.Configuration.PortablePolicyArchive! expected, Mk8.Drava.Configuration.PortablePolicyArchive! replacement, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask

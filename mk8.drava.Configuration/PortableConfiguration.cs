@@ -32,9 +32,9 @@ public static class PortableConfiguration
         cancellationToken.ThrowIfCancellationRequested();
         if (!Path.IsPathFullyQualified(path)) throw new InvalidDataException("Portable configuration requires an absolute location.");
         var file = new FileInfo(path);
-        if (!file.Exists || file.LinkTarget is not null || file.Length is < 1 or > 4 * 1024 * 1024)
+        if (!file.Exists || file.LinkTarget is not null || file.Length is < 1 or > InstallationCollectionBounds.MaximumDocumentBytes)
             throw new InvalidDataException("Portable configuration must be an existing bounded regular document.");
-        InstallationDocumentGuard.Require(path, 1, 4 * 1024 * 1024);
+        InstallationDocumentGuard.Require(path, 1, InstallationCollectionBounds.MaximumDocumentBytes);
         var keyPath = Path.Combine(file.DirectoryName!, ".installation.key");
         if (File.Exists(keyPath) || Directory.Exists(keyPath) || new FileInfo(keyPath).LinkTarget is not null) InstallationDocumentGuard.Require(keyPath, 32, 64);
         var options = new SupprocomSecretsOptions
@@ -50,8 +50,9 @@ public static class PortableConfiguration
         options.File.Protection = SecretFileProtection.InstallationBoundAesGcm;
         var store = new SupprocomSecretFileStore(options);
         var snapshot = await store.LoadAsync(cancellationToken).ConfigureAwait(false);
-        InstallationDocumentGuard.Require(path, 1, 4 * 1024 * 1024);
+        InstallationDocumentGuard.Require(path, 1, InstallationCollectionBounds.MaximumDocumentBytes);
         InstallationDocumentGuard.Require(keyPath, 32, 64);
+        InstallationCollectionBounds.RequireSettings([.. snapshot.Select(static setting => new SupprocomSecretSetting(setting.Key, setting.Value))]);
         if (!snapshot.TryGetValue(Key<T>(), out var value) || string.IsNullOrWhiteSpace(value))
             throw new InvalidDataException("The portable collection does not contain the requested role configuration.");
         cancellationToken.ThrowIfCancellationRequested();
