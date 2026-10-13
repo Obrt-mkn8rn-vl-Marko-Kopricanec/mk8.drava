@@ -20,7 +20,7 @@ public sealed class CloudflareAcmeDns01ProviderTests
         Assert.Equal(2, fixture.Handler.Records.Count); Assert.Contains(foreign, fixture.Handler.Records);
         Assert.Contains(fixture.Handler.Records, r => string.Equals(r.Content, "\"" + second.Value + "\"", StringComparison.Ordinal));
         await fixture.Provider.RemoveAsync(second, CancellationToken.None).ConfigureAwait(true);
-        Assert.Collection(fixture.Handler.Records, r => Assert.Equal(foreign, r));
+        Assert.Equal(foreign, DevelopmentCardinality.RequireSingle(fixture.Handler.Records));
     }
 
     [Theory]
@@ -53,7 +53,7 @@ public sealed class CloudflareAcmeDns01ProviderTests
         using var first = new ProviderFixture(); using var second = new ProviderFixture();
         var record = await first.Provider.PublishAsync("_acme-challenge.site.example", new string('A', 43), Guid.NewGuid().ToString("N"), CancellationToken.None).ConfigureAwait(true);
         await Assert.ThrowsAsync<InvalidDataException>(async () => await second.Provider.RemoveAsync(record, CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-        Assert.Empty(second.Handler.Requests); Assert.Collection(first.Handler.Records, record => Assert.Equal("_acme-challenge.site.example", record.Name));
+        Assert.Empty(second.Handler.Requests); Assert.Equal("_acme-challenge.site.example", DevelopmentCardinality.RequireSingle(first.Handler.Records).Name);
         await first.Provider.RemoveAsync(record, CancellationToken.None).ConfigureAwait(true);
     }
 
@@ -64,23 +64,20 @@ public sealed class CloudflareAcmeDns01ProviderTests
         var record = await fixture.Provider.PublishAsync("_acme-challenge.site.example", new string('A', 43), Guid.NewGuid().ToString("N"), CancellationToken.None).ConfigureAwait(true);
         fixture.Handler.Failure = "read-owner";
         await Assert.ThrowsAsync<InvalidDataException>(async () => await fixture.Provider.RemoveAsync(record, CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-        Assert.Collection(fixture.Handler.Records, record => Assert.Equal("_acme-challenge.site.example", record.Name)); Assert.DoesNotContain(fixture.Handler.Requests, static r => r.Method == HttpMethod.Delete);
+        Assert.Equal("_acme-challenge.site.example", DevelopmentCardinality.RequireSingle(fixture.Handler.Records).Name); Assert.DoesNotContain(fixture.Handler.Requests, static r => r.Method == HttpMethod.Delete);
     }
 
     private sealed class ProviderFixture : IDisposable
     {
-        private readonly RegistryStateDirectory _directory = new();
         public DevelopmentDnsProvider Handler { get; } = new();
         public DevelopmentVerifier Verifier { get; } = new();
         public CloudflareAcmeDns01ChallengeProvider Provider { get; }
         public ProviderFixture()
         {
-            var path = Path.Combine(_directory.Path, "provider.token"); File.WriteAllText(path, new string('A', 40));
-            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            var settings = new Mk8.Drava.Configuration.DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.example", CredentialPath = path };
+            var settings = new Mk8.Drava.Configuration.DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.example", Credential = new Mk8.Drava.Configuration.SecretText(new string('A', 40)) };
             Provider = new CloudflareAcmeDns01ChallengeProvider(settings, "site.example", "development", Verifier, Handler);
         }
-        public void Dispose() { Provider.Dispose(); Handler.Dispose(); _directory.Dispose(); }
+        public void Dispose() { Provider.Dispose(); Handler.Dispose(); }
     }
     private sealed class DevelopmentVerifier : IAcmeDns01PropagationVerifier
     {

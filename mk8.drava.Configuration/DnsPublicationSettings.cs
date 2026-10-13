@@ -6,7 +6,7 @@ public sealed record DnsPublicationSettings
     public Uri? ApiBaseUrl { get; init; }
     public string ZoneId { get; init; } = "";
     public string ZoneName { get; init; } = "";
-    public string CredentialPath { get; init; } = "";
+    public SecretText Credential { get; init; } = SecretText.Empty;
     public NativeDnsManagementSettings? NativeManagement { get; init; }
     public int TtlSeconds { get; init; } = 300;
     public int RequestTimeoutSeconds { get; init; } = 5;
@@ -20,7 +20,7 @@ public sealed record DnsPublicationSettings
             throw new InvalidDataException("DNS publication timing is outside supported bounds.");
         if (string.Equals(Provider, "mk8.dns", StringComparison.Ordinal))
         {
-            if (NativeManagement is null || ApiBaseUrl is not null || ZoneId.Length != 0 || ZoneName.Length != 0 || CredentialPath.Length != 0 || RequestTimeoutSeconds < 20)
+            if (NativeManagement is null || ApiBaseUrl is not null || ZoneId.Length != 0 || ZoneName.Length != 0 || !Credential.IsEmpty || RequestTimeoutSeconds < 20)
                 throw new InvalidDataException("Native DNS requires its explicit separate management profile and at least20second overall request bound.");
             NativeManagement.Validate(siteDomain, acme: false);
             return;
@@ -28,16 +28,20 @@ public sealed record DnsPublicationSettings
         if (NativeManagement is not null) throw new InvalidDataException("Native DNS management settings cannot accompany another provider.");
         if (string.Equals(Provider, "existing", StringComparison.Ordinal))
         {
-            if (ApiBaseUrl is not null || ZoneId.Length != 0 || ZoneName.Length != 0 || CredentialPath.Length != 0)
+            if (ApiBaseUrl is not null || ZoneId.Length != 0 || ZoneName.Length != 0 || !Credential.IsEmpty)
                 throw new InvalidDataException("Existing DNS verification does not accept publisher credentials or zone settings.");
             return;
         }
-        if (!string.Equals(Provider, "cloudflare", StringComparison.Ordinal) || ZoneId.Length != 32 || !Path.IsPathFullyQualified(CredentialPath))
-            throw new InvalidDataException("DNS publication requires a supported provider, zone identity and private credential path.");
+        if (!string.Equals(Provider, "cloudflare", StringComparison.Ordinal) || ZoneId.Length != 32 || Credential.IsEmpty)
+            throw new InvalidDataException("DNS publication requires a supported provider, zone identity and protected credential value.");
+        _ = Credential.RequireToken();
         _ = RequireApiBaseUrl();
         foreach (var character in ZoneId)
+        {
             if (character is not (>= 'a' and <= 'f') and not (>= '0' and <= '9'))
                 throw new InvalidDataException("DNS zone identity requires canonical hexadecimal.");
+        }
+
         RequireDomain(ZoneName);
         if (!string.Equals(siteDomain, ZoneName, StringComparison.Ordinal) && !siteDomain.EndsWith("." + ZoneName, StringComparison.Ordinal))
             throw new InvalidDataException("The DNS zone must contain the enrolled site domain.");
@@ -46,7 +50,7 @@ public sealed record DnsPublicationSettings
     public Uri RequireApiBaseUrl()
     {
         var endpoint = ApiBaseUrl;
-        if (endpoint is null || !endpoint.IsAbsoluteUri || !string.Equals(endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) ||
+        if (endpoint?.IsAbsoluteUri != true || !string.Equals(endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) ||
             endpoint.Host.Length == 0 || endpoint.UserInfo.Length != 0 || endpoint.Query.Length != 0 || endpoint.Fragment.Length != 0 ||
             !endpoint.AbsolutePath.EndsWith('/'))
         {

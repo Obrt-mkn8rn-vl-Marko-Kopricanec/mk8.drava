@@ -233,7 +233,6 @@ public sealed class AcmeHostedPipelineTests
         using var fixture = await DevelopmentServingPlanFixture.CreateAsync().ConfigureAwait(true);
         using var material = DevelopmentPublicServingCertificate.Create(fixture.Clock.GetUtcNow());
         var bootstrap = PendingServingPlanTests.PublicApplication(fixture, material);
-        await WriteProtectedAsync(bootstrap.Controller!.DnsPublication.CredentialPath, System.Text.Encoding.ASCII.GetBytes(new string('A', 48))).ConfigureAwait(true);
         using var plans = await ServingPlanState.OpenAsync(bootstrap, fixture.Authority, fixture.Clock, CancellationToken.None).ConfigureAwait(true);
         var repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, "site", CancellationToken.None).ConfigureAwait(true);
         await using var repositoryLifetime = repository.ConfigureAwait(true);
@@ -248,7 +247,7 @@ public sealed class AcmeHostedPipelineTests
             Assert.IsType<OwnedDns01CertificateIssuer>(provider.GetRequiredService<IAcmeCertificateIssuer>());
             Assert.NotNull(provider.GetRequiredService<AcmeCertificateManager>());
             DevelopmentCardinality.RequireSingle(provider.GetServices<IHostedService>().OfType<AcmeRenewalService>());
-            Assert.False(File.Exists(bootstrap.Controller.Acme.AccountKeyPath));
+            Assert.False(File.Exists(Assert.IsType<ControllerBootstrap>(bootstrap.Controller).Acme.AccountKeyPath));
         }
         using var reopened = new AcmeDns01CleanupJournal(bootstrap.Controller.Acme.CleanupJournalPath);
         Assert.Empty(reopened.Read());
@@ -278,7 +277,7 @@ public sealed class AcmeHostedPipelineTests
         {
             ServingTrust = new ServingTrustSettings { Mode = "pinned", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256) },
             ServingCertificatePath = Path.Combine(directory, "public.pfx"),
-            DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = Path.Combine(directory, "dns.token"), },
+            DnsPublication = new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", Credential = new SecretText(new string('A', 48)), },
             Acme = new AcmeIssuanceSettings { Enabled = true, TermsAccepted = true, DirectoryUrl = new Uri("https://ca.example/directory"), ContactEmails = ["ops@example.org"],
                 AccountKeyPath = Path.Combine(directory, "account.pem"), CleanupJournalPath = Path.Combine(directory, "cleanup.json"), PinnedServingRootPath = Path.Combine(directory, "public-root.der"), },
         }, };

@@ -8,20 +8,20 @@ public sealed class NativeDnsConfigurationTests
     private static NativeDnsManagementSettings Profile(bool acme = false) => new()
     {
         Origin = "site.test", TenantId = Guid.NewGuid(), ZoneId = Guid.NewGuid(),
-        SocketPath = Path.Combine(Path.GetTempPath(), "dns-management.sock"), CredentialPath = Path.Combine(Path.GetTempPath(), "records-capability"),
+        SocketPath = Path.Combine(Path.GetTempPath(), "dns-management.sock"), ProfileId = Guid.NewGuid(), Credential = new SecretText(new string('A', 43)),
         Scopes = [new NativeDnsOwnerScope(acme ? "_acme-challenge.site.test" : "svc.site.test", acme ? (ushort)16 : (ushort)1)],
     };
 
     [Fact]
     public void NativeProfilesRequireExactOwnerTypesAndConcreteProvisionedIdentities()
     {
-        var profile = Profile(); profile.Validate("site.test", false);
-        Assert.Throws<InvalidDataException>(() => (profile with { TenantId = Guid.Empty }).Validate("site.test", false));
-        Assert.Throws<InvalidDataException>(() => (profile with { Scopes = [new NativeDnsOwnerScope("*.site.test", 1)] }).Validate("site.test", false));
-        Assert.Throws<InvalidDataException>(() => (profile with { Scopes = [new NativeDnsOwnerScope("svc.foreign.test", 1)] }).Validate("site.test", false));
-        Assert.Throws<InvalidDataException>(() => (profile with { Scopes = [new NativeDnsOwnerScope("svc.site.test", 5)] }).Validate("site.test", false));
-        Assert.Throws<InvalidDataException>(() => (profile with { Scopes = [profile.Scopes[0], profile.Scopes[0]] }).Validate("site.test", false));
-        Assert.Throws<InvalidDataException>(() => profile.Validate("site.test", true));
+        var profile = Profile(); profile.Validate("site.test", acme: false);
+        Assert.Throws<InvalidDataException>(() => (profile with { TenantId = Guid.Empty }).Validate("site.test", acme: false));
+        Assert.Throws<InvalidDataException>(() => (profile with { Scopes = [new NativeDnsOwnerScope("*.site.test", 1)] }).Validate("site.test", acme: false));
+        Assert.Throws<InvalidDataException>(() => (profile with { Scopes = [new NativeDnsOwnerScope("svc.foreign.test", 1)] }).Validate("site.test", acme: false));
+        Assert.Throws<InvalidDataException>(() => (profile with { Scopes = [new NativeDnsOwnerScope("svc.site.test", 5)] }).Validate("site.test", acme: false));
+        Assert.Throws<InvalidDataException>(() => (profile with { Scopes = [profile.Scopes[0], profile.Scopes[0]] }).Validate("site.test", acme: false));
+        Assert.Throws<InvalidDataException>(() => profile.Validate("site.test", acme: true));
     }
 
     [Fact]
@@ -43,12 +43,12 @@ public sealed class NativeDnsConfigurationTests
     {
         var records = Profile();
         var settings = new DnsPublicationSettings { Provider = "mk8.dns", NativeManagement = records, RequestTimeoutSeconds = 20 };
-        var acme = records with { CredentialPath = Path.Combine(Path.GetTempPath(), "acme-capability"), Scopes = [new NativeDnsOwnerScope("_acme-challenge.site.test", 16)] };
+        var acme = records with { ProfileId = Guid.NewGuid(), Credential = new SecretText(new string('B', 42) + "A"), Scopes = [new NativeDnsOwnerScope("_acme-challenge.site.test", 16)] };
         var issuance = new AcmeIssuanceSettings { Enabled = true, DirectoryUrl = new Uri("https://ca.invalid/directory"), AccountKeyPath = Path.Combine(Path.GetTempPath(), "account.key"), TermsAccepted = true,
-            NativeManagement = acme, ContactEmails = ["owner@site.test"], CleanupTimeoutSeconds = 20 };
+            NativeManagement = acme, ContactEmails = ["owner@site.test"], CleanupTimeoutSeconds = 20, };
         var trust = new ServingTrustSettings { Mode = "system" };
         issuance.Validate(trust, settings);
-        Assert.Throws<InvalidDataException>(() => (issuance with { NativeManagement = acme with { CredentialPath = records.CredentialPath } }).Validate(trust, settings));
+        Assert.Throws<InvalidDataException>(() => (issuance with { NativeManagement = acme with { Credential = records.Credential } }).Validate(trust, settings));
         Assert.Throws<InvalidDataException>(() => (issuance with { NativeManagement = acme with { ZoneId = Guid.NewGuid() } }).Validate(trust, settings));
         Assert.Throws<InvalidDataException>(() => (issuance with { CleanupJournalPath = Path.Combine(Path.GetTempPath(), "cloudflare-cleanup") }).Validate(trust, settings));
         Assert.Throws<InvalidDataException>(() => (issuance with { CleanupTimeoutSeconds = 15 }).Validate(trust, settings));

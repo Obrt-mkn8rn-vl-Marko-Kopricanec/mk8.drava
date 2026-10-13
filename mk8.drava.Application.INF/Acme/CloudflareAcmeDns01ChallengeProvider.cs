@@ -1,4 +1,3 @@
-using Mk8.Drava.Application.DAL.Administration;
 using Mk8.Drava.Application.BLL.ControlPlane.Acme;
 using Mk8.Drava.Application.INF.NoConf;
 using Mk8.Drava.Configuration;
@@ -25,7 +24,7 @@ internal sealed class CloudflareAcmeDns01ChallengeProvider : IAcmeDns01Challenge
         if (!string.Equals(settings.Provider, "cloudflare", StringComparison.Ordinal)) throw new InvalidDataException("DNS01 requires explicit owner-approved Cloudflare settings.");
         _settings = settings; _siteDomain = siteDomain; _siteId = siteId; _verifier = verifier;
         _journal = journal;
-        _api = new CloudflareDnsApi(settings.RequireApiBaseUrl(), settings.ZoneId, PrivateBearerCredentialFile.Read(settings.CredentialPath), handler);
+        _api = new CloudflareDnsApi(settings.RequireApiBaseUrl(), settings.ZoneId, settings.Credential.RequireToken(), handler);
     }
 
     public async ValueTask<AcmeDns01Record> PublishAsync(string host, string value, string operationId, CancellationToken cancellationToken)
@@ -51,7 +50,10 @@ internal sealed class CloudflareAcmeDns01ChallengeProvider : IAcmeDns01Challenge
         const string prefix = "_acme-challenge.";
         if (!host.StartsWith(prefix, StringComparison.Ordinal) || host.Length > 253 ||
             !Guid.TryParseExact(operationId, "N", out var operation) || !string.Equals(operationId, operation.ToString("N"), StringComparison.Ordinal))
+        {
             throw new InvalidDataException("DNS01 challenge exceeds its canonical operation scope.");
+        }
+
         var domain = host[prefix.Length..];
         foreach (var label in domain.Split('.')) RegistrationSiteTrust.RequireLabel(label);
         if (!string.Equals(domain, _siteDomain, StringComparison.Ordinal) && !domain.EndsWith("." + _siteDomain, StringComparison.Ordinal))
@@ -65,9 +67,14 @@ internal sealed class CloudflareAcmeDns01ChallengeProvider : IAcmeDns01Challenge
             if (delegation.RootElement.GetProperty("result").GetArrayLength() != 0) throw new InvalidDataException("DNS01 challenge is delegated outside the approved provider zone.");
         }
         using (var existing = await _api.ListAsync(host, deadline.Token).ConfigureAwait(false))
+        {
             foreach (var record in existing.RootElement.GetProperty("result").EnumerateArray())
+            {
                 if (string.Equals(record.GetProperty("type").GetString(), "CNAME", StringComparison.Ordinal))
                     throw new InvalidDataException("DNS01 challenge uses an unapproved alias.");
+            }
+        }
+
         var intent = new AcmeDns01CleanupEntry(_settings.ZoneId, _siteDomain, _siteId, operationId, host, value, "");
         if (_journal is not null) await _journal.PutAsync(intent, deadline.Token).ConfigureAwait(false);
         try
@@ -118,8 +125,11 @@ internal sealed class CloudflareAcmeDns01ChallengeProvider : IAcmeDns01Challenge
         if (_journal is null) { _recovered = true; return; }
         var entries = _journal.Read();
         foreach (var entry in entries)
+        {
             if (!string.Equals(entry.ZoneId, _settings.ZoneId, StringComparison.Ordinal) || !string.Equals(entry.SiteDomain, _siteDomain, StringComparison.Ordinal) || !string.Equals(entry.SiteId, _siteId, StringComparison.Ordinal))
                 throw new InvalidDataException("DNS01 journal belongs to another owner-approved site or zone.");
+        }
+
         foreach (var entry in entries)
         {
             using var deadline = Deadline(cancellationToken);

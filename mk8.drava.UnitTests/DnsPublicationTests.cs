@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Mk8.Drava.Application.BLL.Registry;
-using Mk8.Drava.Application.DAL.Administration;
 using Mk8.Drava.Application.INF.NoConf;
 using Mk8.Drava.Configuration;
 using Xunit;
@@ -37,7 +36,7 @@ public sealed class DnsPublicationTests
         fixture.Handler.Records.Add(new ProviderRecord("svc.site.example", "A", "192.0.2.10"));
         Assert.True(await fixture.Publisher.EnsureAsync("svc.site.example", CancellationToken.None).ConfigureAwait(true));
         Assert.DoesNotContain(fixture.Handler.Requests, static request => request.Method != HttpMethod.Get);
-        Assert.Collection(fixture.Handler.Records, static record => Assert.Equal("foreign owner", record.Comment));
+        Assert.Equal("foreign owner", DevelopmentCardinality.RequireSingle(fixture.Handler.Records).Comment);
     }
 
     [Theory]
@@ -121,7 +120,7 @@ public sealed class DnsPublicationTests
         using var fixture = new PublisherFixture(); fixture.Handler.Block = true;
         using var cancellation = new CancellationTokenSource();
         var attempt = fixture.Publisher.EnsureAsync("svc.site.example", cancellation.Token).AsTask();
-        await fixture.Handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(true);
+        await fixture.Handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TimeProvider.System, cancellation.Token).ConfigureAwait(true);
         await cancellation.CancelAsync().ConfigureAwait(true);
         try { await attempt.ConfigureAwait(true); Assert.Fail("The owned request did not propagate cancellation."); }
         catch (OperationCanceledException) { Assert.True(cancellation.IsCancellationRequested); }
@@ -137,7 +136,7 @@ public sealed class DnsPublicationTests
         var attempts = Enumerable.Range(0, 4).Select(index => fixture.Publisher.EnsureAsync("svc" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".site.example", cancellation.Token).AsTask()).ToArray();
         try
         {
-            await fixture.Handler.FourEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(true);
+            await fixture.Handler.FourEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TimeProvider.System, cancellation.Token).ConfigureAwait(true);
             Assert.False(await fixture.Publisher.EnsureAsync("overflow.site.example", CancellationToken.None).ConfigureAwait(true));
             Assert.False(await fixture.Publisher.EnsureAsync("svc0.site.example", CancellationToken.None).ConfigureAwait(true));
             Assert.Equal(4, fixture.Handler.Requests.Length);
@@ -160,9 +159,9 @@ public sealed class DnsPublicationTests
         var attempt = fixture.Publisher.EnsureAsync("svc.site.example", cancellation.Token).AsTask();
         try
         {
-            await fixture.Handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(true);
+            await fixture.Handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TimeProvider.System, cancellation.Token).ConfigureAwait(true);
             Assert.False(await fixture.Publisher.EnsureAsync("svc.site.example", CancellationToken.None).ConfigureAwait(true));
-            Assert.Collection(fixture.Handler.Requests, static request => Assert.Equal(HttpMethod.Get, request.Method));
+            Assert.Equal(HttpMethod.Get, DevelopmentCardinality.RequireSingle(fixture.Handler.Requests).Method);
         }
         finally
         {
@@ -197,26 +196,26 @@ public sealed class DnsPublicationTests
     {
         using var fixture = new PublisherFixture(); fixture.Handler.Failure = "created-host";
         Assert.False(await fixture.Publisher.EnsureAsync("svc.site.example", CancellationToken.None).ConfigureAwait(true));
-        Assert.Collection(fixture.Handler.Requests.Where(static request => request.Method == HttpMethod.Post), static request => Assert.Equal(HttpMethod.Post, request.Method));
+        Assert.Equal(HttpMethod.Post, DevelopmentCardinality.RequireSingle(fixture.Handler.Requests.Where(static request => request.Method == HttpMethod.Post)).Method);
     }
 
     [Theory]
     [InlineData("unsupported")]
     [InlineData("foreign-zone")]
     [InlineData("zone-id")]
-    [InlineData("relative-credential")]
+    [InlineData("invalid-credential")]
     [InlineData("ttl")]
     [InlineData("deadline")]
     [InlineData("retry")]
     public void InvalidPublisherBootstrapIsRejectedBeforeProviderWork(string invalid)
     {
-        var settings = PublisherFixture.Settings("/private/token") with { };
+        var settings = PublisherFixture.Settings() with { };
         settings = invalid switch
         {
             "unsupported" => settings with { Provider = "arbitrary" },
             "foreign-zone" => settings with { ZoneName = "foreign.example" },
             "zone-id" => settings with { ZoneId = "../foreign" },
-            "relative-credential" => settings with { CredentialPath = "token" },
+            "invalid-credential" => settings with { Credential = new SecretText("token") },
             "ttl" => settings with { TtlSeconds = 59 },
             "deadline" => settings with { RequestTimeoutSeconds = 31 },
             _ => settings with { RetrySeconds = 4 },
@@ -225,32 +224,26 @@ public sealed class DnsPublicationTests
     }
 
     [Fact]
-    public void ExistingDnsRemainsTheDefaultAndTheSharedReaderRetainsTheAdministratorContract()
+    public void ExistingDnsRemainsTheDefaultAndBearerValuesRetainCanonicalBounds()
     {
         var settings = new ControllerBootstrap(); Assert.Equal("existing", settings.DnsPublication.Provider);
         settings.DnsPublication.Validate("site.example");
-        using var directory = new RegistryStateDirectory(); var path = Path.Combine(directory.Path, "token");
-        File.WriteAllText(path, new string('A', 40));
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        Assert.Equal(AdministratorCredentialFile.Read(path), PrivateBearerCredentialFile.Read(path));
-        File.WriteAllText(path, new string('A', 40) + "\n");
-        Assert.Throws<InvalidDataException>(() => PrivateBearerCredentialFile.Read(path));
+        var token = new SecretText(new string('A', 40));
+        Assert.Equal(new string('A', 40), token.RequireToken(), StringComparer.Ordinal);
+        Assert.Throws<InvalidDataException>(() => new SecretText(new string('A', 40) + "\n").RequireToken());
     }
 
     private sealed class PublisherFixture : IDisposable
     {
-        private readonly RegistryStateDirectory _directory = new();
         public RegistryTimeProvider Clock { get; } = new();
         public DevelopmentDnsProvider Handler { get; } = new();
         public CloudflareDnsPublisher Publisher { get; }
         public PublisherFixture(IReadOnlyList<string>? addresses = null, int timeoutSeconds = 5)
         {
-            var path = Path.Combine(_directory.Path, "provider.token"); File.WriteAllText(path, new string('A', 40));
-            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            Publisher = new CloudflareDnsPublisher(Settings(path) with { RequestTimeoutSeconds = timeoutSeconds }, "site.example", "development", addresses ?? ["192.0.2.10"], Clock, Handler);
+            Publisher = new CloudflareDnsPublisher(Settings() with { RequestTimeoutSeconds = timeoutSeconds }, "site.example", "development", addresses ?? ["192.0.2.10"], Clock, Handler);
         }
-        public static DnsPublicationSettings Settings(string path) => new() { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.example", CredentialPath = path };
-        public void Dispose() { Publisher.Dispose(); _directory.Dispose(); }
+        public static DnsPublicationSettings Settings() => new() { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.example", Credential = new Mk8.Drava.Configuration.SecretText(new string('A', 40)) };
+        public void Dispose() { Publisher.Dispose(); }
     }
 
     private sealed class MissingDnsVerifier : IServiceDnsVerifier

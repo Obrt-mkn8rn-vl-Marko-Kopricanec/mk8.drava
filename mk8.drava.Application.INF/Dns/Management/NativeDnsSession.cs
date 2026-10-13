@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Mk8.Drava.Application.BLL.Dns;
-using Mk8.Drava.Application.DAL.Storage;
 using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application.INF.Dns.Management;
@@ -21,15 +20,15 @@ internal sealed class NativeDnsSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(settings); ArgumentNullException.ThrowIfNull(journal); ArgumentNullException.ThrowIfNull(approvedAddresses);
         settings.Validate(siteDomain, acme); RegistrationSiteTrust.RequireLabel(siteId);
-        settings = settings with { Scopes = settings.Scopes.Select(static scope => scope with { }).ToArray() };
+        settings = settings with { Scopes = [.. settings.Scopes.Select(static scope => scope with { })] };
         _settings = settings; _journal = journal; _origin = WireName(settings.Origin);
-        _credential = ReadCredential(settings.CredentialPath);
+        _credential = settings.DecodeCredential();
         try
         {
             var scopes = settings.Scopes.Select(static item => item.Owner + "/" + item.Type.ToString(System.Globalization.CultureInfo.InvariantCulture)).Order(StringComparer.Ordinal).ToArray();
             var identity = JsonSerializer.SerializeToUtf8Bytes(new { purpose = acme ? "acme" : "records", siteId, settings.TenantId, settings.ZoneId,
-                settings.Origin, settings.SocketPath, settings.CredentialPath, credentialDigest = Convert.ToHexString(SHA256.HashData(_credential)), scopes,
-                addresses = approvedAddresses.Order(StringComparer.Ordinal).ToArray() });
+                settings.Origin, settings.SocketPath, settings.ProfileId, credentialSource = "portable-collection-v1", credentialDigest = Convert.ToHexString(SHA256.HashData(_credential)), scopes,
+                addresses = approvedAddresses.Order(StringComparer.Ordinal).ToArray(), });
             _scope = new DnsJournalScope(acme ? "acme" : "records", Convert.ToHexString(SHA256.HashData(identity)));
             _client = new NativeDnsManagementClient(settings.SocketPath);
         }
@@ -131,18 +130,7 @@ internal sealed class NativeDnsSession : IDisposable
             if (label.Length is < 1 or > 63 || label.Any(static character => !char.IsAscii(character))) throw new InvalidDataException("Invalid canonical DNS wire name.");
             bytes.Add(checked((byte)label.Length)); bytes.AddRange(Encoding.ASCII.GetBytes(label));
         }
-        bytes.Add(0); if (bytes.Count > 255) throw new InvalidDataException("DNS wire name exceeds its bound."); return bytes.ToArray();
-    }
-
-    private static byte[] ReadCredential(string path)
-    {
-        var bytes = PrivateOwnerFile.Read(path, 43, 44);
-        try
-        {
-            if (bytes.Length == 44 && bytes[^1] != (byte)'\n') throw new InvalidDataException("Native capability file must contain its canonical base64url value.");
-            return ManagementHttpProtocol.DecodeCredential("Bearer " + Encoding.ASCII.GetString(bytes, 0, 43));
-        }
-        finally { CryptographicOperations.ZeroMemory(bytes); }
+        bytes.Add(0); if (bytes.Count > 255) throw new InvalidDataException("DNS wire name exceeds its bound."); return [.. bytes];
     }
 
     public void Dispose() { _client.Dispose(); CryptographicOperations.ZeroMemory(_credential); }

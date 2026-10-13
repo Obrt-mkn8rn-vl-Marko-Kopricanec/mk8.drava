@@ -357,8 +357,6 @@ Mk8.Drava.Configuration.DnsPublicationSettings.ZoneId.get -> string!
 Mk8.Drava.Configuration.DnsPublicationSettings.ZoneId.init -> void
 Mk8.Drava.Configuration.DnsPublicationSettings.ZoneName.get -> string!
 Mk8.Drava.Configuration.DnsPublicationSettings.ZoneName.init -> void
-Mk8.Drava.Configuration.DnsPublicationSettings.CredentialPath.get -> string!
-Mk8.Drava.Configuration.DnsPublicationSettings.CredentialPath.init -> void
 Mk8.Drava.Configuration.DnsPublicationSettings.TtlSeconds.get -> int
 Mk8.Drava.Configuration.DnsPublicationSettings.TtlSeconds.init -> void
 Mk8.Drava.Configuration.DnsPublicationSettings.RequestTimeoutSeconds.get -> int
@@ -447,8 +445,6 @@ Mk8.Drava.Configuration.NativeDnsManagementSettings.ZoneId.get -> System.Guid
 Mk8.Drava.Configuration.NativeDnsManagementSettings.ZoneId.init -> void
 Mk8.Drava.Configuration.NativeDnsManagementSettings.Origin.get -> string!
 Mk8.Drava.Configuration.NativeDnsManagementSettings.Origin.init -> void
-Mk8.Drava.Configuration.NativeDnsManagementSettings.CredentialPath.get -> string!
-Mk8.Drava.Configuration.NativeDnsManagementSettings.CredentialPath.init -> void
 Mk8.Drava.Configuration.NativeDnsManagementSettings.Scopes.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Configuration.NativeDnsOwnerScope!>!
 Mk8.Drava.Configuration.NativeDnsManagementSettings.Scopes.init -> void
 override Mk8.Drava.Configuration.NativeDnsManagementSettings.Equals(object? obj) -> bool
@@ -529,3 +525,10 @@ Mk8.Drava.Configuration.SecretText.Equals(Mk8.Drava.Configuration.SecretText? ot
 override Mk8.Drava.Configuration.SecretText.Equals(object? obj) -> bool
 override Mk8.Drava.Configuration.SecretText.GetHashCode() -> int
 override Mk8.Drava.Configuration.SecretText.ToString() -> string!
+Mk8.Drava.Configuration.DnsPublicationSettings.Credential.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.DnsPublicationSettings.Credential.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.Credential.get -> Mk8.Drava.Configuration.SecretText!
+Mk8.Drava.Configuration.NativeDnsManagementSettings.Credential.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.ProfileId.get -> System.Guid
+Mk8.Drava.Configuration.NativeDnsManagementSettings.ProfileId.init -> void
+Mk8.Drava.Configuration.NativeDnsManagementSettings.DecodeCredential() -> byte[]!

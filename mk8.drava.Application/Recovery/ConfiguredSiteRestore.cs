@@ -163,13 +163,10 @@ internal static class ConfiguredSiteRestore
     {
         RequireMaterial(controller.CertificateAuthorityPath, credential: true, request, placements);
         RequireMaterial(controller.ServingCertificatePath, credential: true, request, placements);
-        RequireMaterial(controller.DnsPublication.CredentialPath, credential: true, request, placements);
-        if (controller.DnsPublication.NativeManagement is { } records) RequireMaterial(records.CredentialPath, credential: true, request, placements);
         if (!controller.Acme.Enabled) return;
         RequireMaterial(controller.Acme.AccountKeyPath, credential: true, request, placements);
         RequireMaterial(controller.Acme.CleanupJournalPath, credential: true, request, placements);
         RequireMaterial(controller.Acme.PinnedServingRootPath, credential: false, request, placements);
-        if (controller.Acme.NativeManagement is { } acme) RequireMaterial(acme.CredentialPath, credential: true, request, placements);
     }
 
     private static void CreateParents(string staging, string directory, HashSet<string> directories)

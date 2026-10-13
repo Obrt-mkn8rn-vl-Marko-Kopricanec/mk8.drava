@@ -40,7 +40,7 @@ internal sealed class DevelopmentNativeDnsManagement : IAsyncDisposable
                 File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
             credential = RandomNumberGenerator.GetBytes(32);
-            var settings = await CreateSettingsAsync(directory, scopes, credential, cancellationToken).ConfigureAwait(false);
+            var settings = CreateSettings(directory, scopes, credential, cancellationToken);
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
             builder.Logging.ClearProviders();
             builder.WebHost.ConfigureKestrel(options => options.ListenUnixSocket(settings.SocketPath));
@@ -68,22 +68,18 @@ internal sealed class DevelopmentNativeDnsManagement : IAsyncDisposable
         }
     }
 
-    private static async Task<NativeDnsManagementSettings> CreateSettingsAsync(string directory,
+    private static NativeDnsManagementSettings CreateSettings(string directory,
         IReadOnlyList<NativeDnsOwnerScope>? scopes, byte[] credential, CancellationToken cancellationToken)
     {
-        var path = Path.Combine(directory, "capability");
-        await File.WriteAllTextAsync(path, ManagementHttpProtocol.EncodeCredential(credential)[7..], cancellationToken).ConfigureAwait(false);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        cancellationToken.ThrowIfCancellationRequested();
         return new NativeDnsManagementSettings
         {
             Origin = "site.test",
             TenantId = Guid.NewGuid(),
             ZoneId = Guid.NewGuid(),
             SocketPath = Path.Combine(directory, "management.sock"),
-            CredentialPath = path,
+            ProfileId = Guid.NewGuid(),
+            Credential = new SecretText(ManagementHttpProtocol.EncodeCredential(credential)[7..]),
             Scopes = scopes ?? [new NativeDnsOwnerScope("svc.site.test", 1)],
         };
     }
@@ -118,7 +114,8 @@ internal sealed class DevelopmentNativeDnsManagement : IAsyncDisposable
         else
         {
             operation = Guid.ParseExact(context.Request.Headers[string.Equals(action, "patch", StringComparison.Ordinal) ? "Idempotency-Key" : "X-Mk8-Request-Id"].ToString(), "D");
-            using var buffer = new MemoryStream();
+            var buffer = new MemoryStream();
+            await using var bufferLifetime = buffer.ConfigureAwait(false);
             await context.Request.Body.CopyToAsync(buffer, context.RequestAborted).ConfigureAwait(false);
             body = ManagementHttpProtocol.ReadRequest(buffer.ToArray());
         }

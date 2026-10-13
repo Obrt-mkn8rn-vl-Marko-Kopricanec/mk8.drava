@@ -35,45 +35,50 @@ public sealed class DnsPublisherNetworkTests
                 Assert.False(body.RootElement.GetProperty("proxied").GetBoolean());
                 Assert.Equal(300, body.RootElement.GetProperty("ttl").GetInt32());
                 Interlocked.Increment(ref created);
-                await context.Response.WriteAsJsonAsync(new { success = true, errors = Array.Empty<object>(), result = new
-                    { id = new string('b', 32), name = "svc.site.test", type = "A", content = "127.0.0.1", proxied = false, comment = "mk8.drava site=development" } }, context.RequestAborted).ConfigureAwait(false);
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    success = true,
+                    errors = Array.Empty<object>(),
+                    result = new
+                    { id = new string('b', 32), name = "svc.site.test", type = "A", content = "127.0.0.1", proxied = false, comment = "mk8.drava site=development", },
+                }, context.RequestAborted).ConfigureAwait(false);
             }
             else if (context.Request.Path.Value?.EndsWith("/dns_records", StringComparison.Ordinal) == true)
             {
                 Assert.Equal("svc.site.test", context.Request.Query["name.exact"].ToString());
-                await context.Response.WriteAsJsonAsync(new { success = true, errors = Array.Empty<object>(), result = Array.Empty<object>(),
-                    result_info = new { page = 1, total_count = 0, total_pages = 0 } }, context.RequestAborted).ConfigureAwait(false);
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    success = true,
+                    errors = Array.Empty<object>(),
+                    result = Array.Empty<object>(),
+                    result_info = new { page = 1, total_count = 0, total_pages = 0 },
+                }, context.RequestAborted).ConfigureAwait(false);
             }
-            else await context.Response.WriteAsJsonAsync(new { success = true, errors = Array.Empty<object>(), result = new { name = "site.test" } }, context.RequestAborted).ConfigureAwait(false);
+            else
+            {
+                await context.Response.WriteAsJsonAsync(new { success = true, errors = Array.Empty<object>(), result = new { name = "site.test" } }, context.RequestAborted).ConfigureAwait(false);
+            }
         }, certificate).ConfigureAwait(true);
         await using var apiLifetime = api.ConfigureAwait(true);
-        var directory = Directory.CreateTempSubdirectory("mk8-drava-dns-network-").FullName;
-        try
-        {
-            var settings = await CreateSettingsAsync(directory).ConfigureAwait(true);
-            using var handler = ConnectProvider(root, api.Port);
-            using var publisher = new CloudflareDnsPublisher(settings, "site.test", "development", ["127.0.0.1"], TimeProvider.System, handler);
-            var verifier = new ServiceDnsVerifier(["127.0.0.1"], "127.0.0.1", dns.Port);
-            Assert.False((await verifier.VerifyAsync("svc.site.test", CancellationToken.None).ConfigureAwait(true)).Verified);
-            var composed = new PublishingServiceDnsVerifier(verifier, publisher);
-            var proof = await composed.VerifyAsync("svc.site.test", CancellationToken.None).ConfigureAwait(true);
-            Assert.Equal(propagate, proof.Verified);
-            Assert.Equal(1, Volatile.Read(ref created));
-            if (propagate) Assert.InRange(proof.Validity, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30));
-            Assert.Equal(propagate, (await composed.VerifyAsync("svc.site.test", CancellationToken.None).ConfigureAwait(true)).Verified);
-            Assert.Equal(1, Volatile.Read(ref created));
-        }
-        finally { Directory.Delete(directory, recursive: true); }
+        var settings = CreateSettings();
+        using var handler = ConnectProvider(root, api.Port);
+        using var publisher = new CloudflareDnsPublisher(settings, "site.test", "development", ["127.0.0.1"], TimeProvider.System, handler);
+        var verifier = new ServiceDnsVerifier(["127.0.0.1"], "127.0.0.1", dns.Port);
+        Assert.False((await verifier.VerifyAsync("svc.site.test", CancellationToken.None).ConfigureAwait(true)).Verified);
+        var composed = new PublishingServiceDnsVerifier(verifier, publisher);
+        var proof = await composed.VerifyAsync("svc.site.test", CancellationToken.None).ConfigureAwait(true);
+        Assert.Equal(propagate, proof.Verified);
+        Assert.Equal(1, Volatile.Read(ref created));
+        if (propagate) Assert.InRange(proof.Validity, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30));
+        Assert.Equal(propagate, (await composed.VerifyAsync("svc.site.test", CancellationToken.None).ConfigureAwait(true)).Verified);
+        Assert.Equal(1, Volatile.Read(ref created));
     }
 
-    private static async Task<DnsPublicationSettings> CreateSettingsAsync(string directory)
+    private static DnsPublicationSettings CreateSettings() => new()
     {
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        var credential = Path.Combine(directory, "provider.token");
-        await File.WriteAllTextAsync(credential, new string('A', 40)).ConfigureAwait(false);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(credential, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        return new DnsPublicationSettings { Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"), ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = credential };
-    }
+        Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"),
+        ZoneId = new string('a', 32), ZoneName = "site.test", Credential = new SecretText(new string('A', 40)),
+    };
 
     private static SocketsHttpHandler ConnectProvider(X509Certificate2 root, int port) => new()
     {

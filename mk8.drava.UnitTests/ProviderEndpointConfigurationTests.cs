@@ -62,6 +62,6 @@ public sealed class ProviderEndpointConfigurationTests
     private static DnsPublicationSettings Settings() => new()
     {
         Provider = "cloudflare", ApiBaseUrl = new Uri("https://api.dns.invalid/client/v4/"),
-        ZoneId = new string('a', 32), ZoneName = "site.test", CredentialPath = Path.GetFullPath("fixture-credential"),
+        ZoneId = new string('a', 32), ZoneName = "site.test", Credential = new SecretText(new string('A', 40)),
     };
 }

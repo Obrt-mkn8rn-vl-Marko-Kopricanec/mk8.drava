@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using Mk8.Drava.Application.BLL.Registry;
-using Mk8.Drava.Application.DAL.Administration;
 using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application.INF.NoConf;
@@ -23,7 +22,7 @@ public sealed class CloudflareDnsPublisher : IServiceDnsPublisher, IDisposable
     private bool _zoneChecked;
 
     public CloudflareDnsPublisher(DnsPublicationSettings settings, string siteDomain, string siteId, IReadOnlyList<string> addresses, TimeProvider clock)
-        : this(settings, siteDomain, siteId, addresses, clock, null) { }
+        : this(settings, siteDomain, siteId, addresses, clock, handler: null) { }
 
     internal CloudflareDnsPublisher(DnsPublicationSettings settings, string siteDomain, string siteId, IReadOnlyList<string> addresses, TimeProvider clock, HttpMessageHandler? handler)
     {
@@ -34,13 +33,16 @@ public sealed class CloudflareDnsPublisher : IServiceDnsPublisher, IDisposable
         foreach (var value in addresses)
         {
             if (!IPAddress.TryParse(value, out var address) || address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) ||
-                address.IsIPv6Multicast || address.IsIPv4MappedToIPv6 || address.AddressFamily == AddressFamily.InterNetworkV6 && address.ScopeId != 0 ||
-                address.AddressFamily == AddressFamily.InterNetwork && address.GetAddressBytes()[0] >= 224)
+                address.IsIPv6Multicast || address.IsIPv4MappedToIPv6 || (address.AddressFamily == AddressFamily.InterNetworkV6 && address.ScopeId != 0) ||
+                (address.AddressFamily == AddressFamily.InterNetwork && address.GetAddressBytes()[0] >= 224))
+            {
                 throw new InvalidDataException("DNS publication requires concrete unicast Gateway addresses.");
+            }
+
             _addresses.TryAdd(address.ToString(), address.AddressFamily == AddressFamily.InterNetwork ? "A" : "AAAA");
         }
         _settings = settings; _siteDomain = siteDomain; _ownership = "mk8.drava site=" + siteId; _clock = clock;
-        _api = new CloudflareDnsApi(settings.RequireApiBaseUrl(), settings.ZoneId, PrivateBearerCredentialFile.Read(settings.CredentialPath), handler);
+        _api = new CloudflareDnsApi(settings.RequireApiBaseUrl(), settings.ZoneId, settings.Credential.RequireToken(), handler);
     }
 
     public async ValueTask<bool> EnsureAsync(string host, CancellationToken cancellationToken)
@@ -70,7 +72,7 @@ public sealed class CloudflareDnsPublisher : IServiceDnsPublisher, IDisposable
             bool confirmed;
             try { confirmed = await EnsureRecordsAsync(host, deadline.Token).ConfigureAwait(false); }
             catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or FormatException ||
-                exception is OperationCanceledException && !cancellationToken.IsCancellationRequested) { confirmed = false; }
+                (exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)) { confirmed = false; }
             lock (_gate) if (_attempts.Count < MaximumCachedHosts) _attempts[host] = new Attempt(_clock.GetTimestamp(), confirmed);
             return confirmed;
         }
@@ -102,7 +104,10 @@ public sealed class CloudflareDnsPublisher : IServiceDnsPublisher, IDisposable
                 record.GetProperty("proxied").ValueKind != JsonValueKind.False ||
                 !IPAddress.TryParse(record.GetProperty("content").GetString(), out var address) ||
                 !_addresses.TryGetValue(address.ToString(), out var type) ||
-                !string.Equals(record.GetProperty("type").GetString(), type, StringComparison.Ordinal) || !found.Add(address.ToString())) return false;
+                !string.Equals(record.GetProperty("type").GetString(), type, StringComparison.Ordinal) || !found.Add(address.ToString()))
+            {
+                return false;
+            }
         }
         foreach (var address in _addresses)
             if (!found.Contains(address.Key) && !await _api.CreateAsync(host, address.Value, address.Key, _settings.TtlSeconds, _ownership, cancellationToken).ConfigureAwait(false)) return false;
@@ -111,7 +116,7 @@ public sealed class CloudflareDnsPublisher : IServiceDnsPublisher, IDisposable
 
     private bool IsScopedHost(string host)
     {
-        if (host.Length > 253 || host.Count(static character => character == '.') > 15 || (!string.Equals(host, _siteDomain, StringComparison.Ordinal) && !host.EndsWith("." + _siteDomain, StringComparison.Ordinal))) return false;
+        if (host.Length > 253 || host.Where(static character => character == '.').Skip(15).Any() || (!string.Equals(host, _siteDomain, StringComparison.Ordinal) && !host.EndsWith("." + _siteDomain, StringComparison.Ordinal))) return false;
         try { _ = new PublishedServiceAddress(host, "/"); return true; }
         catch (InvalidDataException) { return false; }
     }

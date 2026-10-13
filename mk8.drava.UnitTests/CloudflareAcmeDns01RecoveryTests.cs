@@ -9,74 +9,74 @@ public sealed class CloudflareAcmeDns01RecoveryTests
     [Fact]
     public async Task ChangedAcknowledgedRecordRetainsItsJournalAndNeverDeletesForeignOwnershipAsync()
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true); List<ProviderRecord> records = [];
+        using var directory = new RegistryStateDirectory(); List<ProviderRecord> records = [];
         using (var session = new DevelopmentJournaledAcmeProvider(directory.Path, records))
             await session.Provider.PublishAsync("_acme-challenge.site.example", new string('A', 43), Guid.NewGuid().ToString("N"), CancellationToken.None).ConfigureAwait(true);
         records[0] = records[0] with { Comment = "foreign owner" };
         using var reopened = new DevelopmentJournaledAcmeProvider(directory.Path, records);
         await Assert.ThrowsAsync<InvalidDataException>(async () => await reopened.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-        Assert.Collection(reopened.Journal.Read(), entry => Assert.Equal(records[0].Id, entry.RecordId));
+        Assert.Equal(records[0].Id, DevelopmentCardinality.RequireSingle(reopened.Journal.Read()).RecordId);
         Assert.DoesNotContain(reopened.Handler.Requests, static r => r.Method == HttpMethod.Delete);
     }
 
     [Fact]
     public async Task RecoveryNeverDeletesAnActiveChallengeAsync()
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true); List<ProviderRecord> records = [];
+        using var directory = new RegistryStateDirectory(); List<ProviderRecord> records = [];
         using var session = new DevelopmentJournaledAcmeProvider(directory.Path, records);
         var record = await session.Provider.PublishAsync("_acme-challenge.site.example", new string('A', 43), Guid.NewGuid().ToString("N"), CancellationToken.None).ConfigureAwait(true);
         var requests = session.Handler.Requests.Length;
         await Assert.ThrowsAsync<InvalidDataException>(async () => await session.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-        Assert.Equal(requests, session.Handler.Requests.Length); Assert.Collection(records, entry => Assert.Equal(record.Host, entry.Name));
+        Assert.Equal(requests, session.Handler.Requests.Length); Assert.Equal(record.Host, DevelopmentCardinality.RequireSingle(records).Name);
         await session.Provider.RemoveAsync(record, CancellationToken.None).ConfigureAwait(true); Assert.Empty(session.Journal.Read());
     }
 
     [Fact]
     public async Task CanceledRecoveryJoinsItsProviderRequestAndRetainsDurableOwnershipAsync()
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true);
+        using var directory = new RegistryStateDirectory();
         var intent = AcmeDns01CleanupJournalTests.Entry(recordId: new string('b', 32)); var path = Path.Combine(directory.Path, "cleanup.json");
         using (var journal = new AcmeDns01CleanupJournal(path)) await journal.PutAsync(intent, CancellationToken.None).ConfigureAwait(true);
         var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
         using var session = new DevelopmentJournaledAcmeProvider(directory.Path, []); session.Handler.Block = true;
         using var cancellation = new CancellationTokenSource(); var operation = session.Provider.RecoverAsync(cancellation.Token).AsTask();
-        await session.Handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(true);
+        await session.Handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellation.Token).ConfigureAwait(true);
         await cancellation.CancelAsync().ConfigureAwait(true);
         var canceled = false;
         try { await operation.ConfigureAwait(true); }
         catch (OperationCanceledException) { canceled = true; }
         Assert.True(canceled);
         Assert.True(session.Handler.Exited.Task.IsCompletedSuccessfully);
-        Assert.Equal(bytes, await File.ReadAllBytesAsync(path).ConfigureAwait(true)); Assert.Collection(session.Journal.Read(), entry => Assert.Equal(intent, entry));
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(path, CancellationToken.None).ConfigureAwait(true)); Assert.Equal(intent, DevelopmentCardinality.RequireSingle(session.Journal.Read()));
         Assert.DoesNotContain(session.Handler.Requests, static r => r.Method == HttpMethod.Delete);
     }
 
     [Fact]
     public async Task RestartCleansAcknowledgedChallengeAndPreservesForeignRecordsAsync()
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true);
+        using var directory = new RegistryStateDirectory();
         var foreign = new ProviderRecord("_acme-challenge.site.example", "TXT", "\"foreign\""); List<ProviderRecord> records = [foreign];
         using (var session = new DevelopmentJournaledAcmeProvider(directory.Path, records))
         {
             await session.Provider.PublishAsync(foreign.Name, new string('A', 43), Guid.NewGuid().ToString("N"), CancellationToken.None).ConfigureAwait(true);
-            Assert.Collection(session.Journal.Read(), item => Assert.Equal(records[1].Id, item.RecordId));
+            Assert.Equal(records[1].Id, DevelopmentCardinality.RequireSingle(session.Journal.Read()).RecordId);
         }
         using var reopened = new DevelopmentJournaledAcmeProvider(directory.Path, records);
         await reopened.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(true);
-        Assert.Empty(reopened.Journal.Read()); Assert.Collection(records, item => Assert.Equal(foreign, item));
+        Assert.Empty(reopened.Journal.Read()); Assert.Equal(foreign, DevelopmentCardinality.RequireSingle(records));
     }
 
     [Fact]
     public async Task LostCreateResponseRetainsIntentThenFindsAndCleansOnlyExactOwnedRecordAsync()
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true);
+        using var directory = new RegistryStateDirectory();
         List<ProviderRecord> records = []; var operation = Guid.NewGuid().ToString("N");
         using (var session = new DevelopmentJournaledAcmeProvider(directory.Path, records))
         {
             session.Handler.BeforeCreate = () => DevelopmentJournaledAcmeProvider.AssertIntentPersisted(directory.Path, operation);
             session.Handler.Failure = "create-response-lost";
             await Assert.ThrowsAsync<HttpRequestException>(async () => await session.Provider.PublishAsync("_acme-challenge.site.example", new string('A', 43), operation, CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-            Assert.Collection(session.Journal.Read(), item => Assert.Equal("", item.RecordId)); Assert.Collection(records, item => Assert.Equal(new string('A', 43), item.Content.Trim('"')));
+            Assert.Equal("", DevelopmentCardinality.RequireSingle(session.Journal.Read()).RecordId); Assert.Equal(new string('A', 43), DevelopmentCardinality.RequireSingle(records).Content.Trim('"'));
         }
         using var reopened = new DevelopmentJournaledAcmeProvider(directory.Path, records);
         await reopened.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(true);
@@ -86,7 +86,7 @@ public sealed class CloudflareAcmeDns01RecoveryTests
     [Fact]
     public async Task LostRecoveryDeleteResponsePersistsDiscoveredIdBeforeDeletingAndRestartsSafelyAsync()
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true);
+        using var directory = new RegistryStateDirectory();
         List<ProviderRecord> records = [];
         using (var session = new DevelopmentJournaledAcmeProvider(directory.Path, records))
         {
@@ -98,7 +98,7 @@ public sealed class CloudflareAcmeDns01RecoveryTests
         {
             session.Handler.Failure = "delete-response-lost";
             await Assert.ThrowsAsync<HttpRequestException>(async () => await session.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-            Assert.Empty(records); Assert.Collection(session.Journal.Read(), entry => Assert.Equal(id, entry.RecordId));
+            Assert.Empty(records); Assert.Equal(id, DevelopmentCardinality.RequireSingle(session.Journal.Read()).RecordId);
         }
         using var recovered = new DevelopmentJournaledAcmeProvider(directory.Path, records);
         await recovered.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(true); Assert.Empty(recovered.Journal.Read());
@@ -107,14 +107,14 @@ public sealed class CloudflareAcmeDns01RecoveryTests
     [Fact]
     public async Task MissingUnacknowledgedCreateBlocksIssuanceAndNeverForgetsItsIntentAsync()
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true);
+        using var directory = new RegistryStateDirectory();
         var intent = AcmeDns01CleanupJournalTests.Entry();
         using (var journal = new AcmeDns01CleanupJournal(Path.Combine(directory.Path, "cleanup.json")))
             await journal.PutAsync(intent, CancellationToken.None).ConfigureAwait(true);
         using var session = new DevelopmentJournaledAcmeProvider(directory.Path, []);
         await Assert.ThrowsAsync<InvalidDataException>(async () => await session.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
         await Assert.ThrowsAsync<InvalidDataException>(async () => await session.Provider.PublishAsync(intent.Host, intent.Value, Guid.NewGuid().ToString("N"), CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-        Assert.Collection(session.Journal.Read(), item => Assert.Equal(intent, item)); Assert.DoesNotContain(session.Handler.Requests, static r => r.Method == HttpMethod.Post || r.Method == HttpMethod.Delete);
+        Assert.Equal(intent, DevelopmentCardinality.RequireSingle(session.Journal.Read())); Assert.DoesNotContain(session.Handler.Requests, static r => r.Method == HttpMethod.Post || r.Method == HttpMethod.Delete);
     }
 
     [Theory]
@@ -122,7 +122,7 @@ public sealed class CloudflareAcmeDns01RecoveryTests
     [InlineData(true)]
     public async Task ChangedOrDuplicateOwnershipCannotBeDeletedDuringRecoveryAsync(bool duplicate)
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true); List<ProviderRecord> records = [];
+        using var directory = new RegistryStateDirectory(); List<ProviderRecord> records = [];
         using (var session = new DevelopmentJournaledAcmeProvider(directory.Path, records))
         {
             session.Handler.Failure = "create-response-lost";
@@ -131,14 +131,14 @@ public sealed class CloudflareAcmeDns01RecoveryTests
         records.Add(records[0] with { Id = new string('c', 32), Content = duplicate ? records[0].Content : "\"changed\"" });
         using var reopened = new DevelopmentJournaledAcmeProvider(directory.Path, records);
         await Assert.ThrowsAsync<InvalidDataException>(async () => await reopened.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-        Assert.Collection(reopened.Journal.Read(), static entry => Assert.Equal("", entry.RecordId)); Assert.Equal(2, records.Count);
+        Assert.Equal("", DevelopmentCardinality.RequireSingle(reopened.Journal.Read()).RecordId); Assert.Equal(2, records.Count);
         Assert.DoesNotContain(reopened.Handler.Requests, static r => r.Method == HttpMethod.Delete);
     }
 
     [Fact]
     public async Task ForeignJournalScopeNeverReachesProviderAsync()
     {
-        using var directory = new RegistryStateDirectory(); await DevelopmentJournaledAcmeProvider.PrepareAsync(directory.Path).ConfigureAwait(true);
+        using var directory = new RegistryStateDirectory();
         using (var journal = new AcmeDns01CleanupJournal(Path.Combine(directory.Path, "cleanup.json")))
         {
             var entry = new AcmeDns01CleanupEntry(new string('c', 32), "site.example", "development", Guid.NewGuid().ToString("N"), "_acme-challenge.site.example", new string('A', 43), "");
@@ -146,6 +146,6 @@ public sealed class CloudflareAcmeDns01RecoveryTests
         }
         using var session = new DevelopmentJournaledAcmeProvider(directory.Path, []);
         await Assert.ThrowsAsync<InvalidDataException>(async () => await session.Provider.RecoverAsync(CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(true);
-        Assert.Empty(session.Handler.Requests); Assert.Collection(session.Journal.Read(), static entry => Assert.Equal(new string('c', 32), entry.ZoneId));
+        Assert.Empty(session.Handler.Requests); Assert.Equal(new string('c', 32), DevelopmentCardinality.RequireSingle(session.Journal.Read()).ZoneId);
     }
 }
