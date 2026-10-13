@@ -20,7 +20,9 @@ public sealed record ApplicationBootstrap
     public bool TransportDiagnostics { get; init; }
     public ControllerBootstrap? Controller { get; init; }
 
-    public void Validate()
+    public void Validate() => ValidateCore(forInitialization: false);
+    internal void ValidateForInitialization() => ValidateCore(forInitialization: true);
+    private void ValidateCore(bool forInitialization)
     {
         if (SchemaVersion != 1 || SiteId.Length is < 1 or > 128 || NodeId.Length is < 1 or > 128 || GatewayId.Length is < 1 or > 128)
             throw new InvalidDataException("Invalid Application bootstrap identity or version.");
@@ -37,7 +39,11 @@ public sealed record ApplicationBootstrap
             _ = AdministratorToken.RequireToken();
             if (AdministratorToken.Equals(IpcToken)) throw new InvalidDataException("Administrator and private IPC credentials must be distinct.");
         }
-        Controller?.Validate();
+        if (Controller is not null)
+        {
+            if (forInitialization) Controller.ValidateConfiguration();
+            else Controller.Validate();
+        }
         if (ManagementPort is < 0 or > 65535 || (ManagementPort > 0 && (Controller is null || AdministratorToken.IsEmpty || ManagementPort == HttpPort || ManagementPort == HttpsPort || ManagementPort == Controller.RegistrationPort)))
             throw new InvalidDataException("Management requires a distinct enrolled listener and administrator credential.");
         if (Controller is not null && (Controller.RegistrationPort == HttpPort || Controller.RegistrationPort == HttpsPort))

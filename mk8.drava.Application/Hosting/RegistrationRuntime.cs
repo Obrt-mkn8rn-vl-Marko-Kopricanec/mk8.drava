@@ -55,7 +55,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
         ServingPlanState? plans = null;
         try
         {
-            authority = LocalSiteCertificateAuthority.Open(controller.CertificateAuthorityPath, controller.EnrollmentRootFingerprint, clock);
+            authority = LocalSiteCertificateAuthority.Open(controller.CertificateAuthority, controller.EnrollmentRootFingerprint, clock);
             registry = new RegistryCoordinator(repository, availability, clock);
             await registry.InitializeAsync(cancellationToken).ConfigureAwait(false);
             using var root = authority.PublicCertificate;

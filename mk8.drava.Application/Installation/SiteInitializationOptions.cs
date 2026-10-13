@@ -38,8 +38,8 @@ internal sealed record SiteInitializationOptions
         RegistrationSiteTrust.RequireLabel(NodeId);
         RegistrationSiteTrust.RequireLabel(OwnerId);
         RegistrationSiteTrust.RequireLabel(ServicePrefix);
-        var bundle = SiteInitializationBundle.Create(this, new string('A', 64), new SecretText(new string('A', 64)), new SecretText(new string('B', 64)));
-        bundle.Application.Validate(); bundle.Gateway.Validate(); bundle.Enrollment.Validate();
+        var bundle = SiteInitializationBundle.Create(this, new string('A', 64), new SecretText(new string('A', 64)), new SecretText(new string('B', 64)), SecretBytes.Empty, SecretBytes.Empty, SecretBytes.Empty);
+        bundle.Application.ValidateForInitialization(); bundle.Gateway.Validate(); bundle.Enrollment.ValidateForInitialization();
         _ = new Mk8.Drava.Application.BLL.Registry.NodeGrant(NodeId, OwnerId, new string('A', 64), ServicePrefix,
             EndpointAddresses, MinimumPort, MaximumPort, DateTimeOffset.MaxValue, revoked: false);
     }

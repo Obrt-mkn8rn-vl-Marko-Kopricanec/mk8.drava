@@ -2,7 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.BLL.Registry;
-using Mk8.Drava.Application.DAL.Acme;
+using Mk8.Drava.Configuration;
 using Mk8.Drava.Transport.Registration;
 using Mk8.Drava.Transport.Relay;
 
@@ -22,35 +22,24 @@ public sealed class LocalSiteCertificateAuthority : IDisposable
     public X509Certificate2 PublicCertificate => X509CertificateLoader.LoadCertificate(_issuer.RawData);
     public string Fingerprint => _issuer.GetCertHashString(HashAlgorithmName.SHA256);
 
-    public static LocalSiteCertificateAuthority Open(string privatePath, string expectedFingerprint, TimeProvider clock)
-    {
-        ArgumentNullException.ThrowIfNull(clock);
-        RegistryNames.RequireFingerprint(expectedFingerprint);
-        var issuer = X509CertificateLoader.LoadPkcs12(PrivateCertificateFile.Read(privatePath), password: null, X509KeyStorageFlags.EphemeralKeySet);
-        try
-        {
-            using var key = issuer.GetECDsaPrivateKey();
-            if (key is null || !RegistrationProof.IsP256(key) || !string.Equals(issuer.GetCertHashString(HashAlgorithmName.SHA256), expectedFingerprint, StringComparison.Ordinal) ||
-                !IsAuthority(issuer) || clock.GetUtcNow().UtcDateTime < issuer.NotBefore.ToUniversalTime() || clock.GetUtcNow().UtcDateTime >= issuer.NotAfter.ToUniversalTime())
-                throw new InvalidDataException("Site issuer identity, role, key or lifetime is invalid.");
-            return new LocalSiteCertificateAuthority(issuer, clock);
-        }
-        catch { issuer.Dispose(); throw; }
-    }
+    public static LocalSiteCertificateAuthority Open(SecretBytes material, string expectedFingerprint, TimeProvider clock) =>
+        new(PortableCertificate.LoadAuthority(material, expectedFingerprint, clock), clock);
 
-    // Creation is an explicit one-time initialization command; runtime Open never substitutes a new trust root.
-    public static async ValueTask<string> InitializeAsync(string privatePath, string siteId, TimeProvider clock, CancellationToken cancellationToken)
+    public SecretBytes PrivateMaterial => PortableCertificate.ExportPrivate(_issuer);
+
+    // Only explicit initialization creates a root; runtime Open never substitutes an identity.
+    public static LocalSiteCertificateAuthority Create(string siteId, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(clock);
         RegistryNames.RequireLabel(siteId);
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var request = new CertificateRequest("CN=mk8.drava " + siteId, key, HashAlgorithmName.SHA256);
-        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, true, 0, true));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
-        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: true, hasPathLengthConstraint: true, 0, critical: true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, critical: true));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
         using var issuer = request.CreateSelfSigned(clock.GetUtcNow().AddMinutes(-5), clock.GetUtcNow().AddYears(5));
-        await PrivateCertificateFile.WriteNewAsync(privatePath, issuer.Export(X509ContentType.Pkcs12), cancellationToken).ConfigureAwait(false);
-        return issuer.GetCertHashString(HashAlgorithmName.SHA256);
+        var material = PortableCertificate.ExportPrivate(issuer);
+        return Open(material, issuer.GetCertHashString(HashAlgorithmName.SHA256), clock);
     }
 
     public X509Certificate2 IssueGateway(string domain, IReadOnlyList<string> addresses) => IssueGateway(domain, addresses, 30);
@@ -106,12 +95,12 @@ public sealed class LocalSiteCertificateAuthority : IDisposable
         if (until < now.AddDays(1)) throw new InvalidOperationException("Site CA requires renewal before issuing another leaf.");
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var request = new CertificateRequest("CN=" + subject, key, HashAlgorithmName.SHA256);
-        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, 0, critical: true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: true));
         var usages = new OidCollection();
         if (client) usages.Add(new Oid("1.3.6.1.5.5.7.3.2"));
         if (server) usages.Add(new Oid("1.3.6.1.5.5.7.3.1"));
-        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(usages, true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(usages, critical: true));
         request.CertificateExtensions.Add(names.Build());
         var serial = RandomNumberGenerator.GetBytes(16);
         serial[0] |= 1;
@@ -119,17 +108,4 @@ public sealed class LocalSiteCertificateAuthority : IDisposable
         return certificate.CopyWithPrivateKey(key);
     }
 
-    private static bool IsAuthority(X509Certificate2 certificate)
-    {
-        var authority = false;
-        var signing = false;
-        var extensions = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var extension in certificate.Extensions)
-        {
-            if (extension.Oid?.Value is not { } oid || !extensions.Add(oid)) return false;
-            if (extension is X509BasicConstraintsExtension basic) authority |= basic.CertificateAuthority;
-            if (extension is X509KeyUsageExtension usage) signing |= (usage.KeyUsages & X509KeyUsageFlags.KeyCertSign) != X509KeyUsageFlags.None;
-        }
-        return authority && signing;
-    }
 }

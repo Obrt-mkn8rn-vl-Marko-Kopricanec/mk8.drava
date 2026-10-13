@@ -185,8 +185,8 @@ public sealed class NodeRelayProcessTests
 
     private static async Task AssertControllerListenerLiveAsync(TwoProcessProxy proxy, DevelopmentNodeAgent agent, X509Certificate2 root)
     {
-        var authorityPath = Path.Combine(Path.GetDirectoryName(proxy.RootCertificatePath)!, "app", "site-ca.pfx");
-        using var authority = LocalSiteCertificateAuthority.Open(authorityPath, root.GetCertHashString(HashAlgorithmName.SHA256), TimeProvider.System);
+        var configured = await PortableConfiguration.LoadDocumentAsync<ApplicationBootstrap>(proxy.ApplicationBootstrapPath, CancellationToken.None).ConfigureAwait(false);
+        using var authority = LocalSiteCertificateAuthority.Open(configured.Controller!.CertificateAuthority, root.GetCertHashString(HashAlgorithmName.SHA256), TimeProvider.System);
         using var controller = authority.IssueController("development", Guid.NewGuid().ToString("N"));
         using var handler = new SocketsHttpHandler { UseProxy = false, SslOptions = new SslClientAuthenticationOptions
         {
@@ -212,7 +212,7 @@ public sealed class NodeRelayProcessTests
         using var root = X509CertificateLoader.LoadCertificateFromFile(proxy.RootCertificatePath);
         return new DravaRegistrationOptions
         {
-            NodeAgentToken = proxy.NodeAgentToken, Site = new RegistrationSiteTrust { SiteId = "development", Domain = "site.test", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256), RootCertificatePath = proxy.RootCertificatePath, NodeCertificatePath = proxy.NodeCertificatePath },
+            NodeAgentToken = proxy.NodeAgentToken, Site = new RegistrationSiteTrust { SiteId = "development", Domain = "site.test", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256), RootCertificate = new SecretBytes(File.ReadAllBytes(proxy.RootCertificatePath)), NodeCertificate = new SecretBytes(File.ReadAllBytes(proxy.NodeCertificatePath)), NodeAgentDescriptorPath = proxy.NodeAgentDescriptorPath },
             NodeId = proxy.EnrolledNodeId, OwnerId = "development", ServiceId = "svc", ReadinessPath = "/ready", MulticastDiscovery = false,
             GatewaySeeds = [new DiscoveryCandidate("127.0.0.1", proxy.RegistrationPort)],
         };

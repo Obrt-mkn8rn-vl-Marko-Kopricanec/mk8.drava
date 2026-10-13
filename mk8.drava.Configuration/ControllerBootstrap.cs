@@ -3,7 +3,7 @@ namespace Mk8.Drava.Configuration;
 public sealed record ControllerBootstrap
 {
     public string Domain { get; init; } = "";
-    public string CertificateAuthorityPath { get; init; } = "";
+    public SecretBytes CertificateAuthority { get; init; } = SecretBytes.Empty;
     public string EnrollmentRootFingerprint { get; init; } = "";
     public int RegistrationPort { get; init; } = 9443;
     public IReadOnlyList<string> PublicAddresses { get; init; } = [];
@@ -19,6 +19,12 @@ public sealed record ControllerBootstrap
 
     public void Validate()
     {
+        ValidateConfiguration();
+        using var issuer = PortableCertificate.LoadAuthority(CertificateAuthority, EnrollmentRootFingerprint, TimeProvider.System);
+    }
+
+    internal void ValidateConfiguration()
+    {
         Relay.Validate(); Registration.Validate(); ServingPlan.Validate(); ServingTrust.Validate();
         if (string.Equals(ServingTrust.Mode, "site-ca", StringComparison.Ordinal) ? ServingCertificatePath.Length != 0 : !Path.IsPathFullyQualified(ServingCertificatePath))
             throw new InvalidDataException("Public serving trust requires an absolute protected certificate path; site CA mode issues its own material.");
@@ -33,12 +39,11 @@ public sealed record ControllerBootstrap
         Acme.Validate(ServingTrust, DnsPublication);
         if (Acme.Enabled)
         {
-            var paths = new[] { CertificateAuthorityPath, ServingCertificatePath, Acme.CleanupJournalPath, Acme.PinnedServingRootPath };
+            var paths = new[] { ServingCertificatePath, Acme.CleanupJournalPath, Acme.PinnedServingRootPath };
             var unique = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             foreach (var path in paths)
                 if (path.Length != 0 && !unique.Add(Path.GetFullPath(path))) throw new InvalidDataException("Automatic issuance material and private enrollment require distinct files.");
         }
-        if (!Path.IsPathFullyQualified(CertificateAuthorityPath)) throw new InvalidDataException("Site issuer path must be absolute.");
         if (EnrollmentRootFingerprint.Length != 64) throw new InvalidDataException("Site issuer requires its enrolled SHA-256 fingerprint.");
         foreach (var character in EnrollmentRootFingerprint)
             if (character is not (>= '0' and <= '9') and not (>= 'A' and <= 'F')) throw new InvalidDataException("Invalid issuer fingerprint.");

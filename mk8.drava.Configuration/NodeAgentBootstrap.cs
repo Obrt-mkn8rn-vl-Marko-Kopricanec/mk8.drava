@@ -27,6 +27,7 @@ public sealed record NodeAgentBootstrap
         if (SchemaVersion != 1) throw new InvalidDataException("Unsupported node-agent schema.");
         PrivateHttp2.Validate();
         Site.Validate(); LocalListen.Validate(); Relay.Validate();
+        if (Site.NodeAgentDescriptorPath.Length == 0) throw new InvalidDataException("Node-agent requires an explicit private descriptor state path.");
         if (MappingLeaseSeconds is < 15 or > 300) throw new InvalidDataException("Invalid local mapping lease lifetime.");
         foreach (var label in new[] { NodeId, OwnerId, ServicePrefix }) RegistrationSiteTrust.RequireLabel(label);
         if (!Path.IsPathFullyQualified(StateDirectory) || LocalListen.HttpsAddress.Length != 0)

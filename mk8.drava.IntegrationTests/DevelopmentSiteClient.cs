@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.IntegrationTests;
 
@@ -16,30 +18,45 @@ internal sealed class DevelopmentSiteClient : IDisposable
     public int ConnectedSockets => Volatile.Read(ref _connectedSockets);
     public HttpClient Client { get; }
 
+    // Raw files here are exclusively disposable test-client inputs, never role startup fallbacks.
     public DevelopmentSiteClient(string rootPath, int port, string host, string? enrollmentPath = null, bool? tcpNoDelay = null)
+        : this(ReadFixture(rootPath), port, host, enrollmentPath is null ? null : ReadFixture(enrollmentPath), tcpNoDelay) { }
+
+    public DevelopmentSiteClient(SecretBytes root, int port, string host, SecretBytes? enrollment = null, bool? tcpNoDelay = null)
     {
-        _root = X509CertificateLoader.LoadCertificateFromFile(rootPath);
-        _enrollment = enrollmentPath is null ? null : X509CertificateLoader.LoadPkcs12FromFile(enrollmentPath, password: null, X509KeyStorageFlags.EphemeralKeySet);
-        _handler = new SocketsHttpHandler
+        _root = PortableCertificate.LoadPublic(root);
+        try
         {
-            AllowAutoRedirect = false,
-            SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = ValidateServer },
-            ConnectCallback = async (_, token) =>
+            _enrollment = enrollment is null ? null : PortableCertificate.LoadPrivate(enrollment);
+            _handler = new SocketsHttpHandler
             {
-                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                try
+                AllowAutoRedirect = false,
+                SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = ValidateServer },
+                ConnectCallback = async (_, token) =>
                 {
-                    if (tcpNoDelay is { } noDelay) socket.NoDelay = noDelay;
-                    Volatile.Write(ref _observedNoDelay, socket.NoDelay ? 1 : 0);
-                    await socket.ConnectAsync(new IPEndPoint(IPAddress.Loopback, port), token).ConfigureAwait(false);
-                    Interlocked.Increment(ref _connectedSockets);
-                    return new NetworkStream(socket, ownsSocket: true);
-                }
-                catch { socket.Dispose(); throw; }
-            },
-        };
-        if (_enrollment is not null) _handler.SslOptions.ClientCertificates = [_enrollment];
-        Client = new HttpClient(_handler, disposeHandler: false) { BaseAddress = new UriBuilder("https", host, port).Uri, Timeout = TimeSpan.FromSeconds(10), DefaultRequestVersion = HttpVersion.Version20, DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact };
+                    var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                    try
+                    {
+                        if (tcpNoDelay is { } noDelay) socket.NoDelay = noDelay;
+                        Volatile.Write(ref _observedNoDelay, socket.NoDelay ? 1 : 0);
+                        await socket.ConnectAsync(new IPEndPoint(IPAddress.Loopback, port), token).ConfigureAwait(false);
+                        Interlocked.Increment(ref _connectedSockets);
+                        return new NetworkStream(socket, ownsSocket: true);
+                    }
+                    catch { socket.Dispose(); throw; }
+                },
+            };
+            if (_enrollment is not null) _handler.SslOptions.ClientCertificates = [_enrollment];
+            Client = new HttpClient(_handler, disposeHandler: false) { BaseAddress = new UriBuilder("https", host, port).Uri, Timeout = TimeSpan.FromSeconds(10), DefaultRequestVersion = HttpVersion.Version20, DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact };
+        }
+        catch { _handler?.Dispose(); _enrollment?.Dispose(); _root.Dispose(); throw; }
+    }
+
+    private static SecretBytes ReadFixture(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        try { return new SecretBytes(bytes); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
     internal bool ValidateServer(object sender, X509Certificate? certificate, X509Chain? existingChain, SslPolicyErrors errors)

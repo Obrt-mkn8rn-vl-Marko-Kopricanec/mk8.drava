@@ -12,12 +12,15 @@ public sealed record NodeEnrollmentProfile
     public int RegistrationPort { get; init; } = 9443;
     public bool MulticastDiscovery { get; init; } = true;
 
-    public void Validate()
+    public void Validate() => ValidateCore(forInitialization: false);
+    internal void ValidateForInitialization() => ValidateCore(forInitialization: true);
+    private void ValidateCore(bool forInitialization)
     {
         if (!LocalToken.IsEmpty) _ = LocalToken.RequireToken();
         if (SchemaVersion != 1 || GatewayAddresses.Count > 16 || RegistrationPort is < 1 or > 65535)
             throw new InvalidDataException("Invalid node enrollment profile.");
-        Site.Validate();
+        if (forInitialization) Site.ValidateIdentity();
+        else Site.Validate();
         RegistrationSiteTrust.RequireLabel(NodeId);
         RegistrationSiteTrust.RequireLabel(OwnerId);
         RegistrationSiteTrust.RequireLabel(ServicePrefix);

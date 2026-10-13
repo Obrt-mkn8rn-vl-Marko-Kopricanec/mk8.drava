@@ -30,12 +30,10 @@ public sealed class SiteRegistrationChannel : IDisposable
         ArgumentNullException.ThrowIfNull(candidate);
         trust.Validate();
         _trust = trust;
-        ValidateFile(trust.NodeCertificatePath, privateMaterial: true);
-        ValidateFile(trust.RootCertificatePath, privateMaterial: false);
-        _root = X509CertificateLoader.LoadCertificateFromFile(trust.RootCertificatePath);
+        _root = PortableCertificate.LoadPublic(trust.RootCertificate);
         try
         {
-            _node = X509CertificateLoader.LoadPkcs12FromFile(trust.NodeCertificatePath, password: null, X509KeyStorageFlags.EphemeralKeySet);
+            _node = PortableCertificate.LoadPrivate(trust.NodeCertificate);
             if (!string.Equals(_root.GetCertHashString(HashAlgorithmName.SHA256), trust.RootFingerprint, StringComparison.Ordinal) || !_node.HasPrivateKey)
                 throw new InvalidDataException("Enrollment root pin or node key does not match.");
             _handler = new SocketsHttpHandler
@@ -43,10 +41,10 @@ public sealed class SiteRegistrationChannel : IDisposable
                 AllowAutoRedirect = false, UseProxy = false, UseCookies = false, ConnectTimeout = TimeSpan.FromSeconds(3),
                 MaxConnectionsPerServer = 1, MaxResponseHeadersLength = 16,
                 ConnectCallback = (_, token) => ConnectAsync(candidate, token),
-                SslOptions = new SslClientAuthenticationOptions { ClientCertificates = new X509CertificateCollection { _node }, RemoteCertificateValidationCallback = ValidateServer },
+                SslOptions = new SslClientAuthenticationOptions { ClientCertificates = [_node], RemoteCertificateValidationCallback = ValidateServer },
             };
             _http = new HttpClient(_handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
-            _channel = GrpcChannel.ForAddress($"https://register.{trust.Domain}:{candidate.Port}", new GrpcChannelOptions { HttpClient = _http, MaxReceiveMessageSize = 64 * 1024, MaxSendMessageSize = 64 * 1024 });
+            _channel = GrpcChannel.ForAddress($"https://register.{trust.Domain}:{candidate.Port.ToString(System.Globalization.CultureInfo.InvariantCulture)}", new GrpcChannelOptions { HttpClient = _http, MaxReceiveMessageSize = 64 * 1024, MaxSendMessageSize = 64 * 1024 });
             _client = new ServiceRegistry.ServiceRegistryClient(_channel);
         }
         catch { _handler?.Dispose(); _http?.Dispose(); _root.Dispose(); _node?.Dispose(); throw; }
@@ -75,7 +73,7 @@ public sealed class SiteRegistrationChannel : IDisposable
     {
         ArgumentNullException.ThrowIfNull(command);
         if (command.Identity is null || !string.Equals(command.Identity.SiteId, _trust.SiteId, StringComparison.Ordinal)) throw new InvalidDataException("Registration belongs to another site.");
-        var challenge = Interlocked.Exchange(ref _verifiedChallenge, null);
+        var challenge = Interlocked.Exchange(ref _verifiedChallenge, value: null);
         if (challenge is null || challenge.ExpiresUnixSeconds <= DateTimeOffset.UtcNow.AddSeconds(2).ToUnixTimeSeconds()) challenge = await ChallengeAsync(cancellationToken).ConfigureAwait(false);
         var payload = RegistrationJson.Encode(command);
         using var key = _node.GetECDsaPrivateKey() ?? throw new InvalidDataException("Enrollment requires a P-256 signing key.");
@@ -92,9 +90,14 @@ public sealed class SiteRegistrationChannel : IDisposable
         if (status.Phase != RegistrationPhase.Ready && status.AssignedUrls.Count != 0) throw new InvalidDataException("Pending membership cannot supply an assigned URL.");
         if (status.Phase == RegistrationPhase.Ready && status.AssignedUrls.Count == 0) throw new InvalidDataException("Ready membership requires an assigned URL.");
         foreach (var assigned in status.AssignedUrls)
+        {
             if (assigned is null || assigned.Length > 2048 || !Uri.TryCreate(assigned, UriKind.Absolute, out var uri) || uri.Scheme is not "http" and not "https" ||
                 uri.HostNameType != UriHostNameType.Dns || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+            {
                 throw new InvalidDataException("The authenticated controller supplied an invalid assigned URL.");
+            }
+        }
+
         return status;
     }
 
@@ -143,21 +146,12 @@ public sealed class SiteRegistrationChannel : IDisposable
                 leaf = true;
             }
             if (extension is X509EnhancedKeyUsageExtension usage)
+            {
                 foreach (var oid in usage.EnhancedKeyUsages)
                     if (string.Equals(oid.Value, "1.3.6.1.5.5.7.3.1", StringComparison.Ordinal)) server = true;
+            }
         }
         return server && leaf;
-    }
-
-    private static void ValidateFile(string path, bool privateMaterial)
-    {
-        var file = new FileInfo(path);
-        if (!file.Exists || file.LinkTarget is not null || file.Length is < 1 or > 64 * 1024) throw new InvalidDataException("Enrollment file is missing, oversized or a symbolic link.");
-        if (!privateMaterial || OperatingSystem.IsWindows()) return;
-        var denied = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
-        var directory = file.Directory ?? throw new InvalidDataException("Enrollment directory is missing.");
-        if (directory.LinkTarget is not null || (File.GetUnixFileMode(path) & denied) != UnixFileMode.None || (File.GetUnixFileMode(directory.FullName) & denied) != UnixFileMode.None)
-            throw new InvalidDataException("Node enrollment requires a private file and directory.");
     }
 
     public void Dispose() { _channel.Dispose(); _http.Dispose(); _handler.Dispose(); _node.Dispose(); _root.Dispose(); }

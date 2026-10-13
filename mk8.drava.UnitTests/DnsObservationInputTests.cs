@@ -1,6 +1,7 @@
 using Mk8.Drava.Application.INF.Acme;
 using Mk8.Drava.Application.INF.NoConf;
 using Mk8.Drava.Configuration;
+using Mk8.Drava.Application.INF.Publication;
 using Xunit;
 
 namespace Mk8.Drava.UnitTests;
@@ -36,9 +37,13 @@ public sealed class DnsObservationInputTests
         Controller(address, port).Validate();
     }
 
-    private static ControllerBootstrap Controller(string address, int port) => new()
+    private static ControllerBootstrap Controller(string address, int port)
     {
-        Domain = "site.test", CertificateAuthorityPath = Path.GetFullPath("fixture-ca.pfx"), EnrollmentRootFingerprint = new string('A', 64),
-        DnsServerAddress = address, DnsServerPort = port,
-    };
+        using var authority = LocalSiteCertificateAuthority.Create("site", TimeProvider.System);
+        return new ControllerBootstrap
+        {
+            Domain = "site.test", CertificateAuthority = authority.PrivateMaterial, EnrollmentRootFingerprint = authority.Fingerprint,
+            DnsServerAddress = address, DnsServerPort = port,
+        };
+    }
 }

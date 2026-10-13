@@ -32,7 +32,8 @@ public sealed class NodeAgentLocalClient : IDisposable
     public static async ValueTask<NodeAgentDescriptor?> ReadDescriptorAsync(RegistrationSiteTrust trust, string nodeId, string fingerprint, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(trust);
-        var path = trust.NodeCertificatePath + ".agent.json";
+        var path = trust.NodeAgentDescriptorPath;
+        if (path.Length == 0) return null;
         if (!File.Exists(path)) return null;
         RequirePrivateFile(path);
         var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, bufferSize: 4096, useAsync: true);

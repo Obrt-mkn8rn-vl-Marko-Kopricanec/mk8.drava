@@ -1,3 +1,4 @@
+using Mk8.Drava.Configuration;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -33,7 +34,7 @@ public sealed class CertificateRoleSplitTests
     [Fact]
     public async Task ActualGatewayChoosesCertificateByListenerRoleAsync()
     {
-        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("unused")).ConfigureAwait(true);
+        var upstream = await DevelopmentHttpUpstream.StartAsync(context => context.Response.WriteAsync("unused", context.RequestAborted)).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
         var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true, administration: true).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
@@ -91,7 +92,7 @@ public sealed class CertificateRoleSplitTests
             case "business-name":
             case "foreign-ip":
                 using (var serving = X509CertificateLoader.LoadPkcs12(plan.Certificates[0].Pfx.Span, password: null, X509KeyStorageFlags.EphemeralKeySet))
-                using (var issuer = X509CertificateLoader.LoadPkcs12FromFile(fixture.Application.Controller!.CertificateAuthorityPath, password: null, X509KeyStorageFlags.EphemeralKeySet))
+                using (var issuer = PortableCertificate.LoadPrivate(fixture.Application.Controller!.CertificateAuthority))
                 using (var key = string.Equals(corruption, "shared-key", StringComparison.Ordinal) ? serving.GetECDsaPrivateKey()! : ECDsa.Create(ECCurve.NamedCurves.nistP256))
                 using (var certificate = CreateInvalidPrivateLeaf(issuer, key, fixture.Clock.GetUtcNow(), corruption))
                 {
@@ -108,9 +109,9 @@ public sealed class CertificateRoleSplitTests
     private static X509Certificate2 CreateInvalidPrivateLeaf(X509Certificate2 issuer, ECDsa key, DateTimeOffset now, string corruption)
     {
         var request = new CertificateRequest("CN=development-private", key, HashAlgorithmName.SHA256);
-        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
-        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, true));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, 0, critical: true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], critical: true));
         var names = new SubjectAlternativeNameBuilder();
         names.AddDnsName("register.site.test"); names.AddDnsName("admin.site.test");
         if (string.Equals(corruption, "business-name", StringComparison.Ordinal)) names.AddDnsName("other.site.test");
@@ -133,17 +134,18 @@ public sealed class CertificateRoleSplitTests
         using var client = new TcpClient();
         await client.ConnectAsync(IPAddress.Loopback, port, timeout.Token).ConfigureAwait(true);
         string? fingerprint = null;
-        using var tls = new SslStream(client.GetStream(), leaveInnerStreamOpen: false, (sender, certificate, chain, errors) =>
+        var tls = new SslStream(client.GetStream(), leaveInnerStreamOpen: false, (sender, certificate, chain, errors) =>
         {
             if (!validator.ValidateServer(sender, certificate, chain, errors)) return false;
             using var leaf = X509CertificateLoader.LoadCertificate(certificate!.GetRawCertData());
             fingerprint = leaf.GetCertHashString(HashAlgorithmName.SHA256);
             return true;
         });
+        await using var tlsLifetime = tls.ConfigureAwait(true);
         await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
         {
             TargetHost = host,
-            ClientCertificates = enrollment ? new X509CertificateCollection { node } : null,
+            ClientCertificates = enrollment ? [node] : null,
         }, timeout.Token).ConfigureAwait(true);
         Assert.False(string.IsNullOrEmpty(fingerprint));
         return fingerprint!;

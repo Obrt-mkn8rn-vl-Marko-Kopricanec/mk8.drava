@@ -26,7 +26,7 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
         var bootstrap = new NodeAgentBootstrap
         {
             Site = new RegistrationSiteTrust { SiteId = "development", Domain = "site.test", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256),
-                RootCertificatePath = proxy.RootCertificatePath, NodeCertificatePath = proxy.NodeCertificatePath, },
+                RootCertificate = new SecretBytes(await File.ReadAllBytesAsync(proxy.RootCertificatePath, CancellationToken.None).ConfigureAwait(false)), NodeCertificate = new SecretBytes(await File.ReadAllBytesAsync(proxy.NodeCertificatePath, CancellationToken.None).ConfigureAwait(false)), NodeAgentDescriptorPath = proxy.NodeAgentDescriptorPath, },
             NodeId = proxy.EnrolledNodeId, OwnerId = "development", ServicePrefix = "svc", StateDirectory = directory, LocalListen = local, LocalToken = proxy.NodeAgentToken,
             RelayAddress = proxy.NodeRelayAddress, RelayPort = 0, EndpointAddresses = proxy.NodeRelayAddress is "127.0.0.1" ? ["127.0.0.1"] : ["127.0.0.1", proxy.NodeRelayAddress],
             Relay = relay ?? new RelayLimits(), MappingLeaseSeconds = mappingLeaseSeconds,
@@ -34,7 +34,7 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
         };
         var path = Path.Combine(directory, "agent.json");
         await PortableFixtureFile.WriteAsync(path, PortableConfiguration.Serialize(bootstrap)).ConfigureAwait(false);
-        var profile = proxy.NodeCertificatePath + ".agent.json";
+        var profile = proxy.NodeAgentDescriptorPath;
         var previous = File.Exists(profile) ? BootstrapFile.Parse<NodeAgentDescriptor>(await File.ReadAllBytesAsync(profile, CancellationToken.None).ConfigureAwait(false)) : null;
         var process = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), path, "--node-agent", environment);
         try

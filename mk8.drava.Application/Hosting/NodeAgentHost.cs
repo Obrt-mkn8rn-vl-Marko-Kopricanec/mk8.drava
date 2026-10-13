@@ -25,19 +25,19 @@ internal static class NodeAgentHost
     {
         var bootstrap = await BootstrapFile.LoadAsync<NodeAgentBootstrap>(path, CancellationToken.None).ConfigureAwait(false);
         bootstrap.Validate();
-        var privateState = await PrivateApplicationState.OpenAsync(new ApplicationBootstrap { StateDirectory = bootstrap.StateDirectory, Listen = bootstrap.LocalListen }, CancellationToken.None).ConfigureAwait(false);
-        await using var privateStateLifetime = privateState.ConfigureAwait(false);
-        using var node = X509CertificateLoader.LoadPkcs12(PrivateCertificateFile.Read(bootstrap.Site.NodeCertificatePath), password: null, X509KeyStorageFlags.EphemeralKeySet);
-        using var root = X509CertificateLoader.LoadCertificateFromFile(bootstrap.Site.RootCertificatePath);
+        using var node = PortableCertificate.LoadPrivate(bootstrap.Site.NodeCertificate);
+        using var root = PortableCertificate.LoadPublic(bootstrap.Site.RootCertificate);
         var fingerprint = node.GetCertHashString(HashAlgorithmName.SHA256);
         if (!node.HasPrivateKey || !string.Equals(root.GetCertHashString(HashAlgorithmName.SHA256), bootstrap.Site.RootFingerprint, StringComparison.Ordinal) ||
             !NodeCertificateTrust.Validate(node, root, bootstrap.RelayAddress, fingerprint, TimeProvider.System))
         {
             throw new InvalidDataException("Node relay enrollment key, trust, role or listener name is invalid.");
         }
+        var privateState = await PrivateApplicationState.OpenAsync(new ApplicationBootstrap { StateDirectory = bootstrap.StateDirectory, Listen = bootstrap.LocalListen }, CancellationToken.None).ConfigureAwait(false);
+        await using var privateStateLifetime = privateState.ConfigureAwait(false);
         var localAddresses = ReadLocalAddresses();
         if (!localAddresses.Contains(bootstrap.RelayAddress)) throw new InvalidDataException("Relay listener does not belong to a local interface.");
-        var profileLock = OpenProfileLock(bootstrap.Site.NodeCertificatePath);
+        var profileLock = OpenProfileLock(bootstrap.Site.NodeAgentDescriptorPath);
         await using var profileLockLifetime = profileLock.ConfigureAwait(false);
         var boot = Guid.NewGuid().ToString("N");
         var grant = new NodeGrant(bootstrap.NodeId, bootstrap.OwnerId, fingerprint, bootstrap.ServicePrefix, bootstrap.EndpointAddresses,
@@ -99,7 +99,7 @@ internal static class NodeAgentHost
         var app = builder.Build();
         await using var appLifetime = app.ConfigureAwait(false);
         app.MapGrpcService<NodeRelayService>(); app.MapGrpcService<NodeAgentLocalService>();
-        var profilePath = bootstrap.Site.NodeCertificatePath + ".agent.json";
+        var profilePath = bootstrap.Site.NodeAgentDescriptorPath;
         try
         {
             await app.StartAsync(CancellationToken.None).ConfigureAwait(false);
@@ -127,8 +127,8 @@ internal static class NodeAgentHost
     }
 
     // Distinct state roots can share this enrollment; its descriptor needs one confirmed owner.
-    private static FileStream OpenProfileLock(string certificatePath) =>
-        PrivateOwnerFile.AcquireLease(certificatePath + ".agent.lock");
+    private static FileStream OpenProfileLock(string descriptorPath) =>
+        PrivateOwnerFile.AcquireLease(descriptorPath + ".lock");
 
     private static async Task WriteProfileAsync(string path, NodeAgentDescriptor descriptor)
     {

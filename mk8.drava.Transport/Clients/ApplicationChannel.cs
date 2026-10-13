@@ -26,8 +26,8 @@ public sealed class ApplicationChannel : IDisposable
         {
             if (endpoint.HttpsAddress.Length > 0)
             {
-                _clientCertificate = X509CertificateLoader.LoadPkcs12FromFile(endpoint.ClientCertificatePath, password: null, X509KeyStorageFlags.EphemeralKeySet);
-                _trustedCertificate = X509CertificateLoader.LoadCertificateFromFile(endpoint.TrustedCertificatePath);
+                _clientCertificate = PortableCertificate.LoadPrivate(endpoint.ClientCertificate);
+                _trustedCertificate = PortableCertificate.LoadPublic(endpoint.TrustedCertificate);
                 handler.SslOptions = new SslClientAuthenticationOptions
                 {
                     ClientCertificates = [_clientCertificate],

@@ -28,6 +28,8 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public SecretText NodeAgentToken { get; } = new(Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
     public string RootCertificatePath => Path.Combine(_directory, "site-root.der");
     public string NodeCertificatePath => Path.Combine(_directory, "node.pfx");
+    public string NodeAgentDescriptorPath => Path.Combine(_directory, "node.agent.json");
+    public string ApplicationBootstrapPath => Path.Combine(_directory, "application.json");
     public string EnrolledNodeId { get; private set; } = "local";
     public string NodeRelayAddress { get; private set; } = "127.0.0.1";
     public Task WritePolicyAsync(string json) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "noconf.json"), json);
@@ -152,13 +154,12 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         ControllerBootstrap? controller = null;
         if (enrolledSite)
         {
-            var authorityPath = Path.Combine(state, "site-ca.pfx");
-            var fingerprint = await LocalSiteCertificateAuthority.InitializeAsync(authorityPath, "development", TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
-            using var authority = LocalSiteCertificateAuthority.Open(authorityPath, fingerprint, TimeProvider.System);
+            using var authority = LocalSiteCertificateAuthority.Create("development", TimeProvider.System);
+            var fingerprint = authority.Fingerprint;
             using var rootCertificate = authority.PublicCertificate;
             await File.WriteAllBytesAsync(Path.Combine(directory, "site-root.der"), rootCertificate.RawData).ConfigureAwait(false);
             await EnrollDevelopmentNodeAsync(directory, state, authority, relayAddress).ConfigureAwait(false);
-            controller = new ControllerBootstrap { Domain = "site.test", CertificateAuthorityPath = authorityPath, EnrollmentRootFingerprint = fingerprint, RegistrationPort = registrationPort, DnsServerAddress = "127.0.0.1", DnsServerPort = dnsPort ?? 53, Registration = lifecycleSettings.Registration, ServingPlan = lifecycleSettings.Serving };
+            controller = new ControllerBootstrap { Domain = "site.test", CertificateAuthority = authority.PrivateMaterial, EnrollmentRootFingerprint = fingerprint, RegistrationPort = registrationPort, DnsServerAddress = "127.0.0.1", DnsServerPort = dnsPort ?? 53, Registration = lifecycleSettings.Registration, ServingPlan = lifecycleSettings.Serving };
         }
         var applicationBootstrap = new ApplicationBootstrap { SiteId = "development", NodeId = "local", StateDirectory = state, Listen = ipc, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, IpcToken = ipcToken, AdministratorToken = administratorToken, Controller = controller, PrivateHttp2 = privateHttp2 ?? new PrivateHttp2Settings(), ForwardingDiagnostics = observeForwarding || observeUploadTiming, TransportDiagnostics = observeUploadTiming };
         var gatewayBootstrap = new GatewayBootstrap { SiteId = "development", StateDirectory = gatewayState, Application = ipc, ApplicationToken = ipcToken, HttpPort = port, HttpsPort = tlsPort, ManagementPort = managementPort, RegistrationPort = registrationPort, DiscoveryEnabled = discovery, Plan = lifecycleSettings.Gateway, EnrollmentRootFingerprint = controller?.EnrollmentRootFingerprint ?? "", RequestBodyLimits = requestBodyLimits ?? [], UploadDiagnostics = observeUploadTiming };

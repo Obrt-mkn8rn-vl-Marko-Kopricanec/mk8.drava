@@ -62,7 +62,7 @@ internal sealed class DevelopmentInitializedSite : IAsyncDisposable
         _gateway = new DevelopmentProcess(Assembly("mk8.drava.Gateway"), GatewayPath);
         var profile = await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(EnrollmentPath, CancellationToken.None).ConfigureAwait(false);
         var gateway = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(GatewayPath, CancellationToken.None).ConfigureAwait(false);
-        using var client = new DevelopmentSiteClient(profile.Site.RootCertificatePath, gateway.HttpsPort, "probe.site.test");
+        using var client = new DevelopmentSiteClient(profile.Site.RootCertificate, gateway.HttpsPort, "probe.site.test");
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));
         while (true)
         {

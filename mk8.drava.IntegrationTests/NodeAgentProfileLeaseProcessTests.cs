@@ -21,7 +21,7 @@ public sealed class NodeAgentProfileLeaseProcessTests
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         var owner = await DevelopmentNodeAgent.StartAsync(proxy, environment: environment).ConfigureAwait(true);
         await using var ownerLifetime = owner.ConfigureAwait(true);
-        var profilePath = proxy.NodeCertificatePath + ".agent.json";
+        var profilePath = proxy.NodeAgentDescriptorPath;
         var originalProfile = await File.ReadAllBytesAsync(profilePath).ConfigureAwait(true);
         Assert.DoesNotContain(proxy.NodeAgentToken.Reveal(), System.Text.Encoding.UTF8.GetString(originalProfile), StringComparison.Ordinal);
 

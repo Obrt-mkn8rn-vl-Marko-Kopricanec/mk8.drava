@@ -4,7 +4,7 @@ namespace Mk8.Drava.Application.Installation;
 
 internal sealed record SiteInitializationBundle(ApplicationBootstrap Application, GatewayBootstrap Gateway, NodeEnrollmentProfile Enrollment)
 {
-    public static SiteInitializationBundle Create(SiteInitializationOptions options, string fingerprint, SecretText ipcToken, SecretText administratorToken)
+    public static SiteInitializationBundle Create(SiteInitializationOptions options, string fingerprint, SecretText ipcToken, SecretText administratorToken, SecretBytes certificateAuthority, SecretBytes rootCertificate, SecretBytes nodeCertificate)
     {
         var destination = options.DestinationDirectory;
         var applicationState = Path.Combine(destination, "application");
@@ -14,7 +14,7 @@ internal sealed record SiteInitializationBundle(ApplicationBootstrap Application
         };
         var controller = new ControllerBootstrap
         {
-            Domain = options.Domain, CertificateAuthorityPath = Path.Combine(applicationState, "site-ca.pfx"),
+            Domain = options.Domain, CertificateAuthority = certificateAuthority,
             EnrollmentRootFingerprint = fingerprint, RegistrationPort = options.RegistrationPort,
             PublicAddresses = [options.BindAddress], DnsServerAddress = options.DnsServerAddress, DnsServerPort = options.DnsServerPort,
             DnsPublication = options.DnsPublication,
@@ -38,8 +38,8 @@ internal sealed record SiteInitializationBundle(ApplicationBootstrap Application
             Site = new RegistrationSiteTrust
             {
                 SiteId = options.SiteId, Domain = options.Domain, RootFingerprint = fingerprint,
-                RootCertificatePath = Path.Combine(destination, "node", "site-root.der"),
-                NodeCertificatePath = Path.Combine(destination, "node", "node.pfx"),
+                RootCertificate = rootCertificate,
+                NodeCertificate = nodeCertificate, NodeAgentDescriptorPath = Path.Combine(destination, "node", "agent.json"),
             },
             NodeId = options.NodeId, OwnerId = options.OwnerId, ServicePrefix = options.ServicePrefix,
             GatewayAddresses = [options.BindAddress], RegistrationPort = options.RegistrationPort, MulticastDiscovery = options.DiscoveryEnabled,

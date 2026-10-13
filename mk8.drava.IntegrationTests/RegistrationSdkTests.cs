@@ -108,7 +108,7 @@ public sealed class RegistrationSdkTests(ITestOutputHelper output)
         using var root = X509CertificateLoader.LoadCertificateFromFile(proxy.RootCertificatePath);
         return new DravaRegistrationOptions
         {
-            Site = new RegistrationSiteTrust { SiteId = "development", Domain = "site.test", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256), RootCertificatePath = proxy.RootCertificatePath, NodeCertificatePath = proxy.NodeCertificatePath },
+            Site = new RegistrationSiteTrust { SiteId = "development", Domain = "site.test", RootFingerprint = root.GetCertHashString(HashAlgorithmName.SHA256), RootCertificate = new SecretBytes(File.ReadAllBytes(proxy.RootCertificatePath)), NodeCertificate = new SecretBytes(File.ReadAllBytes(proxy.NodeCertificatePath)), NodeAgentDescriptorPath = proxy.NodeAgentDescriptorPath },
             NodeId = "local", OwnerId = "development", ServiceId = "svc", ReadinessPath = "/ready", MulticastDiscovery = false,
             GatewaySeeds = [new DiscoveryCandidate("127.0.0.1", proxy.RegistrationPort)],
         };

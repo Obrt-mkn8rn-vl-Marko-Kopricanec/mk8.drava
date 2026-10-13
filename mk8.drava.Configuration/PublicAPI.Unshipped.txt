@@ -29,8 +29,8 @@ Mk8.Drava.Configuration.ApplicationBootstrap.Validate() -> void
 Mk8.Drava.Configuration.BootstrapFile
 Mk8.Drava.Configuration.ControllerBootstrap
 Mk8.Drava.Configuration.ControllerBootstrap.<Clone>$() -> Mk8.Drava.Configuration.ControllerBootstrap!
-Mk8.Drava.Configuration.ControllerBootstrap.CertificateAuthorityPath.get -> string!
-Mk8.Drava.Configuration.ControllerBootstrap.CertificateAuthorityPath.init -> void
+Mk8.Drava.Configuration.ControllerBootstrap.CertificateAuthority.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.ControllerBootstrap.CertificateAuthority.init -> void
 Mk8.Drava.Configuration.ControllerBootstrap.ControllerBootstrap() -> void
 Mk8.Drava.Configuration.ControllerBootstrap.DnsServerAddress.get -> string!
 Mk8.Drava.Configuration.ControllerBootstrap.DnsServerAddress.init -> void
@@ -95,16 +95,16 @@ Mk8.Drava.Configuration.GatewayRequestBodyLimit.MaxRequestBodyBytes.init -> void
 Mk8.Drava.Configuration.GatewayRequestBodyLimit.Validate() -> void
 Mk8.Drava.Configuration.IpcEndpoint
 Mk8.Drava.Configuration.IpcEndpoint.<Clone>$() -> Mk8.Drava.Configuration.IpcEndpoint!
-Mk8.Drava.Configuration.IpcEndpoint.ClientCertificatePath.get -> string!
-Mk8.Drava.Configuration.IpcEndpoint.ClientCertificatePath.init -> void
+Mk8.Drava.Configuration.IpcEndpoint.ClientCertificate.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.IpcEndpoint.ClientCertificate.init -> void
 Mk8.Drava.Configuration.IpcEndpoint.Equals(Mk8.Drava.Configuration.IpcEndpoint? other) -> bool
 Mk8.Drava.Configuration.IpcEndpoint.HttpsAddress.get -> string!
 Mk8.Drava.Configuration.IpcEndpoint.HttpsAddress.init -> void
 Mk8.Drava.Configuration.IpcEndpoint.IpcEndpoint() -> void
 Mk8.Drava.Configuration.IpcEndpoint.NamedPipeName.get -> string!
 Mk8.Drava.Configuration.IpcEndpoint.NamedPipeName.init -> void
-Mk8.Drava.Configuration.IpcEndpoint.TrustedCertificatePath.get -> string!
-Mk8.Drava.Configuration.IpcEndpoint.TrustedCertificatePath.init -> void
+Mk8.Drava.Configuration.IpcEndpoint.TrustedCertificate.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.IpcEndpoint.TrustedCertificate.init -> void
 Mk8.Drava.Configuration.IpcEndpoint.UnixSocketPath.get -> string!
 Mk8.Drava.Configuration.IpcEndpoint.UnixSocketPath.init -> void
 Mk8.Drava.Configuration.IpcEndpoint.Validate() -> void
@@ -113,11 +113,11 @@ Mk8.Drava.Configuration.RegistrationSiteTrust.<Clone>$() -> Mk8.Drava.Configurat
 Mk8.Drava.Configuration.RegistrationSiteTrust.Domain.get -> string!
 Mk8.Drava.Configuration.RegistrationSiteTrust.Domain.init -> void
 Mk8.Drava.Configuration.RegistrationSiteTrust.Equals(Mk8.Drava.Configuration.RegistrationSiteTrust? other) -> bool
-Mk8.Drava.Configuration.RegistrationSiteTrust.NodeCertificatePath.get -> string!
-Mk8.Drava.Configuration.RegistrationSiteTrust.NodeCertificatePath.init -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust.NodeCertificate.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.RegistrationSiteTrust.NodeCertificate.init -> void
 Mk8.Drava.Configuration.RegistrationSiteTrust.RegistrationSiteTrust() -> void
-Mk8.Drava.Configuration.RegistrationSiteTrust.RootCertificatePath.get -> string!
-Mk8.Drava.Configuration.RegistrationSiteTrust.RootCertificatePath.init -> void
+Mk8.Drava.Configuration.RegistrationSiteTrust.RootCertificate.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.RegistrationSiteTrust.RootCertificate.init -> void
 Mk8.Drava.Configuration.RegistrationSiteTrust.RootFingerprint.get -> string!
 Mk8.Drava.Configuration.RegistrationSiteTrust.RootFingerprint.init -> void
 Mk8.Drava.Configuration.RegistrationSiteTrust.SiteId.get -> string!
@@ -533,3 +533,19 @@ Mk8.Drava.Configuration.NativeDnsManagementSettings.ProfileId.get -> System.Guid
 Mk8.Drava.Configuration.NativeDnsManagementSettings.ProfileId.init -> void
 Mk8.Drava.Configuration.NativeDnsManagementSettings.DecodeCredential() -> byte[]!
 Mk8.Drava.Configuration.SecretText.RequirePrivateP256Key() -> string!
+Mk8.Drava.Configuration.RegistrationSiteTrust.NodeAgentDescriptorPath.get -> string!
+Mk8.Drava.Configuration.RegistrationSiteTrust.NodeAgentDescriptorPath.init -> void
+Mk8.Drava.Configuration.SecretBytes
+Mk8.Drava.Configuration.SecretBytes.SecretBytes(System.ReadOnlySpan<byte> value) -> void
+static Mk8.Drava.Configuration.SecretBytes.Empty.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.SecretBytes.Length.get -> int
+Mk8.Drava.Configuration.SecretBytes.Reveal(int minimumBytes, int maximumBytes) -> byte[]!
+Mk8.Drava.Configuration.SecretBytes.Equals(Mk8.Drava.Configuration.SecretBytes? other) -> bool
+override Mk8.Drava.Configuration.SecretBytes.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.SecretBytes.GetHashCode() -> int
+override Mk8.Drava.Configuration.SecretBytes.ToString() -> string!
+Mk8.Drava.Configuration.PortableCertificate
+static Mk8.Drava.Configuration.PortableCertificate.LoadPublic(Mk8.Drava.Configuration.SecretBytes! material) -> System.Security.Cryptography.X509Certificates.X509Certificate2!
+static Mk8.Drava.Configuration.PortableCertificate.LoadPrivate(Mk8.Drava.Configuration.SecretBytes! material) -> System.Security.Cryptography.X509Certificates.X509Certificate2!
+static Mk8.Drava.Configuration.PortableCertificate.LoadAuthority(Mk8.Drava.Configuration.SecretBytes! material, string! expectedFingerprint, System.TimeProvider! clock) -> System.Security.Cryptography.X509Certificates.X509Certificate2!
+static Mk8.Drava.Configuration.PortableCertificate.ExportPrivate(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> Mk8.Drava.Configuration.SecretBytes!

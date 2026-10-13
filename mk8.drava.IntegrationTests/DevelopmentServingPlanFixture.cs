@@ -15,20 +15,20 @@ internal sealed class DevelopmentServingPlanFixture : IDisposable
     {
         _directory = directory; Clock = clock; Authority = authority;
         Application = new ApplicationBootstrap { IpcToken = new SecretText(new string('A', 64)), SiteId = "site", StateDirectory = directory, Controller = new ControllerBootstrap
-            { Domain = "site.test", CertificateAuthorityPath = Path.Combine(directory, "ca.pfx"), EnrollmentRootFingerprint = fingerprint, DnsServerAddress = "127.0.0.1", }, };
+            { Domain = "site.test", CertificateAuthority = authority.PrivateMaterial, EnrollmentRootFingerprint = fingerprint, DnsServerAddress = "127.0.0.1", }, };
         Gateway = new GatewayBootstrap { ApplicationToken = Application.IpcToken, SiteId = "site", StateDirectory = directory, EnrollmentRootFingerprint = fingerprint };
     }
 
-    public static async Task<DevelopmentServingPlanFixture> CreateAsync()
+    public static Task<DevelopmentServingPlanFixture> CreateAsync()
     {
         var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "drava_plan_" + Guid.NewGuid().ToString("N"))).FullName;
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var clock = new PlanClock();
-        var path = Path.Combine(directory, "ca.pfx");
         try
         {
-            var fingerprint = await LocalSiteCertificateAuthority.InitializeAsync(path, "site", clock, CancellationToken.None).ConfigureAwait(false);
-            return new DevelopmentServingPlanFixture(directory, clock, LocalSiteCertificateAuthority.Open(path, fingerprint, clock), fingerprint);
+            var authority = LocalSiteCertificateAuthority.Create("site", clock);
+            try { return Task.FromResult(new DevelopmentServingPlanFixture(directory, clock, authority, authority.Fingerprint)); }
+            catch { authority.Dispose(); throw; }
         }
         catch { Directory.Delete(directory, recursive: true); throw; }
     }

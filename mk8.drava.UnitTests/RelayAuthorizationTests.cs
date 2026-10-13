@@ -15,10 +15,10 @@ public sealed class RelayAuthorizationTests
     {
         using var fixture = new RelayTestFixture();
         var capability = fixture.Capability();
-        var approved = fixture.Authorize(capability);
-        Assert.Equal(fixture.Command.Identity.InstanceId, approved.Endpoint.Identity.InstanceId);
-        Assert.Equal("127.0.0.1", approved.Endpoint.Address);
-        Assert.Equal(12345, approved.Endpoint.Port);
+        var (_, endpoint) = fixture.Authorize(capability);
+        Assert.Equal(fixture.Command.Identity.InstanceId, endpoint.Identity.InstanceId);
+        Assert.Equal("127.0.0.1", endpoint.Address);
+        Assert.Equal(12345, endpoint.Port);
         Assert.Same(capability.Identity, fixture.Command.Identity);
         Assert.Throws<UnauthorizedAccessException>(() => fixture.Authorize(capability));
     }
@@ -139,13 +139,10 @@ public sealed class RelayAuthorizationTests
         Assert.Throws<JsonException>(() => RelayCapabilityJson.Decode(Encoding.UTF8.GetBytes(json)));
 
     [Fact]
-    public async Task ProductionIssuerSeparatesControllerAndNodeRolesAsync()
+    public void ProductionIssuerSeparatesControllerAndNodeRoles()
     {
-        using var directory = new RegistryStateDirectory();
         var clock = new RegistryTimeProvider();
-        var path = Path.Combine(directory.Path, "issuer.pfx");
-        var pin = await LocalSiteCertificateAuthority.InitializeAsync(path, "site", clock, CancellationToken.None).ConfigureAwait(true);
-        using var authority = LocalSiteCertificateAuthority.Open(path, pin, clock);
+        using var authority = LocalSiteCertificateAuthority.Create("site", clock);
         using var root = authority.PublicCertificate;
         var epoch = Guid.NewGuid().ToString("N");
         using var controller = authority.IssueController("site", epoch);

@@ -5,8 +5,8 @@ public sealed record IpcEndpoint
     public string UnixSocketPath { get; init; } = "";
     public string NamedPipeName { get; init; } = "";
     public string HttpsAddress { get; init; } = "";
-    public string ClientCertificatePath { get; init; } = "";
-    public string TrustedCertificatePath { get; init; } = "";
+    public SecretBytes ClientCertificate { get; init; } = SecretBytes.Empty;
+    public SecretBytes TrustedCertificate { get; init; } = SecretBytes.Empty;
 
     public void Validate()
     {
@@ -17,7 +17,12 @@ public sealed record IpcEndpoint
         if (HttpsAddress.Length > 0)
         {
             if (!Uri.TryCreate(HttpsAddress, UriKind.Absolute, out var address) || !string.Equals(address.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal) || !string.Equals(address.AbsolutePath, "/", StringComparison.Ordinal) || address.UserInfo.Length != 0 || address.Query.Length != 0 || address.Fragment.Length != 0) throw new InvalidDataException("Remote Application transport requires an HTTPS authority.");
-            if (ClientCertificatePath.Length == 0 || TrustedCertificatePath.Length == 0) throw new InvalidDataException("Remote Application transport requires mutual TLS enrollment.");
+            using var client = PortableCertificate.LoadPrivate(ClientCertificate);
+            using var trusted = PortableCertificate.LoadPublic(TrustedCertificate);
+        }
+        else if (ClientCertificate.Length != 0 || TrustedCertificate.Length != 0)
+        {
+            throw new InvalidDataException("Local IPC does not accept remote TLS credential material.");
         }
     }
 }
