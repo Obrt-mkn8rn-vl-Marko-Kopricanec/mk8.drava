@@ -1,5 +1,7 @@
+using System.Globalization;
+
 namespace Mk8.Drava.Application.BLL.Configuration;
-public static partial class SiteOptionsAggregator
+public static class SiteOptionsAggregator
 {
     private static ProxyHttpsRedirectOptions MergeHttpsRedirect(ProxyHttpsRedirectOptions site, ProxyHttpsRedirectOptions route)
     {
@@ -7,7 +9,7 @@ public static partial class SiteOptionsAggregator
         {
             Enabled = route.Enabled ?? site.Enabled,
             StatusCode = route.StatusCode ?? site.StatusCode,
-            HttpsPort = route.HttpsPort ?? site.HttpsPort
+            HttpsPort = route.HttpsPort ?? site.HttpsPort,
         };
     }
 
@@ -17,7 +19,7 @@ public static partial class SiteOptionsAggregator
         {
             Enabled = route.Enabled ?? site.Enabled,
             TargetHost = string.IsNullOrWhiteSpace(route.TargetHost) ? site.TargetHost : route.TargetHost,
-            StatusCode = route.StatusCode ?? site.StatusCode
+            StatusCode = route.StatusCode ?? site.StatusCode,
         };
     }
 
@@ -26,9 +28,9 @@ public static partial class SiteOptionsAggregator
         return new ProxyHeaderPolicyOptions
         {
             SetRequestHeaders = new System.Collections.ObjectModel.Collection<Mk8.Drava.Application.BLL.Configuration.ProxyHeaderSetOptions>(CopyHeaderFields(site.SetRequestHeaders.Concat(route.SetRequestHeaders))),
-            RemoveRequestHeaders = new System.Collections.ObjectModel.Collection<string>(site.RemoveRequestHeaders.Concat(route.RemoveRequestHeaders).ToList()),
+            RemoveRequestHeaders = new System.Collections.ObjectModel.Collection<string>([.. site.RemoveRequestHeaders, .. route.RemoveRequestHeaders]),
             SetResponseHeaders = new System.Collections.ObjectModel.Collection<Mk8.Drava.Application.BLL.Configuration.ProxyHeaderSetOptions>(CopyHeaderFields(site.SetResponseHeaders.Concat(route.SetResponseHeaders))),
-            RemoveResponseHeaders = new System.Collections.ObjectModel.Collection<string>(site.RemoveResponseHeaders.Concat(route.RemoveResponseHeaders).ToList())
+            RemoveResponseHeaders = new System.Collections.ObjectModel.Collection<string>([.. site.RemoveResponseHeaders, .. route.RemoveResponseHeaders]),
         };
     }
 
@@ -39,7 +41,7 @@ public static partial class SiteOptionsAggregator
             Enabled = route.Enabled ?? site.Enabled,
             RetryAfterSeconds = route.RetryAfterSeconds ?? site.RetryAfterSeconds,
             ContentType = string.IsNullOrWhiteSpace(route.ContentType) || string.Equals(route.ContentType, "text/plain; charset=utf-8", StringComparison.OrdinalIgnoreCase) ? site.ContentType : route.ContentType,
-            Body = string.Equals(route.Body, "Service Unavailable", StringComparison.Ordinal) ? site.Body : route.Body
+            Body = string.Equals(route.Body, "Service Unavailable", StringComparison.Ordinal) ? site.Body : route.Body,
         };
     }
 
@@ -64,7 +66,7 @@ public static partial class SiteOptionsAggregator
             UpstreamConnectTimeoutMs = route.UpstreamConnectTimeoutMs ?? site.UpstreamConnectTimeoutMs,
             UpstreamResponseBodyIdleTimeoutMs = route.UpstreamResponseBodyIdleTimeoutMs ?? site.UpstreamResponseBodyIdleTimeoutMs,
             DownstreamWriteTimeoutMs = route.DownstreamWriteTimeoutMs ?? site.DownstreamWriteTimeoutMs,
-            AccessLogEnabled = route.AccessLogEnabled ?? site.AccessLogEnabled
+            AccessLogEnabled = route.AccessLogEnabled ?? site.AccessLogEnabled,
         };
     }
 
@@ -102,8 +104,8 @@ public static partial class SiteOptionsAggregator
 
         return new ProxyOptions
         {
-            Listeners = new System.Collections.ObjectModel.Collection<Mk8.Drava.Application.BLL.Configuration.ListenerOptions>(listenersByKey.Values.ToList()),
-            Routes = new System.Collections.ObjectModel.Collection<Mk8.Drava.Application.BLL.Configuration.ProxyRouteOptions>(routes)
+            Listeners = new System.Collections.ObjectModel.Collection<Mk8.Drava.Application.BLL.Configuration.ListenerOptions>([.. listenersByKey.Values]),
+            Routes = new System.Collections.ObjectModel.Collection<Mk8.Drava.Application.BLL.Configuration.ProxyRouteOptions>(routes),
         };
     }
 
@@ -129,18 +131,18 @@ public static partial class SiteOptionsAggregator
             ForwardingBufferBytes = source.ForwardingBufferBytes,
             Http2MaxConcurrentStreams = source.Http2MaxConcurrentStreams,
             Http2MaxHeaderListBytes = source.Http2MaxHeaderListBytes,
-            Http2MaxFrameSize = source.Http2MaxFrameSize
+            Http2MaxFrameSize = source.Http2MaxFrameSize,
         };
     }
 
     private static List<SniCertificateOptions> CopySniCertificates(IEnumerable<SniCertificateOptions> source)
     {
-        return source.Select(static binding => new SniCertificateOptions { HostName = binding.HostName, CertificateId = binding.CertificateId }).ToList();
+        return [.. source.Select(static binding => new SniCertificateOptions { HostName = binding.HostName, CertificateId = binding.CertificateId })];
     }
 
     private static List<UpstreamOptions> CopyUpstreams(IEnumerable<UpstreamOptions> source)
     {
-        return source.Select(CopyUpstream).ToList();
+        return [.. source.Select(CopyUpstream)];
     }
 
     private static UpstreamOptions CopyUpstream(UpstreamOptions source)
@@ -159,9 +161,9 @@ public static partial class SiteOptionsAggregator
                 SniHost = source.UpstreamTls.SniHost,
                 TrustedRoot = source.UpstreamTls.TrustedRoot is { } root ? new TrustedRootCertificateOptions
                 {
-                    CertificatePath = root.CertificatePath,
+                    MaterialId = root.MaterialId,
                     Sha256 = root.Sha256,
-                } : null
+                } : null,
             },
             CircuitBreaker = new ProxyCircuitBreakerOptions
             {
@@ -170,8 +172,8 @@ public static partial class SiteOptionsAggregator
                 SamplingWindowSeconds = source.CircuitBreaker.SamplingWindowSeconds,
                 OpenDurationSeconds = source.CircuitBreaker.OpenDurationSeconds,
                 HalfOpenMaxAttempts = source.CircuitBreaker.HalfOpenMaxAttempts,
-                FailureStatusCodes = new System.Collections.ObjectModel.Collection<int>(source.CircuitBreaker.FailureStatusCodes.ToList())
-            }
+                FailureStatusCodes = new System.Collections.ObjectModel.Collection<int>([.. source.CircuitBreaker.FailureStatusCodes]),
+            },
         };
     }
 
@@ -184,7 +186,7 @@ public static partial class SiteOptionsAggregator
             IntervalSeconds = source.IntervalSeconds,
             TimeoutSeconds = source.TimeoutSeconds,
             HealthyThreshold = source.HealthyThreshold,
-            UnhealthyThreshold = source.UnhealthyThreshold
+            UnhealthyThreshold = source.UnhealthyThreshold,
         };
     }
 
@@ -194,7 +196,7 @@ public static partial class SiteOptionsAggregator
         {
             Enabled = source.Enabled,
             StatusCode = source.StatusCode,
-            HttpsPort = source.HttpsPort
+            HttpsPort = source.HttpsPort,
         };
     }
 
@@ -204,7 +206,7 @@ public static partial class SiteOptionsAggregator
         {
             Enabled = source.Enabled,
             TargetHost = source.TargetHost,
-            StatusCode = source.StatusCode
+            StatusCode = source.StatusCode,
         };
     }
 
@@ -213,15 +215,15 @@ public static partial class SiteOptionsAggregator
         return new ProxyHeaderPolicyOptions
         {
             SetRequestHeaders = new System.Collections.ObjectModel.Collection<Mk8.Drava.Application.BLL.Configuration.ProxyHeaderSetOptions>(CopyHeaderFields(source.SetRequestHeaders)),
-            RemoveRequestHeaders = new System.Collections.ObjectModel.Collection<string>(source.RemoveRequestHeaders.ToList()),
+            RemoveRequestHeaders = new System.Collections.ObjectModel.Collection<string>([.. source.RemoveRequestHeaders]),
             SetResponseHeaders = new System.Collections.ObjectModel.Collection<Mk8.Drava.Application.BLL.Configuration.ProxyHeaderSetOptions>(CopyHeaderFields(source.SetResponseHeaders)),
-            RemoveResponseHeaders = new System.Collections.ObjectModel.Collection<string>(source.RemoveResponseHeaders.ToList())
+            RemoveResponseHeaders = new System.Collections.ObjectModel.Collection<string>([.. source.RemoveResponseHeaders]),
         };
     }
 
     private static List<ProxyHeaderSetOptions> CopyHeaderFields(IEnumerable<ProxyHeaderSetOptions> source)
     {
-        return source.Select(static header => new ProxyHeaderSetOptions { Name = header.Name, Value = header.Value }).ToList();
+        return [.. source.Select(static header => new ProxyHeaderSetOptions { Name = header.Name, Value = header.Value })];
     }
 
     private static ProxyPathRewriteOptions CopyPathRewrite(ProxyPathRewriteOptions source)
@@ -230,7 +232,7 @@ public static partial class SiteOptionsAggregator
         {
             StripPrefix = source.StripPrefix,
             ReplacePrefix = source.ReplacePrefix,
-            Replacement = source.Replacement
+            Replacement = source.Replacement,
         };
     }
 
@@ -241,7 +243,7 @@ public static partial class SiteOptionsAggregator
             StatusCode = source.StatusCode,
             TargetUrl = source.TargetUrl,
             TargetPath = source.TargetPath,
-            PreserveQuery = source.PreserveQuery
+            PreserveQuery = source.PreserveQuery,
         };
     }
 
@@ -251,7 +253,7 @@ public static partial class SiteOptionsAggregator
         {
             StatusCode = source.StatusCode,
             ContentType = source.ContentType,
-            Body = source.Body
+            Body = source.Body,
         };
     }
 
@@ -262,7 +264,7 @@ public static partial class SiteOptionsAggregator
             Enabled = source.Enabled,
             RetryAfterSeconds = source.RetryAfterSeconds,
             ContentType = source.ContentType,
-            Body = source.Body
+            Body = source.Body,
         };
     }
 
@@ -275,9 +277,9 @@ public static partial class SiteOptionsAggregator
             MaxTotalBytes = source.MaxTotalBytes,
             DefaultTtlSeconds = source.DefaultTtlSeconds,
             RespectOriginCacheControl = source.RespectOriginCacheControl,
-            VaryByHeaders = new System.Collections.ObjectModel.Collection<string>(source.VaryByHeaders.ToList()),
-            CacheableStatusCodes = new System.Collections.ObjectModel.Collection<int>(source.CacheableStatusCodes.ToList()),
-            Methods = new System.Collections.ObjectModel.Collection<string>(source.Methods.ToList())
+            VaryByHeaders = new System.Collections.ObjectModel.Collection<string>([.. source.VaryByHeaders]),
+            CacheableStatusCodes = new System.Collections.ObjectModel.Collection<int>([.. source.CacheableStatusCodes]),
+            Methods = new System.Collections.ObjectModel.Collection<string>([.. source.Methods]),
         };
     }
 
@@ -290,9 +292,9 @@ public static partial class SiteOptionsAggregator
             PerAttemptTimeoutMs = source.PerAttemptTimeoutMs,
             RetryOnConnectFailure = source.RetryOnConnectFailure,
             RetryOnUpstreamResponseHeadTimeout = source.RetryOnUpstreamResponseHeadTimeout,
-            RetryOnStatusCodes = new System.Collections.ObjectModel.Collection<int>(source.RetryOnStatusCodes.ToList()),
-            RetryMethods = new System.Collections.ObjectModel.Collection<string>(source.RetryMethods.ToList()),
-            RetryBackoffMilliseconds = source.RetryBackoffMilliseconds
+            RetryOnStatusCodes = new System.Collections.ObjectModel.Collection<int>([.. source.RetryOnStatusCodes]),
+            RetryMethods = new System.Collections.ObjectModel.Collection<string>([.. source.RetryMethods]),
+            RetryBackoffMilliseconds = source.RetryBackoffMilliseconds,
         };
     }
 
@@ -307,13 +309,13 @@ public static partial class SiteOptionsAggregator
             UpstreamConnectTimeoutMs = source.UpstreamConnectTimeoutMs,
             UpstreamResponseBodyIdleTimeoutMs = source.UpstreamResponseBodyIdleTimeoutMs,
             DownstreamWriteTimeoutMs = source.DownstreamWriteTimeoutMs,
-            AccessLogEnabled = source.AccessLogEnabled
+            AccessLogEnabled = source.AccessLogEnabled,
         };
     }
 
     private static string GetListenerKey(ListenerOptions listener)
     {
-        return $"{listener.Name}|{listener.Address}|{listener.Port}|{listener.Transport}";
+        return $"{listener.Name}|{listener.Address}|{listener.Port.ToString(CultureInfo.InvariantCulture)}|{listener.Transport}";
     }
 
     private static ListenerOptions MergeListeners(ListenerOptions existing, ListenerOptions next)
@@ -339,7 +341,7 @@ public static partial class SiteOptionsAggregator
             ForwardingBufferBytes = existing.ForwardingBufferBytes,
             Http2MaxConcurrentStreams = existing.Http2MaxConcurrentStreams,
             Http2MaxHeaderListBytes = existing.Http2MaxHeaderListBytes,
-            Http2MaxFrameSize = existing.Http2MaxFrameSize
+            Http2MaxFrameSize = existing.Http2MaxFrameSize,
         };
     }
 

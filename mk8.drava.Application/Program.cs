@@ -5,6 +5,7 @@ using Mk8.Drava.Application.Transport;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Configuration.Paths;
+using Mk8.Drava.Application.DAL.Configuration.Loading;
 using Mk8.Drava.Application.BLL.Proxy;
 using Mk8.Drava.Application.INF.Proxy.Forwarding;
 using Mk8.Drava.Application.INF.Publication;
@@ -59,6 +60,7 @@ internal static class Program
         await using var roleLifetime = role.ConfigureAwait(false);
         var bootstrap = role.Configuration;
         bootstrap.Validate();
+        var upstreamTrust = new PortableUpstreamTrustMaterialSource(bootstrap);
         startup.Enter(ApplicationStartupPhase.PrivateStateOpen);
         var privateState = await PrivateApplicationState.OpenAsync(bootstrap, CancellationToken.None).ConfigureAwait(false);
         await using var privateStateLifetime = privateState.ConfigureAwait(false);
@@ -74,6 +76,7 @@ internal static class Program
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal) { ["Mdrava:DataDirectory"] = bootstrap.StateDirectory });
         builder.Services.AddSingleton(bootstrap);
+        builder.Services.AddSingleton<IUpstreamTrustMaterialSource>(upstreamTrust);
         builder.Services.AddProxyApplication(builder.Configuration);
         var availability = new DestinationAvailabilityStore(TimeProvider.System);
         builder.Services.RemoveAll<DestinationAvailabilityStore>();

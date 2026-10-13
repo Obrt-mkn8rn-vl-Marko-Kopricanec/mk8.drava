@@ -12,7 +12,7 @@ public static class RuntimeUpstreamTlsResponseMapper
         var root = projection.TrustedRoot;
         return new RuntimeUpstreamTlsResponse(projection.ValidateCertificate, projection.SniHost)
         {
-            TrustedRoot = root is null ? null : new RuntimeTrustedRootCertificateResponse(root.CertificatePath, root.Sha256),
+            TrustedRoot = root is null ? null : new RuntimeTrustedRootCertificateResponse(root.MaterialId, root.Sha256),
         };
     }
 }

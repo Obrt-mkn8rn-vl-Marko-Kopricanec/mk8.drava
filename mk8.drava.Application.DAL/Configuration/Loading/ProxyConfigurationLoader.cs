@@ -12,7 +12,7 @@ namespace Mk8.Drava.Application.DAL.Configuration.Loading;
 public sealed partial class ProxyConfigurationLoader(IMdravaDataDirectoryProvider dataDirectoryProvider, ProxyDataDirectoryBootstrapper bootstrapper,
     SiteConfigurationParser siteParser, IProxyAdminUrlPolicy adminUrlPolicy, IProxyEndpointAddressPolicy endpointAddressPolicy,
     IProxyRelativeStoragePathPolicy relativeStoragePathPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy, IProxyTrustedProxyPolicy trustedProxyPolicy,
-    ILogger<ProxyConfigurationLoader> logger, TimeProvider timeProvider) : IProxyConfigurationLoader, IProxyRestoreConfigurationValidator
+    ILogger<ProxyConfigurationLoader> logger, TimeProvider timeProvider, IUpstreamTrustMaterialSource? upstreamTrust = null) : IProxyConfigurationLoader, IProxyRestoreConfigurationValidator
 {
     private readonly IMdravaDataDirectoryProvider _dataDirectoryProvider = dataDirectoryProvider;
     private readonly ProxyDataDirectoryBootstrapper _bootstrapper = bootstrapper;
@@ -92,22 +92,45 @@ public sealed partial class ProxyConfigurationLoader(IMdravaDataDirectoryProvide
             return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), [.. optionFailures.Select(static failure => ProxyConfigurationFileError.Global(failure))], wouldBeVersion);
         }
 
+        return BuildRuntimeResult(options, operationalOptions, allocateVersion, attemptedAtUtc, sourceDirectory, siteFiles, BuildDiscovery(), wouldBeVersion);
+    }
+
+    private ProxyConfigurationLoadResult BuildRuntimeResult(ProxyOptions options, ProxyOperationalOptions operationalOptions, bool allocateVersion,
+        DateTimeOffset attemptedAtUtc, string sourceDirectory, IReadOnlyList<string> siteFiles, ProxyConfigurationDiscovery discovery, int wouldBeVersion)
+    {
+        List<ProxyConfigurationFileError> errors = [];
         var certificates = LoadCertificates(operationalOptions, _dataDirectoryProvider.GetDataDirectory(), errors);
         if (errors.Count > 0)
         {
             DisposeCertificates(certificates);
-            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), errors, wouldBeVersion);
+            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, discovery, errors, wouldBeVersion);
+        }
+
+        ProxyConfigurationSnapshot snapshot;
+        try
+        {
+            snapshot = ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(options, operationalOptions, ProxyAdminSecurityTokenPolicy.Resolve(operationalOptions.Admin, Environment.GetEnvironmentVariable), certificates, wouldBeVersion, _timeProvider.GetUtcNow(), sourceDirectory, siteFiles, discovery, upstreamTrust);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or ArgumentException)
+        {
+            DisposeCertificates(certificates);
+            errors.Add(ProxyConfigurationFileError.Global($"Runtime configuration could not be resolved: {exception.Message}"));
+            return ProxyConfigurationLoadResult.Failed(sourceDirectory, attemptedAtUtc, siteFiles, discovery, errors, wouldBeVersion);
+        }
+        catch
+        {
+            DisposeCertificates(certificates);
+            throw;
         }
 
         if (!allocateVersion)
         {
             DisposeCertificates(certificates);
-            return ProxyConfigurationLoadResult.Validated(sourceDirectory, attemptedAtUtc, siteFiles, BuildDiscovery(), wouldBeVersion);
+            return ProxyConfigurationLoadResult.Validated(sourceDirectory, attemptedAtUtc, siteFiles, discovery, wouldBeVersion);
         }
 
         var version = Interlocked.Increment(ref _nextVersion);
-        var snapshot = ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(options, operationalOptions, ProxyAdminSecurityTokenPolicy.Resolve(operationalOptions.Admin, Environment.GetEnvironmentVariable), certificates, version, _timeProvider.GetUtcNow(), sourceDirectory, siteFiles, BuildDiscovery());
-        return ProxyConfigurationLoadResult.Loaded(sourceDirectory, snapshot, BuildDiscovery());
+        return ProxyConfigurationLoadResult.Loaded(sourceDirectory, snapshot.WithVersion(version), discovery);
     }
 
     private async ValueTask<List<SiteConfigurationSource>> ReadSitesAsync(IReadOnlyList<(string Path, SiteConfigurationFormat Format)> siteFiles,

@@ -555,3 +555,12 @@ Mk8.Drava.Configuration.PortableRole<T>.Configuration.get -> T!
 Mk8.Drava.Configuration.PortableRole<T>.ReadMaterial() -> Mk8.Drava.Configuration.SecretBytes!
 Mk8.Drava.Configuration.PortableRole<T>.WriteMaterialAsync(Mk8.Drava.Configuration.SecretBytes! material, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 Mk8.Drava.Configuration.PortableRole<T>.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Mk8.Drava.Configuration.ApplicationBootstrap.UpstreamTrust.get -> System.Collections.Generic.IReadOnlyList<Mk8.Drava.Configuration.UpstreamTrustMaterial!>!
+Mk8.Drava.Configuration.ApplicationBootstrap.UpstreamTrust.init -> void
+Mk8.Drava.Configuration.UpstreamTrustMaterial
+Mk8.Drava.Configuration.UpstreamTrustMaterial.UpstreamTrustMaterial() -> void
+Mk8.Drava.Configuration.UpstreamTrustMaterial.Id.get -> string!
+Mk8.Drava.Configuration.UpstreamTrustMaterial.Id.init -> void
+Mk8.Drava.Configuration.UpstreamTrustMaterial.Certificate.get -> Mk8.Drava.Configuration.SecretBytes!
+Mk8.Drava.Configuration.UpstreamTrustMaterial.Certificate.init -> void
+Mk8.Drava.Configuration.UpstreamTrustMaterial.Validate() -> void

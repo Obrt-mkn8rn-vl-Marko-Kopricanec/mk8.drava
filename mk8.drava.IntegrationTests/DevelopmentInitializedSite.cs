@@ -1,6 +1,9 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Mk8.Drava.Application.DAL.Publication;
 using Mk8.Drava.Configuration;
+using Mk8.Drava.Transport.Protocol.V1;
 
 namespace Mk8.Drava.IntegrationTests;
 
@@ -9,10 +12,14 @@ internal sealed class DevelopmentInitializedSite : IAsyncDisposable
     private readonly string _parent;
     private DevelopmentProcess? _application;
     private DevelopmentProcess? _gateway;
+    private string? _retainedApplicationPath;
+    private string? _applicationBeforeRestartLog;
+    private string? _applicationBeforeStopLog;
     public string DirectoryPath { get; }
     public string OptionsPath { get; }
     public string EnrollmentPath => Path.Combine(DirectoryPath, "roles", "node", "Environment", ".env");
-    public string ApplicationPath => Path.Combine(DirectoryPath, "roles", "application", "Environment", ".env");
+    public string ApplicationPath => _application?.PortableDocumentPath ?? _retainedApplicationPath
+        ?? Path.Combine(DirectoryPath, "roles", "application", "Environment", ".env");
     public string GatewayPath => Path.Combine(DirectoryPath, "roles", "gateway", "Environment", ".env");
     public string? InitializationLog { get; private set; }
     public JsonObject Options { get; }
@@ -77,17 +84,42 @@ internal sealed class DevelopmentInitializedSite : IAsyncDisposable
         }
     }
 
+    public async Task<PresentationPlan> ReadCurrentApplicationPlanAsync()
+    {
+        var application = _application ?? throw new InvalidOperationException("Application has not started.");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+        while (true)
+        {
+            application.ThrowIfExited();
+            var role = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(application.PortableDocumentPath, deadline.Token).ConfigureAwait(false);
+            await using (role.ConfigureAwait(false))
+            {
+                var bytes = new GatewayMaterialStore(role).Read();
+                if (bytes is not null)
+                {
+                    try { return PresentationPlan.Parser.ParseFrom(bytes); }
+                    finally { CryptographicOperations.ZeroMemory(bytes); }
+                }
+            }
+            await Task.Delay(100, deadline.Token).ConfigureAwait(false);
+        }
+    }
+
     public async Task RestartApplicationAsync()
     {
-        if (_application is null) throw new InvalidOperationException("Application has not started.");
-        await _application.DisposeAsync().ConfigureAwait(false);
-        _application = new DevelopmentProcess(Assembly("mk8.drava.Application"), ApplicationPath);
+        var application = _application ?? throw new InvalidOperationException("Application has not started.");
+        var retained = await application.RetirePortableAsync(Path.Combine(_parent, "application-installation")).ConfigureAwait(false);
+        _applicationBeforeRestartLog ??= application.CapturedLog;
+        _retainedApplicationPath = retained;
+        _application = null;
+        _application = new DevelopmentProcess(Assembly("mk8.drava.Application"), retained);
     }
 
     public async Task StopApplicationAsync()
     {
-        if (_application is null) throw new InvalidOperationException("Application has not started.");
-        await _application.DisposeAsync().ConfigureAwait(false);
+        var application = _application ?? throw new InvalidOperationException("Application has not started.");
+        _retainedApplicationPath = await application.RetirePortableAsync(Path.Combine(_parent, "application-installation")).ConfigureAwait(false);
+        _applicationBeforeStopLog ??= application.CapturedLog;
         _application = null;
     }
 
@@ -98,6 +130,10 @@ internal sealed class DevelopmentInitializedSite : IAsyncDisposable
         var evidence = System.IO.Directory.CreateDirectory(Path.Combine(TwoProcessProxy.FindRoot(), "artifacts", "site-initialization-tests", Path.GetFileName(_parent))).FullName;
         await File.WriteAllTextAsync(Path.Combine(evidence, "initialization.log"), InitializationLog).ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(evidence, "application.log"), _application?.CapturedLog).ConfigureAwait(false);
+        if (_applicationBeforeRestartLog is not null)
+            await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-restart.log"), _applicationBeforeRestartLog).ConfigureAwait(false);
+        if (_applicationBeforeStopLog is not null)
+            await File.WriteAllTextAsync(Path.Combine(evidence, "application-before-stop.log"), _applicationBeforeStopLog).ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(evidence, "gateway.log"), _gateway?.CapturedLog).ConfigureAwait(false);
         System.IO.Directory.Delete(_parent, recursive: true);
     }

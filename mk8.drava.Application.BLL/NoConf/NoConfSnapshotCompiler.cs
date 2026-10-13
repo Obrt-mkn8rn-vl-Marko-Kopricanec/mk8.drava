@@ -4,8 +4,10 @@ using Mk8.Drava.Application.BLL.Registry;
 
 namespace Mk8.Drava.Application.BLL.NoConf;
 
-public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses, IProxyUrlSyntaxPolicy urls, NoConfIngressGuard? ingress = null)
+public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses, IProxyUrlSyntaxPolicy urls, NoConfIngressGuard? ingress = null, IUpstreamTrustMaterialSource? upstreamTrust = null)
 {
+    private readonly IUpstreamTrustMaterialSource? _upstreamTrust = upstreamTrust;
+
     public CompiledNoConfSnapshot Compile(RegistryState state, ProxyConfigurationSnapshot baseline, NoConfPolicy policy, string domain, string localNodeId)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -62,13 +64,16 @@ public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses
         {
             var intent = intents[index];
             if (validateIngress) ingress?.Validate(intent);
-            input.Upstreams.Add(new UpstreamOptions { Name = intent.Identity.InstanceId, Scheme = intent.Scheme, Protocol = intent.Protocol,
-                Address = intent.Address, Port = intent.Port, Weight = intent.Weight, UpstreamTls = resolved.Tls, CircuitBreaker = resolved.Circuit });
+            input.Upstreams.Add(new UpstreamOptions
+            {
+                Name = intent.Identity.InstanceId, Scheme = intent.Scheme, Protocol = intent.Protocol,
+                Address = intent.Address, Port = intent.Port, Weight = intent.Weight, UpstreamTls = resolved.Tls, CircuitBreaker = resolved.Circuit,
+            });
         }
         var options = new ProxyOptions { Listeners = [new ListenerOptions { Name = "validation", Address = "127.0.0.1", Port = 8080 }], Routes = [input] };
         var errors = ProxyOptionsValidationRules.Validate(options, addresses, urls);
-        if (errors.Count > 0) throw new InvalidDataException("Invalid service policy: " + string.Join(" ", errors));
-        var mapped = ProxyConfigurationRuntimeMapper.ToRuntimeRoutes([input], new ProxyOperationalOptions())[0];
+        if (errors.Count > 0) throw new InvalidDataException("Invalid service policy: " + string.Join(' ', errors));
+        var mapped = ProxyConfigurationRuntimeMapper.ToRuntimeRoutes([input], new ProxyOperationalOptions(), _upstreamTrust)[0];
         var upstreams = new List<RuntimeUpstream>();
         for (var index = 0; index < intents.Count; index++)
         {
@@ -100,7 +105,7 @@ public sealed class NoConfSnapshotCompiler(IProxyEndpointAddressPolicy addresses
             group.Add(intent);
         }
         foreach (var group in groups.Values)
-            group.Sort(static (left, right) => string.Compare(left.Identity.InstanceId, right.Identity.InstanceId, StringComparison.Ordinal));
+            group.Sort(static (left, right) => string.CompareOrdinal(left.Identity.InstanceId, right.Identity.InstanceId));
         return groups;
     }
 

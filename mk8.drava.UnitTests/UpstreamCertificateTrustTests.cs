@@ -22,19 +22,16 @@ public sealed class UpstreamCertificateTrustTests
     [InlineData("system-trust")]
     public async Task ActualTlsRequiresTheConfiguredAuthorityNameValidityAndServerUsageAsync(string profile)
     {
-        using var directory = new RegistryStateDirectory();
         using var certificates = DevelopmentUpstreamTrustCertificates.Create(
             expired: string.Equals(profile, "expired", StringComparison.Ordinal), clientOnly: string.Equals(profile, "client-only", StringComparison.Ordinal));
         using var other = DevelopmentUpstreamTrustCertificates.Create();
         var root = string.Equals(profile, "wrong-root", StringComparison.Ordinal) ? other.Root : certificates.Root;
-        var path = Path.Combine(directory.Path, "upstream-root.cer");
-        await WriteRootAsync(path, root).ConfigureAwait(true);
         var configuredRoot = string.Equals(profile, "system-trust", StringComparison.Ordinal) ? null
-            : new RuntimeTrustedRootCertificate(path, root.GetCertHashString(HashAlgorithmName.SHA256));
+            : new RuntimeTrustedRootCertificate("upstream-root", root.GetCertHashString(HashAlgorithmName.SHA256), root.RawData);
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var endpoint = new UpstreamTransportEndpoint("peer", "https", "http1", "127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port, true,
+        var endpoint = new UpstreamTransportEndpoint("peer", "https", "http1", "127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port, ValidateCertificate: true,
             string.Equals(profile, "wrong-name", StringComparison.Ordinal) ? "other.drava.invalid" : "backend.drava.invalid") { TrustedRoot = configuredRoot };
         // Borrowed leaf; finally joins serving before certificates is disposed.
         var leaf = certificates.Leaf;
@@ -58,9 +55,9 @@ public sealed class UpstreamCertificateTrustTests
                     using var unexpected = await new UpstreamConnectionFactory().ConnectAsync(endpoint, TimeSpan.FromSeconds(5), deadline.Token).ConfigureAwait(true);
                 }).ConfigureAwait(true);
             }
-            var observed = await serving.WaitAsync(deadline.Token).ConfigureAwait(true);
-            Assert.Equal(endpoint.EffectiveSniHost, observed.Sni);
-            Assert.Equal(string.Equals(profile, "matching", StringComparison.Ordinal), observed.BusinessData);
+            var (Sni, BusinessData) = await serving.WaitAsync(deadline.Token).ConfigureAwait(true);
+            Assert.Equal(endpoint.EffectiveSniHost, Sni);
+            Assert.Equal(string.Equals(profile, "matching", StringComparison.Ordinal), BusinessData);
         }
         finally
         {
@@ -73,24 +70,15 @@ public sealed class UpstreamCertificateTrustTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ATrustFileCannotSilentlyChangeItsPinnedCertificateOrUseALeafAsAnAuthorityAsync(bool leaf)
+    public void TrustMaterialCannotChangeItsPinnedCertificateOrUseALeafAsAnAuthority(bool leaf)
     {
-        using var directory = new RegistryStateDirectory();
         using var certificates = DevelopmentUpstreamTrustCertificates.Create();
-        var path = Path.Combine(directory.Path, "upstream-root.cer");
         var certificate = leaf ? certificates.Leaf : certificates.Root;
-        await WriteRootAsync(path, certificate).ConfigureAwait(true);
-        var endpoint = new UpstreamTransportEndpoint("peer", "https", "http1", "127.0.0.1", 443, true, "backend.drava.invalid")
+        var endpoint = new UpstreamTransportEndpoint("peer", "https", "http1", "127.0.0.1", 443, ValidateCertificate: true, "backend.drava.invalid")
         {
-            TrustedRoot = new RuntimeTrustedRootCertificate(path, leaf ? certificate.GetCertHashString(HashAlgorithmName.SHA256) : new string('0', 64)),
+            TrustedRoot = new RuntimeTrustedRootCertificate("upstream-root", leaf ? certificate.GetCertHashString(HashAlgorithmName.SHA256) : new string('0', 64), certificate.RawData),
         };
         Assert.Throws<InvalidDataException>(() => { using var unexpected = UpstreamCertificateTrust.Load(endpoint); });
-    }
-
-    internal static async Task WriteRootAsync(string path, X509Certificate2 root)
-    {
-        await File.WriteAllBytesAsync(path, root.RawData).ConfigureAwait(false);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
 
     private static async Task<(string? Sni, bool BusinessData)> ServeTlsAsync(TcpListener listener, X509Certificate2 leaf, CancellationToken cancellationToken)
@@ -109,7 +97,7 @@ public sealed class UpstreamCertificateTrustTests
             var marker = new byte[1];
             if (await tls.ReadAsync(marker, cancellationToken).ConfigureAwait(false) == 0) return (sni, false);
             if (marker[0] != 7) throw new InvalidDataException("Unexpected development request marker.");
-            await tls.WriteAsync(new byte[] { 9 }, cancellationToken).ConfigureAwait(false);
+            await tls.WriteAsync("\t"u8.ToArray(), cancellationToken).ConfigureAwait(false);
             if (await tls.ReadAsync(marker, cancellationToken).ConfigureAwait(false) != 0)
                 throw new InvalidDataException("The retired development TLS transport remained writable.");
             return (sni, true);

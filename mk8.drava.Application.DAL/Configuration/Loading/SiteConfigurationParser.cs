@@ -61,6 +61,11 @@ public sealed class SiteConfigurationParser
                 foreach (var property in element.EnumerateObject())
                 {
                     var childPath = $"{path}.{property.Name}";
+                    if (string.Equals(property.Name, "trustedRoot", StringComparison.OrdinalIgnoreCase)
+                        && property.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        RejectRetiredTrustLocator(property.Value, childPath);
+                    }
                     if (string.Equals(property.Name, "experimentalHttp3", StringComparison.OrdinalIgnoreCase))
                     {
                         throw new JsonException($"Unsupported HTTP/3 configuration property 'experimentalHttp3' at {childPath}; remove it and use the current listener protocol spellings.");
@@ -84,6 +89,15 @@ public sealed class SiteConfigurationParser
                 }
 
                 break;
+        }
+    }
+
+    private static void RejectRetiredTrustLocator(JsonElement root, string path)
+    {
+        foreach (var property in root.EnumerateObject())
+        {
+            if (string.Equals(property.Name, "certificatePath", StringComparison.OrdinalIgnoreCase))
+                throw new JsonException($"Unsupported upstream trust property at {path}.{property.Name}; use materialId from the protected Application startup collection.");
         }
     }
 }

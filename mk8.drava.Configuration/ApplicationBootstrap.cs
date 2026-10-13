@@ -19,6 +19,7 @@ public sealed record ApplicationBootstrap
     public bool ForwardingDiagnostics { get; init; }
     public bool TransportDiagnostics { get; init; }
     public ControllerBootstrap? Controller { get; init; }
+    public IReadOnlyList<UpstreamTrustMaterial> UpstreamTrust { get; init; } = [];
 
     public void Validate() => ValidateCore(forInitialization: false);
     internal void ValidateForInitialization() => ValidateCore(forInitialization: true);
@@ -33,6 +34,7 @@ public sealed record ApplicationBootstrap
         if (MaxConcurrentExchanges is < 1 or > 4096) throw new InvalidDataException("Invalid Application exchange admission limit.");
         PrivateHttp2.Validate();
         Listen.Validate();
+        ValidateUpstreamTrust();
         _ = IpcToken.RequireToken();
         if (!AdministratorToken.IsEmpty)
         {
@@ -48,5 +50,18 @@ public sealed record ApplicationBootstrap
             throw new InvalidDataException("Management requires a distinct enrolled listener and administrator credential.");
         if (Controller is not null && (Controller.RegistrationPort == HttpPort || Controller.RegistrationPort == HttpsPort))
             throw new InvalidDataException("Registration and serving ports must be distinct.");
+    }
+
+    private void ValidateUpstreamTrust()
+    {
+        if (UpstreamTrust is null || UpstreamTrust.Count > 64)
+            throw new InvalidDataException("Upstream trust material exceeds its collection bound.");
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var material in UpstreamTrust)
+        {
+            if (material is null) throw new InvalidDataException("Upstream trust material cannot contain null entries.");
+            material.Validate();
+            if (!ids.Add(material.Id)) throw new InvalidDataException("Duplicate upstream trust material identifier.");
+        }
     }
 }

@@ -3,7 +3,6 @@ using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Mk8.Drava.Application.BLL.ControlPlane.Upstreams;
-using Mk8.Drava.Application.DAL.Storage;
 
 namespace Mk8.Drava.Application.INF.Proxy.Connections;
 
@@ -18,23 +17,23 @@ internal sealed class UpstreamCertificateTrust : IDisposable
     public static UpstreamCertificateTrust Load(UpstreamTransportEndpoint endpoint)
     {
         var configured = endpoint.TrustedRoot;
-        if (configured is null) return new UpstreamCertificateTrust(null);
+        if (configured is null) return new UpstreamCertificateTrust(root: null);
         if (!endpoint.ValidateCertificate || !string.Equals(endpoint.Scheme, "https", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("A trusted upstream root requires verified HTTPS.");
 
-        var bytes = PrivateOwnerFile.Read(configured.CertificatePath, 128, 65536);
+        var bytes = configured.CopyCertificate();
         X509Certificate2? certificate = null;
         try
         {
             certificate = X509CertificateLoader.LoadCertificate(bytes);
             if (!string.Equals(certificate.GetCertHashString(HashAlgorithmName.SHA256), configured.Sha256, StringComparison.Ordinal) || certificate.HasPrivateKey)
-                throw new InvalidDataException("The upstream trust file must match its pinned public CA certificate.");
+                throw new InvalidDataException("The upstream trust material must match its pinned public CA certificate.");
             RequireAuthority(certificate);
             var owner = new UpstreamCertificateTrust(certificate);
             certificate = null;
             return owner;
         }
-        finally { certificate?.Dispose(); }
+        finally { CryptographicOperations.ZeroMemory(bytes); certificate?.Dispose(); }
     }
 
     private static void RequireAuthority(X509Certificate2 certificate)
@@ -54,9 +53,10 @@ internal sealed class UpstreamCertificateTrust : IDisposable
                 usage = keyUsage;
             }
         }
-        if (constraints is not { CertificateAuthority: true } || usage is null
-            || (usage.KeyUsages & X509KeyUsageFlags.KeyCertSign) == X509KeyUsageFlags.None)
-            throw new InvalidDataException("The upstream trust file must contain a public signing authority.");
+        if (constraints is not { CertificateAuthority: true } || usage?.KeyUsages.HasFlag(X509KeyUsageFlags.KeyCertSign) != true)
+        {
+            throw new InvalidDataException("The upstream trust material must contain a public signing authority.");
+        }
     }
 
     public SslClientAuthenticationOptions CreateOptions(UpstreamTransportEndpoint endpoint, List<SslApplicationProtocol>? applicationProtocols)

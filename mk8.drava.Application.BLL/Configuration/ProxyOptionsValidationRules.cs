@@ -1,8 +1,9 @@
+using System.Globalization;
 using Mk8.Drava.Application.BLL.Http;
 using System.Text;
 
 namespace Mk8.Drava.Application.BLL.Configuration;
-public static partial class ProxyOptionsValidationRules
+public static class ProxyOptionsValidationRules
 {
     private static void ValidateRoutes(List<string> failures, ProxyOptions options, IProxyEndpointAddressPolicy endpointAddressPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy)
     {
@@ -15,7 +16,7 @@ public static partial class ProxyOptionsValidationRules
         for (var routeIndex = 0; routeIndex < options.Routes.Count; routeIndex++)
         {
             var route = options.Routes[routeIndex];
-            var routePrefix = $"Proxy:Routes:{routeIndex}";
+            var routePrefix = $"Proxy:Routes:{routeIndex.ToString(CultureInfo.InvariantCulture)}";
             ValidateRoute(failures, routePrefix, route, routeNames, endpointAddressPolicy, urlSyntaxPolicy);
         }
     }
@@ -26,7 +27,7 @@ public static partial class ProxyOptionsValidationRules
         for (var upstreamIndex = 0; upstreamIndex < route.Upstreams.Count; upstreamIndex++)
         {
             var upstream = route.Upstreams[upstreamIndex];
-            var upstreamPrefix = $"{routePrefix}:Upstreams:{upstreamIndex}";
+            var upstreamPrefix = $"{routePrefix}:Upstreams:{upstreamIndex.ToString(CultureInfo.InvariantCulture)}";
             if (string.IsNullOrWhiteSpace(upstream.Name))
             {
                 failures.Add($"{upstreamPrefix}:Name is required.");
@@ -150,7 +151,7 @@ public static partial class ProxyOptionsValidationRules
             var method = retry.RetryMethods[index];
             if (!ProxyRequestMethodPolicy.IsSafeReadMethod(method))
             {
-                failures.Add($"{routePrefix}:Retry:RetryMethods:{index} must be GET or HEAD.");
+                failures.Add($"{routePrefix}:Retry:RetryMethods:{index.ToString(CultureInfo.InvariantCulture)} must be GET or HEAD.");
             }
         }
 
@@ -159,7 +160,7 @@ public static partial class ProxyOptionsValidationRules
             var statusCode = retry.RetryOnStatusCodes[index];
             if (statusCode is < 500 or > 599)
             {
-                failures.Add($"{routePrefix}:Retry:RetryOnStatusCodes:{index} must be a 5xx HTTP response status code.");
+                failures.Add($"{routePrefix}:Retry:RetryOnStatusCodes:{index.ToString(CultureInfo.InvariantCulture)} must be a 5xx HTTP response status code.");
             }
         }
     }
@@ -212,11 +213,11 @@ public static partial class ProxyOptionsValidationRules
                 failures.Add($"{upstreamPrefix}:UpstreamTls:TrustedRoot requires scheme 'https'.");
             try
             {
-                _ = new RuntimeTrustedRootCertificate(root.CertificatePath, root.Sha256);
+                RuntimeTrustedRootCertificate.ValidateReference(root.MaterialId, root.Sha256);
             }
             catch (ArgumentException)
             {
-                failures.Add($"{upstreamPrefix}:UpstreamTls:TrustedRoot requires a bounded absolute certificate path and 64 canonical uppercase SHA256 characters.");
+                failures.Add($"{upstreamPrefix}:UpstreamTls:TrustedRoot requires a bounded material ID and 64 canonical uppercase SHA256 characters.");
             }
             if (!tls.ValidateCertificate)
             {
@@ -291,7 +292,7 @@ public static partial class ProxyOptionsValidationRules
             var statusCode = circuitBreaker.FailureStatusCodes[index];
             if (statusCode is < 500 or > 599)
             {
-                failures.Add($"{upstreamPrefix}:CircuitBreaker:FailureStatusCodes:{index} must be a 5xx HTTP response status code.");
+                failures.Add($"{upstreamPrefix}:CircuitBreaker:FailureStatusCodes:{index.ToString(CultureInfo.InvariantCulture)} must be a 5xx HTTP response status code.");
             }
         }
     }
@@ -487,15 +488,15 @@ public static partial class ProxyOptionsValidationRules
         for (var index = 0; index < options.Listeners.Count; index++)
         {
             var listener = options.Listeners[index];
-            var prefix = $"Proxy:Listeners:{index}";
+            var prefix = $"Proxy:Listeners:{index.ToString(CultureInfo.InvariantCulture)}";
             var isHttps = ValidateListenerIdentity(failures, prefix, listener, listenerNames, endpointAddressPolicy);
             ValidateListenerProtocols(failures, prefix, listener, isHttps);
             ValidateListenerLimits(failures, prefix, listener);
 
-            var bindKey = $"{listener.Address.Trim()}|{listener.Port}|{listener.Transport.Trim()}";
+            var bindKey = $"{listener.Address.Trim()}|{listener.Port.ToString(CultureInfo.InvariantCulture)}|{listener.Transport.Trim()}";
             if (listener.Enabled && !listenerBinds.Add(bindKey))
             {
-                failures.Add($"{prefix}:Listener bind {listener.Address}:{listener.Port}/{listener.Transport} is duplicated.");
+                failures.Add($"{prefix}:Listener bind {listener.Address}:{listener.Port.ToString(CultureInfo.InvariantCulture)}/{listener.Transport} is duplicated.");
             }
         }
 
@@ -607,7 +608,7 @@ public static partial class ProxyOptionsValidationRules
             var headerName = cache.VaryByHeaders[index];
             if (string.IsNullOrWhiteSpace(headerName) || !ProxyHeaderPolicyOptionsValidationRules.IsValidHttpFieldName(headerName))
             {
-                failures.Add($"{routePrefix}:Cache:VaryByHeaders:{index} '{headerName}' is not a valid HTTP field name.");
+                failures.Add($"{routePrefix}:Cache:VaryByHeaders:{index.ToString(CultureInfo.InvariantCulture)} '{headerName}' is not a valid HTTP field name.");
             }
         }
 
@@ -621,7 +622,7 @@ public static partial class ProxyOptionsValidationRules
             var statusCode = cache.CacheableStatusCodes[index];
             if (statusCode is < 200 or > 599)
             {
-                failures.Add($"{routePrefix}:Cache:CacheableStatusCodes:{index} must be an HTTP response status code.");
+                failures.Add($"{routePrefix}:Cache:CacheableStatusCodes:{index.ToString(CultureInfo.InvariantCulture)} must be an HTTP response status code.");
             }
         }
 
@@ -635,7 +636,7 @@ public static partial class ProxyOptionsValidationRules
             var method = cache.Methods[index];
             if (!ProxyRequestMethodPolicy.IsSafeReadMethod(method))
             {
-                failures.Add($"{routePrefix}:Cache:Methods:{index} must be GET or HEAD.");
+                failures.Add($"{routePrefix}:Cache:Methods:{index.ToString(CultureInfo.InvariantCulture)} must be GET or HEAD.");
             }
         }
     }
@@ -762,7 +763,7 @@ public static partial class ProxyOptionsValidationRules
             failures.Add($"{prefix}:Http2MaxHeaderListBytes must be between 1024 and 1048576.");
         }
 
-        if (listener.Http2MaxFrameSize is < 16 * 1024 or > 16 * 1024 * 1024 - 1)
+        if (listener.Http2MaxFrameSize is < 16 * 1024 or > (16 * 1024 * 1024) - 1)
         {
             failures.Add($"{prefix}:Http2MaxFrameSize must be between 16384 and 16777215.");
         }

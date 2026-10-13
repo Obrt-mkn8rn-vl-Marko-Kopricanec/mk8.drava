@@ -44,7 +44,11 @@ public sealed class SiteInitializationTests
         using var business = new DevelopmentSiteClient(profile.Site.RootCertificate, gateway.HttpsPort, "svc-api.site.test");
         await AssertServedAsync(business.Client).ConfigureAwait(true);
         await AssertInitialGrantAsync(site, gateway, profile).ConfigureAwait(true);
+        var beforeRestart = await site.ReadCurrentApplicationPlanAsync().ConfigureAwait(true);
         await site.RestartApplicationAsync().ConfigureAwait(true);
+        var afterRestart = await site.ReadCurrentApplicationPlanAsync().ConfigureAwait(true);
+        Assert.Equal(beforeRestart.Generation, afterRestart.Generation);
+        Assert.Equal(beforeRestart.ContentSha256, afterRestart.ContentSha256);
         await AssertServedAsync(business.Client).ConfigureAwait(true);
         await AssertInitialGrantAsync(site, gateway, profile).ConfigureAwait(true);
         Assert.Equal(originalRoot, (await PortableConfiguration.LoadDocumentAsync<NodeEnrollmentProfile>(site.EnrollmentPath, CancellationToken.None).ConfigureAwait(true)).Site.RootCertificate);

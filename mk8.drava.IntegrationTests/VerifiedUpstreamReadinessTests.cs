@@ -20,11 +20,9 @@ public sealed class VerifiedUpstreamReadinessTests
     {
         using var directory = new RegistryStateDirectory();
         using var certificates = DevelopmentUpstreamTrustCertificates.Create(expired: string.Equals(profile, "expired", StringComparison.Ordinal));
-        var rootPath = Path.Combine(directory.Path, "upstream-root.cer");
-        await File.WriteAllBytesAsync(rootPath, certificates.Root.RawData).ConfigureAwait(true);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(rootPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        var source = await DevelopmentUpstreamTrustConfiguration.LoadSourceAsync(directory.Path, certificates).ConfigureAwait(true);
         var root = string.Equals(profile, "system-trust", StringComparison.Ordinal) ? null
-            : new RuntimeTrustedRootCertificate(rootPath, certificates.Root.GetCertHashString(HashAlgorithmName.SHA256));
+            : source.Resolve(DevelopmentUpstreamTrustConfiguration.MaterialId, certificates.Root.GetCertHashString(HashAlgorithmName.SHA256));
         var requests = 0;
         var names = new ConcurrentQueue<string?>();
         var upstream = await DevelopmentHttpUpstream.StartAsync(context =>
@@ -39,7 +37,7 @@ public sealed class VerifiedUpstreamReadinessTests
         var intent = new InstanceIntent(new RegisteredUpstreamIdentity("node", "owner", "svc", "v1", Guid.NewGuid().ToString("N"), Guid.NewGuid().ToString("N")),
             "deployment", "127.0.0.1", upstream.Port, "http1", "https", "/health/ready", "local", 1, draining: false);
         var backend = new RuntimeUpstream("svc", intent.Identity.InstanceId, intent.Scheme, intent.Protocol, intent.Address, intent.Port, 1,
-            new RuntimeUpstreamTlsOptions(true, string.Equals(profile, "wrong-name", StringComparison.Ordinal) ? "other.drava.invalid" : "backend.drava.invalid", root),
+            new RuntimeUpstreamTlsOptions(ValidateCertificate: true, string.Equals(profile, "wrong-name", StringComparison.Ordinal) ? "other.drava.invalid" : "backend.drava.invalid", root),
             RuntimeCircuitBreakerPolicy.Disabled, intent.Identity);
         var ready = await new RegisteredReadinessProbe().CheckAsync(intent, backend, CancellationToken.None).ConfigureAwait(true);
         var expected = string.Equals(profile, "matching", StringComparison.Ordinal);

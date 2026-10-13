@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.ControlPlane.UpstreamSelection;
 using Mk8.Drava.Application.BLL.NoConf;
@@ -21,7 +22,10 @@ public sealed class NoConfCompilerTests
         var intent = new InstanceIntent(source.Identity, source.DeploymentId, source.Address, source.Port, source.Protocol,
             "https", source.ReadinessPath, source.Zone, source.Weight, source.Draining);
         await fixture.ReadyAsync(intent).ConfigureAwait(true);
-        var path = Path.GetFullPath("operator-root.cer");
+        using var certificates = DevelopmentUpstreamTrustCertificates.Create();
+        var fingerprint = certificates.Root.GetCertHashString(HashAlgorithmName.SHA256);
+        var material = new RuntimeTrustedRootCertificate("operator-root", fingerprint, certificates.Root.RawData);
+        var compiler = Compiler(UpstreamTrustConfigurationTests.Source(material));
         var policy = new NoConfPolicy
         {
             Site = new NoConfPolicyPatch
@@ -29,21 +33,22 @@ public sealed class NoConfCompilerTests
                 UpstreamTls = new UpstreamTlsOptions
                 {
                     SniHost = "backend.drava.invalid",
-                    TrustedRoot = new TrustedRootCertificateOptions { CertificatePath = path, Sha256 = new string('A', 64) },
+                    TrustedRoot = new TrustedRootCertificateOptions { MaterialId = material.MaterialId, Sha256 = fingerprint },
                 },
             },
         };
-        var cold = Compiler().Compile(RegistryState.Empty, Baseline(), policy, "site.example", "node");
+        Assert.Throws<InvalidDataException>(() => Compiler().Compile(RegistryState.Empty, Baseline(), policy, "site.example", "node"));
+        var cold = compiler.Compile(RegistryState.Empty, Baseline(), policy, "site.example", "node");
         Assert.Empty(cold.Services);
-        var compiled = Compiler().Compile(fixture.Registry.State, Baseline(), policy, "site.example", "node");
+        var compiled = compiler.Compile(fixture.Registry.State, Baseline(), policy, "site.example", "node");
         var upstream = Only(compiled.Services["svc"].Route.Upstreams);
         Assert.True(upstream.Tls.ValidateCertificate);
-        Assert.Equal(path, upstream.Tls.TrustedRoot?.CertificatePath);
-        Assert.Equal(new string('A', 64), upstream.Tls.TrustedRoot?.Sha256);
+        Assert.Equal(material.MaterialId, upstream.Tls.TrustedRoot?.MaterialId);
+        Assert.Equal(fingerprint, upstream.Tls.TrustedRoot?.Sha256);
         Assert.Equal(intent.Identity, upstream.Membership);
         Assert.Equal("site", compiled.Services["svc"].Provenance["upstreamTls"]);
         await fixture.ReadyAsync(RegistryTestFixture.Intent()).ConfigureAwait(true);
-        Assert.Throws<InvalidDataException>(() => Compiler().Compile(fixture.Registry.State, Baseline(), policy, "site.example", "node"));
+        Assert.Throws<InvalidDataException>(() => compiler.Compile(fixture.Registry.State, Baseline(), policy, "site.example", "node"));
     }
 
     [Fact]
@@ -70,7 +75,7 @@ public sealed class NoConfCompilerTests
         await fixture.Registry.DrainAsync(RegistryTestFixture.Fingerprint, first.Identity, CancellationToken.None).ConfigureAwait(true);
         var drained = Compiler().Compile(fixture.Registry.State, Baseline(), new NoConfPolicy(), "site.example", "node");
         Assert.Equal(2, route.Upstreams.Count);
-        Assert.Collection(drained.Services["svc"].Route.Upstreams, upstream => Assert.Equal(second.Identity, upstream.Membership));
+        Assert.Equal(second.Identity, Only(drained.Services["svc"].Route.Upstreams).Membership);
     }
 
     [Fact]
@@ -83,9 +88,15 @@ public sealed class NoConfCompilerTests
         {
             Global = new NoConfPolicyPatch { Algorithm = BalancingAlgorithm.WeightedRoundRobin },
             Site = new NoConfPolicyPatch { Algorithm = BalancingAlgorithm.LeastActive },
-            Services = [new NoConfServicePolicy { ServiceId = "svc", Profile = new NoConfPolicyPatch { Algorithm = BalancingAlgorithm.PowerOfTwoChoices },
-                Route = new NoConfPolicyPatch { Algorithm = BalancingAlgorithm.StableHash, AffinityHeader = "X-Tenant", PreferredZone = "local", RequireLocalZone = true,
-                    Limits = new ProxyRouteOverrideOptions { MaxRequestBodyBytes = 1234 } } }],
+            Services = [new NoConfServicePolicy
+            {
+                ServiceId = "svc", Profile = new NoConfPolicyPatch { Algorithm = BalancingAlgorithm.PowerOfTwoChoices },
+                Route = new NoConfPolicyPatch
+                {
+                    Algorithm = BalancingAlgorithm.StableHash, AffinityHeader = "X-Tenant", PreferredZone = "local", RequireLocalZone = true,
+                    Limits = new ProxyRouteOverrideOptions { MaxRequestBodyBytes = 1234 },
+                },
+            }],
         };
         var compiled = Compiler().Compile(fixture.Registry.State, Baseline(), policy, "site.example", "node");
         var service = compiled.Services["svc"];
@@ -177,7 +188,7 @@ public sealed class NoConfCompilerTests
         Assert.Throws<InvalidDataException>(() => new NodeGrant("node", "owner", RegistryTestFixture.Fingerprint, "svc", [address], 1, 65535, DateTimeOffset.UtcNow.AddDays(1), revoked: false));
     }
 
-    internal static NoConfSnapshotCompiler Compiler() => new(new ProxyEndpointAddressPolicy(), new ProxyUrlSyntaxPolicy());
+    internal static NoConfSnapshotCompiler Compiler(IUpstreamTrustMaterialSource? source = null) => new(new ProxyEndpointAddressPolicy(), new ProxyUrlSyntaxPolicy(), ingress: null, upstreamTrust: source);
     internal static ProxyConfigurationSnapshot Baseline() => ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(
         new ProxyOptions { Listeners = [new ListenerOptions { Name = "http", Address = "127.0.0.1", Port = 8080 }] }, new ProxyOperationalOptions(),
         ProxyAdminTokenResolution.None("DRAVA_ADMIN_TOKEN"), new Dictionary<string, RuntimeCertificate>(StringComparer.Ordinal), 1, DateTimeOffset.UtcNow,

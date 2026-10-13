@@ -27,9 +27,7 @@ public sealed class VerifiedUpstreamQuicTrustTests
     {
         using var directory = new RegistryStateDirectory();
         using var certificates = DevelopmentUpstreamTrustCertificates.Create();
-        var rootPath = Path.Combine(directory.Path, "upstream-root.cer");
-        await File.WriteAllBytesAsync(rootPath, certificates.Root.RawData).ConfigureAwait(true);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(rootPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        var source = await DevelopmentUpstreamTrustConfiguration.LoadSourceAsync(directory.Path, certificates).ConfigureAwait(true);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var names = new ConcurrentQueue<string?>();
         var listener = await QuicListener.ListenAsync(new QuicListenerOptions
@@ -46,11 +44,11 @@ public sealed class VerifiedUpstreamQuicTrustTests
             },
         }, deadline.Token).ConfigureAwait(true);
         await using var listenerLifetime = listener.ConfigureAwait(true);
-        var endpoint = new UpstreamTransportEndpoint("peer", "https", "http3", "127.0.0.1", listener.LocalEndPoint.Port, true,
+        var endpoint = new UpstreamTransportEndpoint("peer", "https", "http3", "127.0.0.1", listener.LocalEndPoint.Port, ValidateCertificate: true,
             string.Equals(profile, "wrong-name", StringComparison.Ordinal) ? "other.drava.invalid" : "backend.drava.invalid")
         {
             TrustedRoot = string.Equals(profile, "system-trust", StringComparison.Ordinal) ? null
-                : new RuntimeTrustedRootCertificate(rootPath, certificates.Root.GetCertHashString(HashAlgorithmName.SHA256)),
+                : source.Resolve(DevelopmentUpstreamTrustConfiguration.MaterialId, certificates.Root.GetCertHashString(HashAlgorithmName.SHA256)),
         };
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var metrics = new ProxyMetrics();
@@ -59,13 +57,17 @@ public sealed class VerifiedUpstreamQuicTrustTests
         try
         {
             if (string.Equals(profile, "matching", StringComparison.Ordinal))
+            {
                 await ExchangeAsync(endpoint, timeouts, metrics, deadline.Token).ConfigureAwait(true);
+            }
             else
+            {
                 await Assert.ThrowsAsync<Http3UpstreamProtocolException>(async () =>
                 {
                     var unexpected = await Http3UpstreamConnection.ConnectAsync(endpoint, timeouts, metrics, 16384, deadline.Token).ConfigureAwait(true);
                     await using var unexpectedLifetime = unexpected.ConfigureAwait(true);
                 }).ConfigureAwait(true);
+            }
             Assert.Contains(endpoint.EffectiveSniHost, names, StringComparer.Ordinal);
             Assert.Equal(0, metrics.Snapshot().UpstreamHttp3.ActiveConnections);
         }
@@ -84,7 +86,7 @@ public sealed class VerifiedUpstreamQuicTrustTests
     {
         var connection = await Http3UpstreamConnection.ConnectAsync(endpoint, timeouts, metrics, 16384, cancellationToken).ConfigureAwait(true);
         await using var connectionLifetime = connection.ConfigureAwait(true);
-        await connection.SendHeadersAsync([new(":method", "GET"), new(":scheme", "https"), new(":authority", "svc.site.test"), new(":path", "/verified")], true, timeouts, cancellationToken).ConfigureAwait(true);
+        await connection.SendHeadersAsync([new(":method", "GET"), new(":scheme", "https"), new(":authority", "svc.site.test"), new(":path", "/verified")], endStream: true, timeouts, cancellationToken).ConfigureAwait(true);
         Assert.Equal(200, (await connection.ReadResponseHeadAsync(4096, timeouts, cancellationToken).ConfigureAwait(true)).StatusCode);
         Assert.Equal("ok"u8.ToArray(), (await connection.ReadDataAsync(timeouts, cancellationToken).ConfigureAwait(true)).Data);
         Assert.True((await connection.ReadDataAsync(timeouts, cancellationToken).ConfigureAwait(true)).EndStream);
@@ -119,14 +121,16 @@ public sealed class VerifiedUpstreamQuicTrustTests
 
     private static async Task RespondAsync(QuicStream stream, CancellationToken cancellationToken)
     {
-        using var request = new MemoryStream();
+        var request = new MemoryStream();
+        await using var requestLifetime = request.ConfigureAwait(false);
         await stream.CopyToAsync(request, cancellationToken).ConfigureAwait(false);
         var offset = 0;
         Assert.True(Http3Codec.TryReadFrame(request.ToArray(), ref offset, out var type, out var payload));
         Assert.Equal(Http3Codec.HeadersFrame, type);
         Assert.True(Http3Codec.TryDecodeHeaderBlock(payload.Span, 4096, out var fields, out var reason), reason);
         Assert.Contains(fields, static field => field.Name.Equals(":authority", StringComparison.Ordinal) && field.Value.Equals("svc.site.test", StringComparison.Ordinal));
-        using var response = new MemoryStream();
+        var response = new MemoryStream();
+        await using var responseLifetime = response.ConfigureAwait(false);
         Http3Codec.WriteFrame(response, Http3Codec.HeadersFrame, Http3Codec.EncodeHeaderBlock([new(":status", "200"), new("content-length", "2")]));
         Http3Codec.WriteFrame(response, Http3Codec.DataFrame, "ok"u8);
         await stream.WriteAsync(response.ToArray(), completeWrites: true, cancellationToken).ConfigureAwait(false);

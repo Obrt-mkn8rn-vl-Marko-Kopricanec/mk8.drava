@@ -55,9 +55,8 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
     {
         const long bodyBytes = 30L * 1024 * 1024;
         const string rawTarget = "/container/mail/a%2Fb.bin?sig=a%2Bb%2Fc%3D&spr=https";
-        using var directory = new RegistryStateDirectory();
         using var certificates = DevelopmentUpstreamTrustCertificates.Create();
-        var tls = await PreparePolicyAsync(directory.Path, certificates).ConfigureAwait(true);
+        var tls = DevelopmentUpstreamTrustConfiguration.Policy(certificates);
         var names = new ConcurrentQueue<string?>();
         var completed = 0;
         var headersValidated = 0;
@@ -71,7 +70,7 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
             Interlocked.Increment(ref completed);
         }, originTls ? certificates.Leaf : null, names.Enqueue).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
-        var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true, verifiedUpstreamTls: originTls ? tls : null, observeUploadTiming: observeUploadTiming).ConfigureAwait(true);
+        var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true, verifiedUpstreamTls: originTls ? tls : null, observeUploadTiming: observeUploadTiming, upstreamTrust: originTls ? DevelopmentUpstreamTrustConfiguration.Entries(certificates) : null).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         using var client = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.TlsPort, "svc.site.test", tcpNoDelay: tcpNoDelay);
         using var content = new DevelopmentRepeatedBodyContent(bodyBytes);
@@ -116,8 +115,8 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         const string rawTarget = "/container/mail/a%2Fb.bin?sig=a%2Bb%2Fc%3D&spr=https";
         using var directory = new RegistryStateDirectory();
         using var certificates = DevelopmentUpstreamTrustCertificates.Create();
-        var tls = await PreparePolicyAsync(directory.Path, certificates).ConfigureAwait(true);
-        var root = tls.TrustedRoot ?? throw new InvalidOperationException("The control requires verified root identity.");
+        var source = await DevelopmentUpstreamTrustConfiguration.LoadSourceAsync(directory.Path, certificates).ConfigureAwait(true);
+        var root = source.Resolve(DevelopmentUpstreamTrustConfiguration.MaterialId, certificates.Root.GetCertHashString(HashAlgorithmName.SHA256));
         var names = new ConcurrentQueue<string?>();
         long received = 0;
         var completed = 0;
@@ -129,7 +128,7 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         await using var lifetime = upstream.ConfigureAwait(true);
         var endpoint = new UpstreamTransportEndpoint("native-control", "https", "http1", "127.0.0.1", upstream.Port, ValidateCertificate: true, "backend.drava.invalid")
         {
-            TrustedRoot = new RuntimeTrustedRootCertificate(root.CertificatePath, root.Sha256),
+            TrustedRoot = root,
         };
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var content = new DevelopmentRepeatedBodyContent(bodyBytes);
@@ -213,9 +212,8 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
     [Fact]
     public async Task AHostnameMismatchNeverReachesTheBusinessHandlerAcrossBothProcessesAsync()
     {
-        using var directory = new RegistryStateDirectory();
         using var certificates = DevelopmentUpstreamTrustCertificates.Create();
-        var matching = await PreparePolicyAsync(directory.Path, certificates).ConfigureAwait(true);
+        var matching = DevelopmentUpstreamTrustConfiguration.Policy(certificates);
         var mismatch = new UpstreamTlsOptions { ValidateCertificate = true, SniHost = "other.drava.invalid", TrustedRoot = matching.TrustedRoot };
         var requests = 0;
         var upstream = await DevelopmentHttpUpstream.StartAsync(context =>
@@ -224,7 +222,7 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
             return context.Response.WriteAsync("unreachable", context.RequestAborted);
         }, certificates.Leaf).ConfigureAwait(true);
         await using var upstreamLifetime = upstream.ConfigureAwait(true);
-        var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true, verifiedUpstreamTls: mismatch).ConfigureAwait(true);
+        var proxy = await TwoProcessProxy.StartAsync(upstream.Port, "svc.site.test", enrolledSite: true, verifiedUpstreamTls: mismatch, upstreamTrust: DevelopmentUpstreamTrustConfiguration.Entries(certificates)).ConfigureAwait(true);
         await using var proxyLifetime = proxy.ConfigureAwait(true);
         using var client = new DevelopmentSiteClient(proxy.RootCertificatePath, proxy.TlsPort, "svc.site.test");
         using var response = await client.Client.GetAsync(new Uri("/unreachable", UriKind.Relative)).ConfigureAwait(true);
@@ -276,15 +274,4 @@ public sealed class VerifiedUpstreamTlsProcessTests(ITestOutputHelper output)
         observePhase?.Invoke("response-prepared");
     }
 
-    private static async Task<UpstreamTlsOptions> PreparePolicyAsync(string directory, DevelopmentUpstreamTrustCertificates certificates)
-    {
-        var path = Path.Combine(directory, "upstream-root.cer");
-        await File.WriteAllBytesAsync(path, certificates.Root.RawData).ConfigureAwait(false);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        return new UpstreamTlsOptions
-        {
-            ValidateCertificate = true, SniHost = "backend.drava.invalid",
-            TrustedRoot = new TrustedRootCertificateOptions { CertificatePath = path, Sha256 = certificates.Root.GetCertHashString(HashAlgorithmName.SHA256) },
-        };
-    }
 }
