@@ -12,6 +12,8 @@ using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Application.INF.Administration;
 using Mk8.Drava.Application.BLL.ControlPlane.AdminAuthentication;
 using Mk8.Drava.Application.BLL.ControlPlane.Listeners;
+using Mk8.Drava.Application.BLL.ControlPlane.Backup;
+using Mk8.Drava.Application.BLL.ControlPlane.ConfigurationManagement;
 using Mk8.Drava.Application.INF.NoConf;
 using Mk8.Drava.Application.INF.Runtime;
 using Mk8.Drava.Configuration;
@@ -101,6 +103,11 @@ internal static class Program
         builder.Services.AddSingleton<IProxyListenerReloadApplier>(services => new GatewayPlanCoordinator(bootstrap,
             services.GetRequiredService<ProxyConfigurationStore>(), registration?.Plans, registration is null ? null : services.GetRequiredService<NoConfReconciler>()));
         builder.Services.AddSingleton<IMdravaDataDirectoryProvider>(new ApplicationDataDirectoryProvider(bootstrap.StateDirectory));
+        builder.Services.RemoveAll<ProxyBackupService>();
+        builder.Services.AddSingleton(services => ProxyBackupService.ForProtectedRole(
+            services.GetRequiredService<IMdravaDataDirectoryProvider>(), services.GetRequiredService<IProxyBackupFileSystem>(),
+            services.GetRequiredService<IProxyRestoreConfigurationValidator>(), services.GetRequiredService<IProxyActiveConfigurationVersionReader>(),
+            services.GetRequiredService<TimeProvider>()));
         builder.Services.AddSingleton(_ => new IpcIdentityInterceptor(bootstrap));
         builder.Services.AddSingleton(_ => new ExchangeAdmission(bootstrap));
         builder.Services.AddSingleton(services => new ProxyExchangeService(services.GetRequiredService<ProxyRequestPipeline>(),

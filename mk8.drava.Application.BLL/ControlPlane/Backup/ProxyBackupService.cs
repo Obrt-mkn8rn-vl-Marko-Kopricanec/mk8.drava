@@ -11,14 +11,31 @@ public sealed class ProxyBackupService : IProxyBackupOperations
     private readonly IProxyRestoreConfigurationValidator _restoreConfigurationValidator;
     private readonly IProxyActiveConfigurationVersionReader _activeConfigurationVersionReader;
     private readonly TimeProvider _timeProvider;
+    private readonly IReadOnlyList<ProxyBackupDirectoryRequirement> _directoryRequirements;
     public ProxyBackupService(IMdravaDataDirectoryProvider dataDirectoryProvider, IProxyBackupFileSystem backupFileSystem, IProxyRestoreConfigurationValidator restoreConfigurationValidator, IProxyActiveConfigurationVersionReader activeConfigurationVersionReader, TimeProvider timeProvider)
+        : this(dataDirectoryProvider, backupFileSystem, restoreConfigurationValidator, activeConfigurationVersionReader, timeProvider,
+            ProxyBackupDirectoryLayoutPolicy.ExpectedDirectories())
+    {
+    }
+
+    private ProxyBackupService(IMdravaDataDirectoryProvider dataDirectoryProvider, IProxyBackupFileSystem backupFileSystem,
+        IProxyRestoreConfigurationValidator restoreConfigurationValidator, IProxyActiveConfigurationVersionReader activeConfigurationVersionReader,
+        TimeProvider timeProvider, IReadOnlyList<ProxyBackupDirectoryRequirement> directoryRequirements)
     {
         _dataDirectoryProvider = dataDirectoryProvider;
         _backupFileSystem = backupFileSystem;
         _restoreConfigurationValidator = restoreConfigurationValidator;
         _activeConfigurationVersionReader = activeConfigurationVersionReader;
         _timeProvider = timeProvider;
+        _directoryRequirements = BackupList.Copy(directoryRequirements);
     }
+
+    /// <summary>Inventories durable state; protected configuration is validated through its role and recovered through explicit escrow.</summary>
+    public static ProxyBackupService ForProtectedRole(IMdravaDataDirectoryProvider dataDirectoryProvider, IProxyBackupFileSystem backupFileSystem,
+        IProxyRestoreConfigurationValidator restoreConfigurationValidator, IProxyActiveConfigurationVersionReader activeConfigurationVersionReader,
+        TimeProvider timeProvider) => new(dataDirectoryProvider, backupFileSystem, restoreConfigurationValidator, activeConfigurationVersionReader,
+            timeProvider, [new(".", ProxyBackupFileClassificationPolicy.MustBackup, Sensitive: true),
+                new("logs", ProxyBackupFileClassificationPolicy.ShouldBackup, Sensitive: false)]);
 
     public ProxyBackupManifest CreateManifest()
     {
@@ -59,7 +76,7 @@ public sealed class ProxyBackupService : IProxyBackupOperations
         var root = _dataDirectoryProvider.GetDataDirectory();
         var manifest = CreateManifest();
         List<ProxyRestoreValidationFinding> errors = [];
-        List<ProxyRestoreValidationFinding> warnings = manifest.Warnings.Select(ProxyRestoreValidationFindingPolicy.FromBackupWarning).ToList();
+        List<ProxyRestoreValidationFinding> warnings = [.. manifest.Warnings.Select(ProxyRestoreValidationFindingPolicy.FromBackupWarning)];
         errors.AddRange(ProxyRestoreValidationDirectoryPolicy.FindMissingRequiredDirectories(manifest.Directories));
         var configValidation = await _restoreConfigurationValidator.ValidateExistingLayoutAsync(cancellationToken).ConfigureAwait(false);
         foreach (var fileError in configValidation.FileErrors)
@@ -77,7 +94,7 @@ public sealed class ProxyBackupService : IProxyBackupOperations
 
     private ProxyBackupDirectoryStatus[] ExpectedDirectories(string root)
     {
-        return ProxyBackupDirectoryLayoutPolicy.ExpectedDirectories().Select(requirement => DirectoryStatus(root, requirement)).ToArray();
+        return [.. _directoryRequirements.Select(requirement => DirectoryStatus(root, requirement))];
     }
 
     private ProxyBackupDirectoryStatus DirectoryStatus(string root, ProxyBackupDirectoryRequirement requirement)
