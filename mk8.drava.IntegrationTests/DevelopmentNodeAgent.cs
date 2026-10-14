@@ -10,6 +10,7 @@ internal sealed class DevelopmentNodeAgent : IAsyncDisposable
     private readonly TwoProcessProxy _proxy;
     public NodeAgentDescriptor Descriptor { get; }
     public string StateDirectory { get; }
+    internal DevelopmentProcessMemory ReadMemory() => _process.ReadMemory();
 
     private DevelopmentNodeAgent(DevelopmentProcess process, TwoProcessProxy proxy, NodeAgentDescriptor descriptor, string stateDirectory)
     { _process = process; _proxy = proxy; Descriptor = descriptor; StateDirectory = stateDirectory; }
