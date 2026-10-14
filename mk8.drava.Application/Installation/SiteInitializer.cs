@@ -2,9 +2,11 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Mk8.Drava.Application.BLL.Registry;
+using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.DAL.Acme;
 using Mk8.Drava.Application.DAL.Installation;
 using Mk8.Drava.Application.DAL.Registry;
+using Mk8.Drava.Application.DAL.NoConf;
 using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Application.Hosting;
@@ -29,12 +31,16 @@ internal static class SiteInitializer
         var fingerprint = authority.Fingerprint;
         using var root = authority.PublicCertificate;
         using var node = authority.IssueNode(options.NodeId, options.EndpointAddresses);
-        startup.Enter(ApplicationStartupPhase.SiteNodeEnroll);
-        await EnrollAsync(applicationState, options, node, cancellationToken).ConfigureAwait(false);
         var bundle = SiteInitializationBundle.Create(options, fingerprint, new SecretText(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))), new SecretText(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))), authority.PrivateMaterial, new SecretBytes(root.RawData), PortableCertificate.ExportPrivate(node));
         bundle.Application.Validate(); bundle.Gateway.Validate(); bundle.Enrollment.Validate();
         startup.Enter(ApplicationStartupPhase.SiteConfigurationProtect);
         await WriteBundleAsync(workspace, bundle, cancellationToken).ConfigureAwait(false);
+        startup.Enter(ApplicationStartupPhase.SiteNodeEnroll);
+        var role = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(Path.Combine(workspace.StagingDirectory, "roles", "application", "Environment", ".env"), cancellationToken).ConfigureAwait(false);
+        await using (role.ConfigureAwait(false))
+        {
+            await EnrollAsync(applicationState, options, node, new PortablePolicyPayloadStore(role), cancellationToken).ConfigureAwait(false);
+        }
         cancellationToken.ThrowIfCancellationRequested();
         startup.Enter(ApplicationStartupPhase.SitePublish);
         workspace.Publish();
@@ -42,9 +48,9 @@ internal static class SiteInitializer
         return fingerprint;
     }
 
-    private static async Task EnrollAsync(string state, SiteInitializationOptions options, X509Certificate2 node, CancellationToken cancellationToken)
+    private static async Task EnrollAsync(string state, SiteInitializationOptions options, X509Certificate2 node, IPolicyPayloadStore payloads, CancellationToken cancellationToken)
     {
-        var repository = await SqliteRegistryRepository.OpenAsync(state, options.SiteId, cancellationToken).ConfigureAwait(false);
+        var repository = await SqliteRegistryRepository.OpenAsync(state, options.SiteId, payloads, cancellationToken).ConfigureAwait(false);
         await using var repositoryLifetime = repository.ConfigureAwait(false);
         using var registry = new RegistryCoordinator(repository, new DestinationAvailabilityStore(TimeProvider.System), TimeProvider.System);
         await registry.InitializeAsync(cancellationToken).ConfigureAwait(false);

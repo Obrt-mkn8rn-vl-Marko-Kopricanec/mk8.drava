@@ -3,6 +3,7 @@ using Mk8.Drava.Application.BLL.Configuration;
 using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Registry;
+using Mk8.Drava.Application.DAL.NoConf;
 using Mk8.Drava.Application.INF.NoConf;
 using Mk8.Drava.Application.INF.Runtime;
 
@@ -10,7 +11,7 @@ namespace Mk8.Drava.UnitTests;
 
 internal sealed class PolicyRuntime : IAsyncDisposable
 {
-    public PolicyRuntime(SqliteRegistryRepository repository, string directory, IPolicyRepository? policies = null)
+    public PolicyRuntime(SqliteRegistryRepository repository, string directory, IPolicyRepository? policies = null, INoConfPolicySource? source = null)
     {
         Availability = new DestinationAvailabilityStore(TimeProvider.System);
         Registry = new RegistryCoordinator(repository, Availability, TimeProvider.System);
@@ -18,7 +19,7 @@ internal sealed class PolicyRuntime : IAsyncDisposable
         store.Replace(NoConfCompilerTests.Baseline());
         var site = new UnpublishedSite();
         Reconciler = new NoConfReconciler(Registry, Availability, store, NoConfCompilerTests.Compiler(), site, site, site,
-            Path.Combine(directory, "noconf.json"), "site.example", "node", TimeProvider.System, NullLogger<NoConfReconciler>.Instance, policies ?? repository);
+            source ?? new FileNoConfPolicySource(Path.Combine(directory, "noconf.json")), "site.example", "node", TimeProvider.System, NullLogger<NoConfReconciler>.Instance, policies ?? repository);
     }
 
     public DestinationAvailabilityStore Availability { get; }

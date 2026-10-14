@@ -5,6 +5,8 @@ using System.Text.Json.Nodes;
 using Mk8.Drava.Application.BLL.ControlPlane.Backup;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Registry;
+using Mk8.Drava.Application.DAL.NoConf;
+using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.Recovery;
 using Mk8.Drava.Configuration;
 using Xunit;
@@ -16,6 +18,78 @@ public sealed class ConfiguredSiteRestoreTests
     private const long MaximumRegistryBytes = 16 * 1024 * 1024;
     // Loopback and finite unused ports describe an offline configuration fixture; no listener or certificate is created.
     private static readonly RecoveryFileApproval[] Approvals = [new("ipc.token", Credential: true), new("admin.token", Credential: true)];
+
+    [Fact]
+    public async Task ProtectedPolicyOnlyRecoveryDoesNotRequireOrdinaryCredentialFilesAsync()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        using var source = new RegistryStateDirectory();
+        using var gateway = new RegistryStateDirectory();
+        using var parent = new RegistryStateDirectory();
+        var path = await ProtectedRegistrySnapshotTests.InitializeRoleAsync(source.Path, source.Path, "site").ConfigureAwait(true);
+        var role = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(path, CancellationToken.None).ConfigureAwait(true);
+        await using (role.ConfigureAwait(true))
+        {
+            var repository = await SqliteRegistryRepository.OpenAsync(source.Path, "site", new PortablePolicyPayloadStore(role), CancellationToken.None).ConfigureAwait(true);
+            await using (repository.ConfigureAwait(true))
+            {
+                Assert.True(await repository.TryCommitPolicyAsync(0, 0, new PolicyRevision(1, "{}", DateTimeOffset.UnixEpoch, "fixture", "control"), CancellationToken.None).ConfigureAwait(true));
+            }
+        }
+        var snapshot = Path.Combine(parent.Path, "snapshot");
+        var backup = await SiteRecoveryBundle.CreateProtectedAsync(source.Path, gateway.Path, snapshot, "site", MaximumRegistryBytes,
+            maximumFileBytes: 1, files: [], path, allowCredentialEscrow: true, CancellationToken.None).ConfigureAwait(true);
+        Assert.Empty(backup.Receipt.Files);
+        var destination = Path.Combine(parent.Path, "site");
+        var request = Request(snapshot, destination, backup.ManifestSha256) with
+        { SchemaVersion = 2, MaximumFileBytes = 1, ApprovedFiles = [], Placements = [], };
+        var result = await ConfiguredSiteRestore.PrepareAsync(request, CancellationToken.None).ConfigureAwait(true);
+        Assert.Empty(result.Receipt.Files);
+        Assert.Empty(result.Receipt.Placements);
+        Assert.False(Directory.Exists(Path.Combine(destination, "application", "policy")));
+        var restored = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(Path.Combine(destination, "roles", "application", "Environment", ".env"), CancellationToken.None).ConfigureAwait(true);
+        await using var restoredLifetime = restored.ConfigureAwait(true);
+        var reopened = await SqliteRegistryRepository.OpenAsync(Path.Combine(destination, "application"), "site", new PortablePolicyPayloadStore(restored), CancellationToken.None).ConfigureAwait(true);
+        await using var reopenedLifetime = reopened.ConfigureAwait(true);
+        Assert.Equal("{}", (await reopened.ReadPolicyAsync(CancellationToken.None).ConfigureAwait(true))?.CanonicalJson, StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task ProtectedPreparationImportsApprovedHistoryBeforeFinalReceiptsAndSurvivesReopenAsync()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        using var source = new RegistryStateDirectory();
+        using var gateway = new RegistryStateDirectory();
+        using var parent = new RegistryStateDirectory();
+        var snapshot = Path.Combine(parent.Path, "snapshot");
+        var backup = await BackupAsync(source.Path, gateway.Path, snapshot, protectedPolicy: true).ConfigureAwait(true);
+        var destination = Path.Combine(parent.Path, "site");
+        var request = Request(snapshot, destination, backup.ManifestSha256) with { SchemaVersion = 2 };
+        var result = await ConfiguredSiteRestore.PrepareAsync(request, CancellationToken.None).ConfigureAwait(true);
+        Assert.Equal(2, result.Receipt.SchemaVersion);
+        Assert.Null(result.Receipt.Registry.PolicyEscrow);
+        Assert.Equal(backup.Receipt.Registry.PolicyEscrow?.References, result.Receipt.PolicyReferences);
+        Assert.False(Directory.Exists(Path.Combine(destination, "application", "policy")));
+        var applicationPath = Path.Combine(destination, "roles", "application", "Environment", ".env");
+        Assert.Equal(result.Receipt.ApplicationBootstrapSha256, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(applicationPath, CancellationToken.None).ConfigureAwait(true))), StringComparer.Ordinal);
+        Assert.Equal(result.Receipt.Registry.DatabaseSha256, Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(Path.Combine(destination, "application", "registry.sqlite"), CancellationToken.None).ConfigureAwait(true))), StringComparer.Ordinal);
+        for (var reopen = 0; reopen < 2; reopen++)
+        {
+            var role = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(applicationPath, CancellationToken.None).ConfigureAwait(true);
+            await using var roleLifetime = role.ConfigureAwait(true);
+            var repository = await SqliteRegistryRepository.OpenAsync(Path.Combine(destination, "application"), "site", new PortablePolicyPayloadStore(role), CancellationToken.None).ConfigureAwait(true);
+            await using var repositoryLifetime = repository.ConfigureAwait(true);
+            var history = await repository.ReadPolicyHistoryAsync(CancellationToken.None).ConfigureAwait(true);
+            Assert.Equal(2, history.Count);
+            Assert.Equal("{\"synthetic\":2}", history[0].CanonicalJson);
+            Assert.Equal("{\"synthetic\":1}", history[1].CanonicalJson);
+            Assert.True((await repository.ReadAsync(CancellationToken.None).ConfigureAwait(true)).Grants["node"].Revoked);
+            Assert.Equal(result.Receipt.Registry.RegistryRevision, (await repository.ReadAsync(CancellationToken.None).ConfigureAwait(true)).Revision);
+        }
+        var refused = Request(snapshot, Path.Combine(parent.Path, "wrong-schema"), backup.ManifestSha256);
+        await Assert.ThrowsAsync<InvalidDataException>(() => ConfiguredSiteRestore.PrepareAsync(refused, CancellationToken.None).AsTask()).ConfigureAwait(true);
+        Assert.False(Directory.Exists(refused.DestinationDirectory));
+    }
 
     [Theory]
     [InlineData(false)]
@@ -166,7 +240,7 @@ public sealed class ConfiguredSiteRestoreTests
         };
     }
 
-    private static async Task<SiteRecoveryResult> BackupAsync(string application, string gateway, string destination, bool configuration = false)
+    private static async Task<SiteRecoveryResult> BackupAsync(string application, string gateway, string destination, bool configuration = false, bool protectedPolicy = false)
     {
         var repository = await SqliteRegistryRepository.OpenAsync(application, "site", CancellationToken.None).ConfigureAwait(true);
         await using (repository.ConfigureAwait(true))
@@ -192,6 +266,22 @@ public sealed class ConfiguredSiteRestoreTests
             await File.WriteAllBytesAsync(path, bytes, CancellationToken.None).ConfigureAwait(true);
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             inputs.Add(new RecoveryFileInput(path, "site.json", Credential: false));
+        }
+        if (protectedPolicy)
+        {
+            var path = await ProtectedRegistrySnapshotTests.InitializeRoleAsync(application, application, "site").ConfigureAwait(true);
+            var role = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(path, CancellationToken.None).ConfigureAwait(true);
+            await using (role.ConfigureAwait(true))
+            {
+                var protectedRepository = await SqliteRegistryRepository.OpenAsync(application, "site", new PortablePolicyPayloadStore(role), CancellationToken.None).ConfigureAwait(true);
+                await using (protectedRepository.ConfigureAwait(true))
+                {
+                    Assert.True(await protectedRepository.TryCommitPolicyAsync(0, 1, new PolicyRevision(1, "{\"synthetic\":1}", DateTimeOffset.UnixEpoch, "operator", "control"), CancellationToken.None).ConfigureAwait(true));
+                    Assert.True(await protectedRepository.TryCommitPolicyAsync(1, 1, new PolicyRevision(2, "{\"synthetic\":2}", DateTimeOffset.UnixEpoch, "operator", "control"), CancellationToken.None).ConfigureAwait(true));
+                }
+            }
+            return await SiteRecoveryBundle.CreateProtectedAsync(application, gateway, destination, "site", MaximumRegistryBytes, 4096, inputs,
+                path, allowCredentialEscrow: true, CancellationToken.None).ConfigureAwait(true);
         }
         return await SiteRecoveryBundle.CreateAsync(application, gateway, destination, "site", MaximumRegistryBytes, 4096, inputs, allowCredentialEscrow: true, CancellationToken.None).ConfigureAwait(true);
     }

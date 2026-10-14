@@ -21,7 +21,7 @@ public sealed partial class NoConfReconciler : BackgroundService
     private readonly RegistrationRuntimePolicy _runtimePolicy;
     private readonly IServiceDnsVerifier _dns;
     private readonly IGatewayPublicationSource _gateway;
-    private readonly string _policyPath;
+    private readonly INoConfPolicySource _policySource;
     private readonly string _domain;
     private readonly string _localNodeId;
     private readonly TimeProvider _clock;
@@ -41,6 +41,13 @@ public sealed partial class NoConfReconciler : BackgroundService
     public NoConfReconciler(RegistryCoordinator registry, DestinationAvailabilityStore availability, ProxyConfigurationStore store,
         NoConfSnapshotCompiler compiler, IRegisteredReadinessProbe readiness, IServiceDnsVerifier dns, IGatewayPublicationSource gateway,
         string policyPath, string domain, string localNodeId, TimeProvider clock, ILogger<NoConfReconciler> logger, IPolicyRepository policies, RegistrationRuntimePolicy? runtimePolicy = null)
+        : this(registry, availability, store, compiler, readiness, dns, gateway, new FileNoConfPolicySource(policyPath), domain, localNodeId, clock, logger, policies, runtimePolicy)
+    {
+    }
+
+    public NoConfReconciler(RegistryCoordinator registry, DestinationAvailabilityStore availability, ProxyConfigurationStore store,
+        NoConfSnapshotCompiler compiler, IRegisteredReadinessProbe readiness, IServiceDnsVerifier dns, IGatewayPublicationSource gateway,
+        INoConfPolicySource policySource, string domain, string localNodeId, TimeProvider clock, ILogger<NoConfReconciler> logger, IPolicyRepository policies, RegistrationRuntimePolicy? runtimePolicy = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(policies);
@@ -52,14 +59,14 @@ public sealed partial class NoConfReconciler : BackgroundService
         ArgumentNullException.ThrowIfNull(gateway);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(logger);
-        if (!Path.IsPathFullyQualified(policyPath)) throw new ArgumentException("Policy path must be absolute.", nameof(policyPath));
+        ArgumentNullException.ThrowIfNull(policySource);
         ArgumentNullException.ThrowIfNull(domain);
         RegistryNames.RequireLabel(localNodeId);
         _registry = registry; _availability = availability; _store = store; _compiler = compiler; _readiness = readiness; _dns = dns; _gateway = gateway;
         _policies = policies;
         _runtimePolicy = runtimePolicy ?? new RegistrationRuntimePolicy();
         _runtimePolicy.Validate();
-        _policyPath = policyPath; _domain = domain; _localNodeId = localNodeId; _clock = clock; _logger = logger;
+        _policySource = policySource; _domain = domain; _localNodeId = localNodeId; _clock = clock; _logger = logger;
     }
 
     public CompiledNoConfSnapshot? Compiled => Volatile.Read(ref _compiled);

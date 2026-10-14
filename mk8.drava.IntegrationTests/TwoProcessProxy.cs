@@ -3,6 +3,8 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using System.Text;
+using Supprocom.Secrets;
 using Mk8.Drava.Configuration;
 using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Application.BLL.Registry;
@@ -37,7 +39,25 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     public string GatewayBootstrapPath => _gateway.PortableDocumentPath;
     public string EnrolledNodeId { get; private set; } = "local";
     public string NodeRelayAddress { get; private set; } = "127.0.0.1";
-    public Task WritePolicyAsync(string json) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "noconf.json"), json);
+    public async Task WritePolicyAsync(string json)
+    {
+        var role = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(ApplicationBootstrapPath, CancellationToken.None).ConfigureAwait(false);
+        await using var lifetime = role.ConfigureAwait(false);
+        // Independent wire fixture deliberately permits malformed policy JSON for rejection tests.
+        var encoded = JsonSerializer.Serialize(new { schemaVersion = 1, siteId = role.Configuration.SiteId,
+            policy = Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_'), });
+        var store = new SupprocomSecretFileStore(new SupprocomSecretFileOptions
+        {
+            Directory = Path.GetDirectoryName(ApplicationBootstrapPath), ActiveName = Path.GetFileName(ApplicationBootstrapPath),
+            Protection = SecretFileProtection.InstallationBoundAesGcm, Import = SecretFileImport.None, Recovery = SecretFileRecovery.None,
+        }, "Production");
+        await store.UpdateDocumentAsync(settings =>
+        {
+            var replacement = settings.Where(static setting => !string.Equals(setting.Key, InstallationCollectionBounds.PolicySourceKey, StringComparison.OrdinalIgnoreCase)).ToList();
+            replacement.Add(new SupprocomSecretSetting(InstallationCollectionBounds.PolicySourceKey, encoded));
+            return replacement;
+        }, CancellationToken.None).ConfigureAwait(false);
+    }
 
     public async Task RestartAsync()
     {

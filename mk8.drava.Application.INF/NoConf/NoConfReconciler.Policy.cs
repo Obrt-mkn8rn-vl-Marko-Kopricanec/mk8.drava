@@ -31,7 +31,7 @@ public sealed partial class NoConfReconciler
             EnsureBaseline();
             await LoadPolicyAsync(cancellationToken).ConfigureAwait(false);
             if ((_acceptedPolicy?.Revision ?? 0) != expectedRevision) return false;
-            var policy = importFile ? await NoConfPolicyFile.ReadAsync(_policyPath, cancellationToken).ConfigureAwait(false) : NoConfPolicyFile.Parse(json ?? throw new InvalidDataException("Policy is missing."));
+            var policy = importFile ? await _policySource.ReadAsync(cancellationToken).ConfigureAwait(false) ?? new NoConfPolicy() : NoConfPolicyFile.Parse(json ?? throw new InvalidDataException("Policy is missing."));
             return await AcceptPolicyAsync(policy, importFile ? "file" : "control", cancellationToken).ConfigureAwait(false);
         }
         finally { _compilationGate.Release(); }
@@ -103,7 +103,11 @@ public sealed partial class NoConfReconciler
     private async ValueTask<(NoConfPolicy Policy, bool FileRejected)> ReadDesiredPolicyAsync(CancellationToken cancellationToken)
     {
         if (_acceptedPolicy is { Source: "control" } controlled) return (NoConfPolicyFile.Parse(controlled.CanonicalJson), false);
-        try { return (await NoConfPolicyFile.ReadAsync(_policyPath, cancellationToken).ConfigureAwait(false), false); }
+        try
+        {
+            var configured = await _policySource.ReadAsync(cancellationToken).ConfigureAwait(false);
+            return (configured ?? (_acceptedPolicy is { } retained ? NoConfPolicyFile.Parse(retained.CanonicalJson) : new NoConfPolicy()), false);
+        }
         catch (Exception exception) when (exception is InvalidDataException or ArgumentException or JsonException or IOException)
         {
             if (_acceptedPolicy is not { } accepted) throw;

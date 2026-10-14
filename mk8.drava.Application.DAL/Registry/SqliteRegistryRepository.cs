@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Storage;
+using Mk8.Drava.Application.DAL.NoConf;
 
 namespace Mk8.Drava.Application.DAL.Registry;
 
@@ -20,18 +21,48 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
     private readonly SqliteConnection _connection;
     private readonly FileStream _writerLock;
     private readonly string _siteId;
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly IPolicyPayloadStore? _policyPayloads;
+    private readonly Func<PolicyMigrationPhase, ValueTask>? _policyMigrationObserver;
+    private readonly RepositoryOperationGate _gate = new();
+    private readonly Lock _disposalGate = new();
+    private Task? _disposeTask;
     private long _fence;
+    private int _policySchema = 1;
+    private bool _policyStorageUnhealthy;
 
-    private SqliteRegistryRepository(SqliteConnection connection, FileStream writerLock, string siteId)
+    private SqliteRegistryRepository(SqliteConnection connection, FileStream writerLock, string siteId, IPolicyPayloadStore? policyPayloads,
+        Func<PolicyMigrationPhase, ValueTask>? migrationObserver)
     {
         _connection = connection;
         _writerLock = writerLock;
         _siteId = siteId;
+        _policyPayloads = policyPayloads;
+        _policyMigrationObserver = migrationObserver;
+    }
+
+    public static ValueTask<SqliteRegistryRepository> OpenAsync(string stateDirectory, string siteId, CancellationToken cancellationToken) =>
+        OpenCoreAsync(stateDirectory, siteId, policyPayloads: null, migrationObserver: null, cancellationToken);
+
+    public static ValueTask<SqliteRegistryRepository> OpenAsync(string stateDirectory, string siteId, IPolicyPayloadStore policyPayloads, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(policyPayloads);
+        if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Protected policy storage requires the qualified Linux durability profile.");
+        return OpenCoreAsync(stateDirectory, siteId, policyPayloads, migrationObserver: null, cancellationToken);
+    }
+
+    // Test-only startup observer, instance-owned and unset by every production entrypoint.
+    internal static ValueTask<SqliteRegistryRepository> OpenForMigrationTestAsync(string stateDirectory, string siteId,
+        IPolicyPayloadStore policyPayloads, Func<PolicyMigrationPhase, ValueTask> migrationObserver, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(policyPayloads);
+        ArgumentNullException.ThrowIfNull(migrationObserver);
+        if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Protected policy storage requires the qualified Linux durability profile.");
+        return OpenCoreAsync(stateDirectory, siteId, policyPayloads, migrationObserver, cancellationToken);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The async factory transfers ownership to its successful caller. Its finally disposes failed repository initialization and every connection/lock not transferred; initialization failure and second-writer tests verify lock release.")]
-    public static async ValueTask<SqliteRegistryRepository> OpenAsync(string stateDirectory, string siteId, CancellationToken cancellationToken)
+    private static async ValueTask<SqliteRegistryRepository> OpenCoreAsync(string stateDirectory, string siteId, IPolicyPayloadStore? policyPayloads,
+        Func<PolicyMigrationPhase, ValueTask>? migrationObserver, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(stateDirectory);
         RegistryNames.RequireLabel(siteId);
@@ -44,14 +75,15 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
         SqliteRegistryRepository? repository = null;
         try
         {
+            if (policyPayloads is PortablePolicyPayloadStore rolePayloads)
+                await rolePayloads.CaptureOwnedAsync(cancellationToken).ConfigureAwait(false);
             connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databasePath, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = false }.ToString());
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            repository = new SqliteRegistryRepository(connection, writerLock, siteId);
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(databasePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            repository = new SqliteRegistryRepository(connection, writerLock, siteId, policyPayloads, migrationObserver);
             connection = null;
             writerLock = null;
             await repository.InitializeAsync(cancellationToken).ConfigureAwait(false);
-            if (!OperatingSystem.IsWindows())
-                File.SetUnixFileMode(databasePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             var result = repository;
             repository = null;
             return result;
@@ -69,7 +101,8 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            using var command = _connection.CreateCommand();
+            var command = _connection.CreateCommand();
+            await using var commandLifetime = command.ConfigureAwait(false);
             command.CommandText = "SELECT revision, state, digest, fence, schema_version, site_id FROM registry_state WHERE id = 1";
             var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             await using var readerLifetime = reader.ConfigureAwait(false);
@@ -98,7 +131,8 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
         {
             var transaction = (SqliteTransaction)await _connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             await using var transactionLifetime = transaction.ConfigureAwait(false);
-            using var update = _connection.CreateCommand();
+            var update = _connection.CreateCommand();
+            await using var updateLifetime = update.ConfigureAwait(false);
             update.Transaction = transaction;
             update.CommandText = "UPDATE registry_state SET revision=$next, state=$state, digest=$digest WHERE id=1 AND revision=$previous AND fence=$fence AND schema_version=1 AND site_id=$site";
             update.Parameters.AddWithValue("$next", replacement.Revision);
@@ -109,7 +143,8 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
             update.Parameters.AddWithValue("$site", _siteId);
             if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
                 throw new InvalidOperationException("Registry revision conflict or writer fence was lost.");
-            using var insert = _connection.CreateCommand();
+            var insert = _connection.CreateCommand();
+            await using var insertLifetime = insert.ConfigureAwait(false);
             insert.Transaction = transaction;
             insert.CommandText = "INSERT INTO registry_audit(revision, at_utc, operation, actor, subject) VALUES($revision,$at,$operation,$actor,$subject)";
             insert.Parameters.AddWithValue("$revision", replacement.Revision);
@@ -123,16 +158,32 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
         finally { _gate.Release(); }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        await _connection.DisposeAsync().ConfigureAwait(false);
+        lock (_disposalGate) return new ValueTask(_disposeTask ??= DisposeCoreAsync());
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        await _gate.DisposeAsync().ConfigureAwait(false);
+        try { await _connection.DisposeAsync().ConfigureAwait(false); }
+        catch (Exception databaseFailure)
+        {
+            try { await _writerLock.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception leaseFailure)
+            {
+                throw new AggregateException("Registry shutdown failed while closing both database and writer lease.", databaseFailure, leaseFailure);
+            }
+            throw;
+        }
         await _writerLock.DisposeAsync().ConfigureAwait(false);
-        _gate.Dispose();
     }
 
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        using var command = _connection.CreateCommand();
+        await PolicyReferenceSchema.RequireExistingAsync(_connection, _policyPayloads is not null, cancellationToken).ConfigureAwait(false);
+        var command = _connection.CreateCommand();
+        await using var commandLifetime = command.ConfigureAwait(false);
         command.CommandText = """
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=FULL;
@@ -146,12 +197,13 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
                 at_utc INTEGER NOT NULL, actor TEXT NOT NULL, source TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS acme_lifecycle(id INTEGER PRIMARY KEY CHECK(id=1), schema_version INTEGER NOT NULL,
                 site_id TEXT NOT NULL, scope TEXT NOT NULL, state BLOB NOT NULL, digest BLOB NOT NULL);
-            INSERT OR IGNORE INTO policy_state VALUES(1,1,0);
+            INSERT OR IGNORE INTO policy_state(id,schema_version,revision) VALUES(1,1,0);
             """;
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         var transaction = (SqliteTransaction)await _connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         await using var transactionLifetime = transaction.ConfigureAwait(false);
-        using var initial = _connection.CreateCommand();
+        var initial = _connection.CreateCommand();
+        await using var initialLifetime = initial.ConfigureAwait(false);
         initial.Transaction = transaction;
         initial.CommandText = "INSERT OR IGNORE INTO registry_state VALUES(1,1,0,0,$state,$digest,$site)";
         var empty = JsonSerializer.SerializeToUtf8Bytes(RegistryState.Empty, Json);
@@ -159,12 +211,14 @@ public sealed partial class SqliteRegistryRepository : IRegistryRepository, IPol
         initial.Parameters.AddWithValue("$digest", SHA256.HashData(empty));
         initial.Parameters.AddWithValue("$site", _siteId);
         await initial.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-        using var fence = _connection.CreateCommand();
+        var fence = _connection.CreateCommand();
+        await using var fenceLifetime = fence.ConfigureAwait(false);
         fence.Transaction = transaction;
         fence.CommandText = "UPDATE registry_state SET fence=fence+1 WHERE id=1 AND schema_version=1 AND site_id=$site AND fence < 9223372036854775807 RETURNING fence";
         fence.Parameters.AddWithValue("$site", _siteId);
         _fence = (long)(await fence.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) ?? throw new InvalidDataException("Unsupported registry schema or fence exhaustion."));
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await InitializePolicyStorageAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static void ValidateDirectory(string directory)

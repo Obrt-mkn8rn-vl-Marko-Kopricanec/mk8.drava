@@ -20,12 +20,29 @@ public static class SiteRecoveryBundle
         AllowDuplicateProperties = false,
     };
 
-    public static async ValueTask<SiteRecoveryResult> CreateAsync(string applicationDirectory, string gatewayDirectory,
+    public static ValueTask<SiteRecoveryResult> CreateAsync(string applicationDirectory, string gatewayDirectory,
         string destinationDirectory, string siteId, long maximumRegistryBytes, long maximumFileBytes,
-        IReadOnlyList<RecoveryFileInput> files, bool allowCredentialEscrow, CancellationToken cancellationToken)
+        IReadOnlyList<RecoveryFileInput> files, bool allowCredentialEscrow, CancellationToken cancellationToken) =>
+        CreateCoreAsync(applicationDirectory, gatewayDirectory, destinationDirectory, siteId, maximumRegistryBytes, maximumFileBytes,
+            files, applicationCollectionPath: null, allowCredentialEscrow, cancellationToken);
+
+    public static ValueTask<SiteRecoveryResult> CreateProtectedAsync(string applicationDirectory, string gatewayDirectory,
+        string destinationDirectory, string siteId, long maximumRegistryBytes, long maximumFileBytes,
+        IReadOnlyList<RecoveryFileInput> files, string applicationCollectionPath, bool allowCredentialEscrow, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(applicationCollectionPath);
+        if (!allowCredentialEscrow) throw new InvalidOperationException("Policy recovery requires explicit credential escrow approval.");
+        return CreateCoreAsync(applicationDirectory, gatewayDirectory, destinationDirectory, siteId, maximumRegistryBytes, maximumFileBytes,
+            files, applicationCollectionPath, allowCredentialEscrow, cancellationToken);
+    }
+
+    private static async ValueTask<SiteRecoveryResult> CreateCoreAsync(string applicationDirectory, string gatewayDirectory,
+        string destinationDirectory, string siteId, long maximumRegistryBytes, long maximumFileBytes,
+        IReadOnlyList<RecoveryFileInput> files, string? applicationCollectionPath, bool allowCredentialEscrow, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(files);
-        if (files.Count is < 1 or > MaximumFiles) throw new InvalidDataException("Recovery requires a bounded explicit file inventory.");
+        if (files.Count > MaximumFiles || (files.Count == 0 && applicationCollectionPath is null))
+            throw new InvalidDataException("Recovery requires a bounded explicit inventory; only protected policy recovery may omit ordinary files.");
         RecoveryFileInput[] inventory = [.. files];
         if (inventory.Any(static file => file is null)) throw new InvalidDataException("Missing recovery input.");
         cancellationToken.ThrowIfCancellationRequested();
@@ -41,7 +58,8 @@ public static class SiteRecoveryBundle
         var registryLease = PrivateOwnerFile.AcquireLease(Path.Combine(applicationDirectory, "registry-writer.lock"));
         await using var registryLeaseLifetime = registryLease.ConfigureAwait(false);
         var registry = await RegistrySnapshot.CopyWithWritersStoppedAsync(applicationDirectory,
-            Path.Combine(workspace.StagingDirectory, "registry"), siteId, maximumRegistryBytes, expectedSha256: null, cancellationToken).ConfigureAwait(false);
+            Path.Combine(workspace.StagingDirectory, "registry"), siteId, maximumRegistryBytes, expectedSha256: null,
+            applicationCollectionPath is null ? null : new RegistrySnapshot.PolicySnapshotInput(applicationCollectionPath, Expected: null, allowCredentialEscrow), cancellationToken).ConfigureAwait(false);
         workspace.CreateDirectory("files");
         var receipts = new List<RecoveryFileReceipt>(inventory.Length);
         long total = 0;
@@ -53,12 +71,27 @@ public static class SiteRecoveryBundle
             total = checked(total + receipt.Bytes);
             receipts.Add(receipt);
         }
-        return await PublishAsync(workspace, destinationDirectory, new SiteRecoveryReceipt(1, registry, receipts), cancellationToken).ConfigureAwait(false);
+        return await PublishAsync(workspace, destinationDirectory, new SiteRecoveryReceipt(applicationCollectionPath is null ? 1 : 2, registry, receipts), cancellationToken).ConfigureAwait(false);
     }
 
-    public static async ValueTask<SiteRecoveryResult> RestoreAsync(string sourceDirectory, string destinationDirectory,
+    public static ValueTask<SiteRecoveryResult> RestoreAsync(string sourceDirectory, string destinationDirectory,
         string siteId, string expectedManifestSha256, long maximumRegistryBytes, long maximumFileBytes,
-        IReadOnlyList<RecoveryFileApproval> approvedFiles, bool allowCredentialEscrow, CancellationToken cancellationToken)
+        IReadOnlyList<RecoveryFileApproval> approvedFiles, bool allowCredentialEscrow, CancellationToken cancellationToken) =>
+        RestoreCoreAsync(sourceDirectory, destinationDirectory, siteId, expectedManifestSha256, maximumRegistryBytes, maximumFileBytes,
+            approvedFiles, allowCredentialEscrow, expectedSchemaVersion: null, cancellationToken);
+
+    public static ValueTask<SiteRecoveryResult> RestoreVersionedAsync(string sourceDirectory, string destinationDirectory,
+        string siteId, string expectedManifestSha256, long maximumRegistryBytes, long maximumFileBytes,
+        IReadOnlyList<RecoveryFileApproval> approvedFiles, bool allowCredentialEscrow, int expectedSchemaVersion, CancellationToken cancellationToken)
+    {
+        if (expectedSchemaVersion is not (1 or 2)) throw new InvalidDataException("Unsupported approved recovery schema.");
+        return RestoreCoreAsync(sourceDirectory, destinationDirectory, siteId, expectedManifestSha256, maximumRegistryBytes, maximumFileBytes,
+            approvedFiles, allowCredentialEscrow, expectedSchemaVersion, cancellationToken);
+    }
+
+    private static async ValueTask<SiteRecoveryResult> RestoreCoreAsync(string sourceDirectory, string destinationDirectory,
+        string siteId, string expectedManifestSha256, long maximumRegistryBytes, long maximumFileBytes,
+        IReadOnlyList<RecoveryFileApproval> approvedFiles, bool allowCredentialEscrow, int? expectedSchemaVersion, CancellationToken cancellationToken)
     {
         RegistryNames.RequireFingerprint(expectedManifestSha256);
         ValidateInventory(approvedFiles, allowCredentialEscrow, maximumFileBytes);
@@ -71,12 +104,17 @@ public static class SiteRecoveryBundle
         if (!string.Equals(Convert.ToHexString(SHA256.HashData(bytes)), expectedManifestSha256, StringComparison.Ordinal))
             throw new InvalidDataException("Recovery manifest differs from the caller's expected digest.");
         var manifest = JsonSerializer.Deserialize<SiteRecoveryReceipt>(bytes, JsonOptions) ?? throw new InvalidDataException("Missing recovery manifest.");
-        ValidateManifest(manifest, siteId, approvals);
-        RequireExactInventory(sourceDirectory, manifest.Files);
+        if (expectedSchemaVersion is { } expected && manifest.SchemaVersion != expected)
+            throw new InvalidDataException("Requested and recovered site schema differ.");
+        ValidateManifest(manifest, siteId, approvals, allowCredentialEscrow);
+        RequireExactInventory(sourceDirectory, manifest);
         RequireDestinationParent(destinationDirectory);
         using var workspace = PrivateSiteWorkspace.Create(destinationDirectory);
-        var registry = await RegistrySnapshot.RestoreAsync(Path.Combine(sourceDirectory, "registry"),
-            Path.Combine(workspace.StagingDirectory, "registry"), siteId, maximumRegistryBytes, manifest.Registry.DatabaseSha256, cancellationToken).ConfigureAwait(false);
+        var registry = manifest.SchemaVersion == 2
+            ? await RegistrySnapshot.RestoreProtectedAsync(Path.Combine(sourceDirectory, "registry"),
+                Path.Combine(workspace.StagingDirectory, "registry"), siteId, maximumRegistryBytes, manifest.Registry, allowCredentialEscrow, cancellationToken).ConfigureAwait(false)
+            : await RegistrySnapshot.RestoreAsync(Path.Combine(sourceDirectory, "registry"),
+                Path.Combine(workspace.StagingDirectory, "registry"), siteId, maximumRegistryBytes, manifest.Registry.DatabaseSha256, cancellationToken).ConfigureAwait(false);
         workspace.CreateDirectory("files");
         long total = 0;
         foreach (var entry in manifest.Files)
@@ -94,7 +132,7 @@ public static class SiteRecoveryBundle
         ArgumentNullException.ThrowIfNull(files);
         ArgumentOutOfRangeException.ThrowIfLessThan(maximumBytes, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(maximumBytes, (long)MaximumFiles * MaximumFileBytes);
-        if (files.Count is < 1 or > MaximumFiles) throw new InvalidDataException("Recovery requires a bounded explicit file inventory.");
+        if (files.Count > MaximumFiles) throw new InvalidDataException("Recovery requires a bounded explicit file inventory.");
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in files)
         {
@@ -114,13 +152,15 @@ public static class SiteRecoveryBundle
         }
     }
 
-    private static void ValidateManifest(SiteRecoveryReceipt manifest, string siteId, RecoveryFileApproval[] approvals)
+    private static void ValidateManifest(SiteRecoveryReceipt manifest, string siteId, RecoveryFileApproval[] approvals, bool allowCredentialEscrow)
     {
-        if (manifest.SchemaVersion != 1 || manifest.Registry is null || manifest.Files is null ||
+        if (manifest.SchemaVersion is not (1 or 2) || manifest.Registry is null || manifest.Files is null ||
             !string.Equals(manifest.Registry.SiteId, siteId, StringComparison.Ordinal) || manifest.Files.Count != approvals.Length)
         {
             throw new InvalidDataException("Recovery manifest identity or inventory differs from caller approval.");
         }
+        if (manifest.SchemaVersion == 1 ? manifest.Registry.PolicyEscrow is not null || manifest.Files.Count == 0 : manifest.Registry.PolicyEscrow is null || !allowCredentialEscrow)
+            throw new InvalidDataException("Recovery schema and policy escrow approval do not agree.");
         RegistryNames.RequireFingerprint(manifest.Registry.DatabaseSha256);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in manifest.Files)
@@ -134,15 +174,16 @@ public static class SiteRecoveryBundle
         }
     }
 
-    private static void RequireExactInventory(string source, IReadOnlyList<RecoveryFileReceipt> files)
+    private static void RequireExactInventory(string source, SiteRecoveryReceipt manifest)
     {
         PrivateOwnerFile.RequirePrivateDirectory(Path.Combine(source, "files"));
-        var expected = new HashSet<string>(files.Select(static file => file.Name), StringComparer.Ordinal);
+        var expected = new HashSet<string>(manifest.Files.Select(static file => file.Name), StringComparer.Ordinal);
         foreach (var entry in Directory.EnumerateFileSystemEntries(Path.Combine(source, "files")))
             if (!expected.Remove(Path.GetFileName(entry))) throw new InvalidDataException("Recovery contains an unexpected file.");
         if (expected.Count != 0) throw new InvalidDataException("Recovery is missing an approved file.");
         PrivateOwnerFile.RequirePrivateDirectory(Path.Combine(source, "registry"));
         var registryNames = new HashSet<string>(["registry.sqlite", "application.lock", "registry-writer.lock"], StringComparer.Ordinal);
+        if (manifest.SchemaVersion == 2) registryNames.Add("policy");
         foreach (var entry in Directory.EnumerateFileSystemEntries(Path.Combine(source, "registry")))
             if (!registryNames.Remove(Path.GetFileName(entry))) throw new InvalidDataException("Recovery registry contains an unexpected entry.");
         var rootNames = new HashSet<string>(["registry", "files", "manifest.json", "recovery.lock"], StringComparer.Ordinal);

@@ -1,6 +1,7 @@
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.DAL.Registry;
+using Mk8.Drava.Application.DAL.NoConf;
 using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Application.INF.Registry;
 using Mk8.Drava.Configuration;
@@ -23,11 +24,13 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
     public SignedRegistrationHandler Handler { get; }
     public ServingPlanState Plans { get; }
     public IPolicyRepository Policies => _repository;
+    public INoConfPolicySource ConfiguredPolicies { get; }
     public Mk8.Drava.Application.BLL.Dns.IDnsMutationJournal DnsJournal => _repository;
     public IAcmeCertificateStatusPersistence AcmeHistory(string domain, Uri directory) => new SqliteAcmeCertificateStatusPersistence(_repository, domain, directory);
 
     private RegistrationRuntime(SqliteRegistryRepository repository, LocalSiteCertificateAuthority authority, RegistryCoordinator registry,
-        EnrollmentVerifier verifier, SignedRegistrationHandler handler, ServingPlanState plans, RegisteredRelayConnector relay, X509Certificate2 relayRoot, X509Certificate2 relayController)
+        EnrollmentVerifier verifier, SignedRegistrationHandler handler, ServingPlanState plans, RegisteredRelayConnector relay, X509Certificate2 relayRoot, X509Certificate2 relayController,
+        INoConfPolicySource configuredPolicies)
     {
         _repository = repository;
         _authority = authority;
@@ -35,6 +38,7 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
         _verifier = verifier;
         Handler = handler;
         Plans = plans;
+        ConfiguredPolicies = configuredPolicies;
         Relay = relay; _relayRoot = relayRoot; _relayController = relayController;
     }
 
@@ -46,7 +50,8 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(availability);
         ArgumentNullException.ThrowIfNull(clock);
         var controller = bootstrap.Controller ?? throw new InvalidOperationException("Controller configuration is missing.");
-        SqliteRegistryRepository? repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, bootstrap.SiteId, cancellationToken).ConfigureAwait(false);
+        SqliteRegistryRepository? repository = await SqliteRegistryRepository.OpenAsync(bootstrap.StateDirectory, bootstrap.SiteId,
+            new PortablePolicyPayloadStore(role), cancellationToken).ConfigureAwait(false);
         LocalSiteCertificateAuthority? authority = null;
         RegistryCoordinator? registry = null;
         EnrollmentVerifier? verifier = null;
@@ -67,7 +72,8 @@ internal sealed class RegistrationRuntime : IAsyncDisposable
             relayController = authority.IssueController(bootstrap.SiteId, Guid.NewGuid().ToString("N"));
             relay = new RegisteredRelayConnector(bootstrap.SiteId, bootstrap.NodeId, registry, availability, relayController, relayRoot, clock,
                 RelayPolicyMapping.ToPolicy(controller.Relay));
-            var runtime = new RegistrationRuntime(repository, authority, registry, verifier, handler, plans, relay, relayRoot, relayController);
+            var runtime = new RegistrationRuntime(repository, authority, registry, verifier, handler, plans, relay, relayRoot, relayController,
+                new PortableNoConfPolicySource(role));
             (repository, authority, registry, verifier, relay, relayRoot, relayController, plans) = (null, null, null, null, null, null, null, null);
             return runtime;
         }

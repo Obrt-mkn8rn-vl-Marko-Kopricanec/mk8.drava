@@ -16,12 +16,16 @@ public sealed partial class SqliteRegistryRepository
     public ValueTask<IReadOnlyList<PolicyRevision>> ReadPolicyHistoryAsync(CancellationToken cancellationToken)
         => ReadPoliciesAsync(includeHistory: true, cancellationToken);
 
-    private async ValueTask<IReadOnlyList<PolicyRevision>> ReadPoliciesAsync(bool includeHistory, CancellationToken cancellationToken)
+    private ValueTask<IReadOnlyList<PolicyRevision>> ReadPoliciesAsync(bool includeHistory, CancellationToken cancellationToken) =>
+        _policySchema == 2 ? ReadReferencePoliciesAsync(includeHistory, cancellationToken) : ReadLegacyPoliciesAsync(includeHistory, cancellationToken);
+
+    private async ValueTask<IReadOnlyList<PolicyRevision>> ReadLegacyPoliciesAsync(bool includeHistory, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            using var command = _connection.CreateCommand();
+            var command = _connection.CreateCommand();
+            await using var commandLifetime = command.ConfigureAwait(false);
             command.CommandText = """
                 SELECT p.revision, h.revision, h.canonical, h.digest, h.at_utc, h.actor, h.source
                 FROM registry_state r JOIN policy_state p ON p.id=1
@@ -51,7 +55,7 @@ public sealed partial class SqliteRegistryRepository
                 var digest = (byte[])reader.GetValue(3);
                 if (bytes.Length is < 2 or > 256 * 1024 || digest.Length != 32 || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), digest))
                     throw new InvalidDataException("Policy integrity failed.");
-                history.Add(new PolicyRevision(reader.GetInt64(1), new UTF8Encoding(false, true).GetString(bytes),
+                history.Add(new PolicyRevision(reader.GetInt64(1), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes),
                     DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(4)), reader.GetString(5), reader.GetString(6)));
             } while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false));
             if (history.Count != Math.Min(head, includeHistory ? 64 : 1)) throw new InvalidDataException("Policy history is incomplete.");
@@ -67,19 +71,23 @@ public sealed partial class SqliteRegistryRepository
         ArgumentOutOfRangeException.ThrowIfNegative(expectedRegistryRevision);
         ArgumentNullException.ThrowIfNull(replacement);
         if (replacement.Revision != checked(expectedPolicyRevision + 1)) throw new InvalidDataException("Policy commit must advance one revision.");
+        if (_policySchema == 2)
+            return await CommitReferencePolicyAsync(expectedPolicyRevision, expectedRegistryRevision, replacement, cancellationToken).ConfigureAwait(false);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var transaction = (SqliteTransaction)await _connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             await using var transactionLifetime = transaction.ConfigureAwait(false);
             if (!await CheckPolicyAuthorityAsync(transaction, expectedPolicyRevision, expectedRegistryRevision, cancellationToken).ConfigureAwait(false)) return false;
-            using var update = _connection.CreateCommand();
+            var update = _connection.CreateCommand();
+            await using var updateLifetime = update.ConfigureAwait(false);
             update.Transaction = transaction;
             update.CommandText = "UPDATE policy_state SET revision=$next WHERE id=1 AND schema_version=1 AND revision=$previous";
             update.Parameters.AddWithValue("$next", replacement.Revision);
             update.Parameters.AddWithValue("$previous", expectedPolicyRevision);
             if (await update.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1) return false;
-            using var insert = _connection.CreateCommand();
+            var insert = _connection.CreateCommand();
+            await using var insertLifetime = insert.ConfigureAwait(false);
             insert.Transaction = transaction;
             insert.CommandText = """
                 INSERT INTO policy_revisions(revision, canonical, digest, at_utc, actor, source) VALUES($revision,$canonical,$digest,$at,$actor,$source);
@@ -101,7 +109,8 @@ public sealed partial class SqliteRegistryRepository
 
     private async ValueTask<bool> CheckPolicyAuthorityAsync(SqliteTransaction transaction, long expectedPolicyRevision, long expectedRegistryRevision, CancellationToken cancellationToken)
     {
-        using var authority = _connection.CreateCommand();
+        var authority = _connection.CreateCommand();
+        await using var authorityLifetime = authority.ConfigureAwait(false);
         authority.Transaction = transaction;
         authority.CommandText = """
             SELECT r.revision, p.revision, h.canonical, h.digest FROM registry_state r JOIN policy_state p ON p.id=1

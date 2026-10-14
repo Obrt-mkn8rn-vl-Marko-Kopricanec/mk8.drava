@@ -17,7 +17,7 @@ public sealed partial class NoConfReconciler
             EnsureBaseline();
             RequireAuthority();
             await LoadPolicyAsync(cancellationToken).ConfigureAwait(false);
-            var policy = _acceptedPolicy is { } accepted ? NoConfPolicyFile.Parse(accepted.CanonicalJson) : await NoConfPolicyFile.ReadAsync(_policyPath, cancellationToken).ConfigureAwait(false);
+            var policy = _acceptedPolicy is { } accepted ? NoConfPolicyFile.Parse(accepted.CanonicalJson) : await _policySource.ReadAsync(cancellationToken).ConfigureAwait(false) ?? new NoConfPolicy();
             var state = _registry.State;
             var candidate = _compiler.Compile(state, baseline, policy, _domain, _localNodeId);
             var snapshot = candidate.Snapshot.WithVersion(checked(_version + 1));

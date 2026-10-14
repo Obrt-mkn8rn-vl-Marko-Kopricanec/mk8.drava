@@ -4,10 +4,11 @@ using Mk8.Drava.Application.BLL.ControlPlane.Backup;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Installation;
 using Mk8.Drava.Application.DAL.Storage;
+using Mk8.Drava.Application.BLL.NoConf;
 
 namespace Mk8.Drava.Application.DAL.Registry;
 
-public static class RegistrySnapshot
+public static partial class RegistrySnapshot
 {
     public static ValueTask<RegistrySnapshotReceipt> CreateAsync(string sourceDirectory, string destinationDirectory,
         string siteId, long maximumBytes, CancellationToken cancellationToken) =>
@@ -20,8 +21,12 @@ public static class RegistrySnapshot
         return CopyAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expectedSha256, cancellationToken);
     }
 
+    private static ValueTask<RegistrySnapshotReceipt> CopyAsync(string sourceDirectory, string destinationDirectory,
+        string siteId, long maximumBytes, string? expectedSha256, CancellationToken cancellationToken) =>
+        CopyAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expectedSha256, policy: null, cancellationToken);
+
     private static async ValueTask<RegistrySnapshotReceipt> CopyAsync(string sourceDirectory, string destinationDirectory,
-        string siteId, long maximumBytes, string? expectedSha256, CancellationToken cancellationToken)
+        string siteId, long maximumBytes, string? expectedSha256, PolicySnapshotInput? policy, CancellationToken cancellationToken)
     {
         RegistryNames.RequireLabel(siteId);
         ArgumentOutOfRangeException.ThrowIfLessThan(maximumBytes, 4096);
@@ -32,12 +37,16 @@ public static class RegistrySnapshot
         await using var applicationLifetime = applicationLease.ConfigureAwait(false);
         var registryLease = PrivateOwnerFile.AcquireLease(Path.Combine(sourceDirectory, "registry-writer.lock"));
         await using var registryLifetime = registryLease.ConfigureAwait(false);
-        return await CopyWithWritersStoppedAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expectedSha256, cancellationToken).ConfigureAwait(false);
+        return await CopyWithWritersStoppedAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expectedSha256, policy, cancellationToken).ConfigureAwait(false);
     }
 
     // Both callers retain Application and registry writer leases through this operation.
+    internal static ValueTask<RegistrySnapshotReceipt> CopyWithWritersStoppedAsync(string sourceDirectory, string destinationDirectory,
+        string siteId, long maximumBytes, string? expectedSha256, CancellationToken cancellationToken) =>
+        CopyWithWritersStoppedAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expectedSha256, policy: null, cancellationToken);
+
     internal static async ValueTask<RegistrySnapshotReceipt> CopyWithWritersStoppedAsync(string sourceDirectory, string destinationDirectory,
-        string siteId, long maximumBytes, string? expectedSha256, CancellationToken cancellationToken)
+        string siteId, long maximumBytes, string? expectedSha256, PolicySnapshotInput? policy, CancellationToken cancellationToken)
     {
         RegistryNames.RequireLabel(siteId);
         ArgumentOutOfRangeException.ThrowIfLessThan(maximumBytes, 4096);
@@ -48,12 +57,19 @@ public static class RegistrySnapshot
         await using var sourceFile = PrivateOwnerFile.OpenRead(sourcePath).ConfigureAwait(false);
         RequireSidecars(sourcePath, maximumBytes, expectedSha256 is not null);
         if (expectedSha256 is not null) await RequireDigestAsync(sourcePath, maximumBytes, expectedSha256, cancellationToken).ConfigureAwait(false);
+        var payloads = policy is null ? null : await ReadPolicyInputAsync(sourceDirectory, siteId, policy, cancellationToken).ConfigureAwait(false);
         using var workspace = PrivateSiteWorkspace.Create(destinationDirectory);
         PrivateOwnerFile.RequirePrivateDirectory(Path.GetDirectoryName(destinationDirectory) ?? throw new InvalidDataException("Missing snapshot parent."));
         var targetPath = Path.Combine(workspace.StagingDirectory, "registry.sqlite");
         await CopyDatabaseAsync(sourcePath, targetPath, siteId, maximumBytes, cancellationToken).ConfigureAwait(false);
-        var receipt = await ValidateImageAsync(workspace.StagingDirectory, siteId, maximumBytes,
+        var validated = await ValidateImageAsync(workspace.StagingDirectory, siteId, maximumBytes, payloads,
             closeAuthority: expectedSha256 is not null, cancellationToken).ConfigureAwait(false);
+        var receipt = validated.Receipt;
+        if (payloads is not null)
+        {
+            RequireApprovedReferences(policy?.Expected, validated.History);
+            receipt = receipt with { PolicyEscrow = await ExportPolicyAsync(workspace, siteId, payloads, validated.History, cancellationToken).ConfigureAwait(false) };
+        }
         // Publication has one commit point. Cancellation after rename cannot retract a published image.
         cancellationToken.ThrowIfCancellationRequested();
         PrivateOwnerFile.SynchronizeDirectory(workspace.StagingDirectory);
@@ -151,18 +167,21 @@ public static class RegistrySnapshot
             throw new InvalidDataException("Registry snapshot schema or site authority differs from the caller.");
     }
 
-    private static async ValueTask<RegistrySnapshotReceipt> ValidateImageAsync(string directory, string siteId, long maximumBytes,
+    private static async ValueTask<ValidatedImage> ValidateImageAsync(string directory, string siteId, long maximumBytes, IPolicyPayloadStore? payloads,
         bool closeAuthority, CancellationToken cancellationToken)
     {
         long revision;
         long policyRevision;
-        var repository = await SqliteRegistryRepository.OpenAsync(directory, siteId, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<PolicyRevision> history;
+        var repository = payloads is null
+            ? await SqliteRegistryRepository.OpenAsync(directory, siteId, cancellationToken).ConfigureAwait(false)
+            : await SqliteRegistryRepository.OpenAsync(directory, siteId, payloads, cancellationToken).ConfigureAwait(false);
         await using (repository.ConfigureAwait(false))
         {
             var state = await repository.ReadAsync(cancellationToken).ConfigureAwait(false);
             revision = state.Revision;
             policyRevision = (await repository.ReadPolicyAsync(cancellationToken).ConfigureAwait(false))?.Revision ?? 0;
-            await repository.ReadPolicyHistoryAsync(cancellationToken).ConfigureAwait(false);
+            history = await repository.ReadPolicyHistoryAsync(cancellationToken).ConfigureAwait(false);
             await repository.ValidateBackupJournalsAsync(revision, cancellationToken).ConfigureAwait(false);
             if (closeAuthority)
             {
@@ -182,7 +201,7 @@ public static class RegistrySnapshot
         file.Position = 0;
         var digest = Convert.ToHexString(await SHA256.HashDataAsync(file, cancellationToken).ConfigureAwait(false));
         File.Delete(Path.Combine(directory, "registry-writer.lock"));
-        return new RegistrySnapshotReceipt(siteId, revision, policyRevision, file.Length, digest);
+        return new ValidatedImage(new RegistrySnapshotReceipt(siteId, revision, policyRevision, file.Length, digest), history);
     }
 
     private static async ValueTask SealImageAsync(string path, CancellationToken cancellationToken)
@@ -210,4 +229,6 @@ public static class RegistrySnapshot
 
     private static SqliteConnection Connection(string path, SqliteOpenMode mode) =>
         new(new SqliteConnectionStringBuilder { DataSource = path, Mode = mode, Pooling = false, DefaultTimeout = 2 }.ToString());
+
+    private sealed record ValidatedImage(RegistrySnapshotReceipt Receipt, IReadOnlyList<PolicyRevision> History);
 }

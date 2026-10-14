@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Mk8.Drava.Application.BLL.ControlPlane.Backup;
 using Mk8.Drava.Application.DAL.Installation;
 using Mk8.Drava.Application.DAL.Registry;
+using Mk8.Drava.Application.DAL.NoConf;
 using Mk8.Drava.Application.DAL.Storage;
 using Mk8.Drava.Configuration;
 
@@ -20,10 +21,19 @@ internal static class ConfiguredSiteRestore
         PrivateOwnerFile.RequirePrivateDirectory(Path.GetDirectoryName(request.DestinationDirectory) ?? throw new InvalidDataException("Missing restore parent."));
         using var workspace = PrivateSiteWorkspace.Create(request.DestinationDirectory);
         var recoveredPath = Path.Combine(workspace.StagingDirectory, "recovered");
-        var result = await SiteRecoveryBundle.RestoreAsync(request.SourceDirectory, recoveredPath, request.Application.SiteId,
+        var result = await SiteRecoveryBundle.RestoreVersionedAsync(request.SourceDirectory, recoveredPath, request.Application.SiteId,
             request.ExpectedManifestSha256, request.MaximumRegistryBytes, request.MaximumFileBytes,
-            request.ApprovedFiles, request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+            request.ApprovedFiles, request.AllowCredentialEscrow, request.SchemaVersion, cancellationToken).ConfigureAwait(false);
+        if (result.Receipt.SchemaVersion != request.SchemaVersion)
+            throw new InvalidDataException("Configured restore request and approved recovery schema differ.");
         Directory.Move(Path.Combine(recoveredPath, "registry"), Path.Combine(workspace.StagingDirectory, "application"));
+        PortablePolicyArchive? archive = null;
+        if (request.SchemaVersion == 2)
+        {
+            var policyDirectory = Path.Combine(workspace.StagingDirectory, "application", "policy");
+            archive = await PortablePolicyEscrow.LoadAsync(policyDirectory, request.Application.SiteId, request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+            Directory.Delete(policyDirectory, recursive: true);
+        }
         workspace.CreateDirectory("gateway");
         var directories = new HashSet<string>(StringComparer.Ordinal) { workspace.StagingDirectory, Path.Combine(workspace.StagingDirectory, "application"), Path.Combine(workspace.StagingDirectory, "gateway") };
         foreach (var file in result.Receipt.Files)
@@ -35,7 +45,7 @@ internal static class ConfiguredSiteRestore
             File.Move(Path.Combine(recoveredPath, "files", file.Name), target, overwrite: false);
         }
         Directory.Delete(recoveredPath, recursive: true);
-        var prepared = await WriteRoleDocumentsAsync(workspace, request, result, directories, cancellationToken).ConfigureAwait(false);
+        var prepared = await WriteRoleDocumentsAsync(workspace, request, result, archive, directories, cancellationToken).ConfigureAwait(false);
         foreach (var directory in directories.OrderByDescending(static path => path.Length)) PrivateOwnerFile.SynchronizeDirectory(directory);
         cancellationToken.ThrowIfCancellationRequested();
         workspace.Publish();
@@ -48,7 +58,7 @@ internal static class ConfiguredSiteRestore
     }
 
     private static async ValueTask<ConfiguredSiteRestoreResult> WriteRoleDocumentsAsync(PrivateSiteWorkspace workspace,
-        ConfiguredSiteRestoreRequest request, SiteRecoveryResult result, HashSet<string> directories, CancellationToken cancellationToken)
+        ConfiguredSiteRestoreRequest request, SiteRecoveryResult result, PortablePolicyArchive? archive, HashSet<string> directories, CancellationToken cancellationToken)
     {
         const string applicationDocument = "roles/application/Environment/.env";
         const string gatewayDocument = "roles/gateway/Environment/.env";
@@ -64,12 +74,26 @@ internal static class ConfiguredSiteRestore
         // Protect before recording bytes. Loading the published role must not change its receipt.
         var applicationPath = Path.Combine(workspace.StagingDirectory, applicationDocument);
         var gatewayPath = Path.Combine(workspace.StagingDirectory, gatewayDocument);
-        _ = await PortableConfiguration.LoadDocumentAsync<ApplicationBootstrap>(applicationPath, cancellationToken).ConfigureAwait(false);
+        var registryReceipt = result.Receipt.Registry;
+        var applicationRole = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(applicationPath, cancellationToken).ConfigureAwait(false);
+        await using (applicationRole.ConfigureAwait(false))
+        {
+            if (archive is not null)
+            {
+                var references = result.Receipt.Registry.PolicyEscrow?.References ?? throw new InvalidDataException("Recovered policy reference inventory is absent.");
+                var payloads = new PortablePolicyPayloadStore(applicationRole);
+                await payloads.RestoreAsync(archive, references, cancellationToken).ConfigureAwait(false);
+                registryReceipt = await RegistrySnapshot.ValidatePreparedProtectedAsync(Path.Combine(workspace.StagingDirectory, "application"),
+                    request.Application.SiteId, request.MaximumRegistryBytes,
+                    await payloads.ReadSnapshotAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+            }
+        }
         _ = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(gatewayPath, cancellationToken).ConfigureAwait(false);
         var applicationBytes = await File.ReadAllBytesAsync(applicationPath, cancellationToken).ConfigureAwait(false);
         var gatewayBytes = await File.ReadAllBytesAsync(gatewayPath, cancellationToken).ConfigureAwait(false);
-        var receipt = new ConfiguredSiteRestoreReceipt(1, request.ExpectedManifestSha256, result.Receipt.Registry,
-            result.Receipt.Files, request.Placements, Convert.ToHexString(SHA256.HashData(applicationBytes)), Convert.ToHexString(SHA256.HashData(gatewayBytes)));
+        var receipt = new ConfiguredSiteRestoreReceipt(request.SchemaVersion, request.ExpectedManifestSha256, registryReceipt,
+            result.Receipt.Files, request.Placements, Convert.ToHexString(SHA256.HashData(applicationBytes)), Convert.ToHexString(SHA256.HashData(gatewayBytes)))
+        { PolicyReferences = result.Receipt.Registry.PolicyEscrow?.References };
         var receiptBytes = Encoding.UTF8.GetBytes(BootstrapFile.Serialize(receipt));
         await workspace.WriteAsync("recovery.json", receiptBytes, cancellationToken).ConfigureAwait(false);
         foreach (var name in new[] { applicationDocument, gatewayDocument, "roles/application/Environment/.installation.key", "roles/gateway/Environment/.installation.key", "recovery.json" })
@@ -82,10 +106,10 @@ internal static class ConfiguredSiteRestore
 
     private static Dictionary<string, string> Validate(ConfiguredSiteRestoreRequest request)
     {
-        if (request.SchemaVersion != 1 || !Path.IsPathFullyQualified(request.DestinationDirectory) ||
+        if (request.SchemaVersion is not (1 or 2) || (request.SchemaVersion == 2 && !request.AllowCredentialEscrow) || !Path.IsPathFullyQualified(request.DestinationDirectory) ||
             !string.Equals(Path.GetFullPath(request.DestinationDirectory), request.DestinationDirectory, StringComparison.Ordinal))
         {
-            throw new InvalidDataException("Configured restore requires version1 and a canonical new destination.");
+            throw new InvalidDataException("Configured restore requires an approved supported schema and a canonical new destination.");
         }
         request.Application.Validate(); request.Gateway.Validate();
         var application = request.Application;
@@ -117,7 +141,7 @@ internal static class ConfiguredSiteRestore
 
     private static Dictionary<string, string> ValidatePlacements(ConfiguredSiteRestoreRequest request)
     {
-        if (request.Placements.Length is < 1 or > 128 || request.Placements.Length != request.ApprovedFiles.Length ||
+        if (request.Placements.Length > 128 || (request.Placements.Length == 0 && request.SchemaVersion == 1) || request.Placements.Length != request.ApprovedFiles.Length ||
             request.ApprovedFiles.Any(static file => file is null))
         {
             throw new InvalidDataException("Configured restore requires one placement per approved file.");

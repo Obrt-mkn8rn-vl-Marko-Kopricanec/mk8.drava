@@ -75,6 +75,9 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
     }
 
     public bool HasExited => _process.HasExited;
+    internal int ProcessId => _process.Id;
+    internal int? TerminationExitCode { get; private set; }
+    internal bool TerminatedByFixture { get; private set; }
 
     internal string PortableDocumentPath => Path.Combine(_outputDirectory
         ?? throw new InvalidOperationException("This fixture has no portable installation."), "Environment", ".env");
@@ -145,8 +148,13 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
     {
         try
         {
-            if (!_process.HasExited) _process.Kill(entireProcessTree: true);
+            if (!_process.HasExited)
+            {
+                _process.Kill(entireProcessTree: true);
+                TerminatedByFixture = true;
+            }
             await _process.WaitForExitAsync().ConfigureAwait(false);
+            TerminationExitCode = _process.ExitCode;
             await Task.WhenAll(_stdout, _stderr).ConfigureAwait(false);
             if (destinationDirectory is null) return null;
             Directory.CreateDirectory(destinationDirectory);

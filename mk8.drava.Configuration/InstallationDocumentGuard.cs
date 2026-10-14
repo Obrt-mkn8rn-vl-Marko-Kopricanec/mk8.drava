@@ -20,6 +20,16 @@ internal static partial class InstallationDocumentGuard
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Protected policy mutation requires the qualified Linux durability profile.");
     }
 
+    internal static void RequirePrivateDirectory(string path)
+    {
+        RequireDurabilitySupport();
+        if (!Path.IsPathFullyQualified(path) || !string.Equals(Path.GetFullPath(path), path, StringComparison.Ordinal))
+            throw new InvalidDataException("Protected policy environment requires a canonical absolute directory.");
+        for (var current = new DirectoryInfo(path); current is not null; current = current.Parent)
+            if (current.LinkTarget is not null) throw new InvalidDataException("Protected policy environment cannot traverse symbolic directories.");
+        using var directory = OpenDirectory(path);
+    }
+
     internal static void Synchronize(string path, long minimumBytes, long maximumBytes)
     {
         RequireDurabilitySupport();

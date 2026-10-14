@@ -1,6 +1,13 @@
 using System.Text.Json;
 using Mk8.Drava.CompatibilityTests;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
+using System.Globalization;
+
+if (args is ["--development-policy-crash", var policyDirectory])
+{
+    await DevelopmentPolicyCrash.RunAsync(policyDirectory).ConfigureAwait(false);
+    return;
+}
 
 if (args is ["--development-native-reference", var dataDirectory])
 {
@@ -33,7 +40,7 @@ if (options.ListCategories)
     foreach (var category in TestTaxonomy.Categories)
     {
         var count = tests.Count(test => test.Categories.Contains(category));
-        Console.WriteLine($"{category} {count}");
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{category} {count}"));
     }
 
     return;
@@ -60,13 +67,13 @@ if (options.CheckMetadata)
     foreach (var category in TestTaxonomy.Categories)
     {
         var count = tests.Count(test => test.Categories.Contains(category));
-        Console.WriteLine($"{category} {count}");
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{category} {count}"));
     }
 
     return;
 }
 
-var selectedTests = options.Categories.Count == 0 ? tests : tests.Where(test => test.Categories.Any(options.Categories.Contains)).ToArray();
+var selectedTests = options.Categories.Count == 0 ? tests : [.. tests.Where(test => test.Categories.Any(options.Categories.Contains))];
 if (selectedTests.Length == 0)
 {
     await Console.Error.WriteLineAsync($"No tests matched categories: {string.Join(", ", options.Categories)}").ConfigureAwait(false);
@@ -129,7 +136,7 @@ static void WriteCorrectnessSummary(TestRunOptions options, int totalTests, int 
         selectedTests,
         passedTests = selectedTests - failures,
         failedTests = failures,
-        failures = failureNames
+        failures = failureNames,
     };
     File.WriteAllText(options.SummaryFile, JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
 }
