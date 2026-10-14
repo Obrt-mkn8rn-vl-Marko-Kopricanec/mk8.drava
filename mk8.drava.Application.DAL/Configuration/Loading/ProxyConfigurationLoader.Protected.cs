@@ -182,7 +182,7 @@ public sealed partial class ProxyConfigurationLoader
         var bytes = input.CopyPfx();
         try
         {
-            var certificate = X509CertificateLoader.LoadPkcs12(bytes, password.AsSpan(), X509KeyStorageFlags.UserKeySet);
+            var certificate = X509CertificateLoader.LoadPkcs12(bytes, password.AsSpan(), X509KeyStorageFlags.EphemeralKeySet);
             if (certificate.HasPrivateKey) return certificate;
             certificate.Dispose();
             throw new InvalidDataException("Protected certificate has no private key.");

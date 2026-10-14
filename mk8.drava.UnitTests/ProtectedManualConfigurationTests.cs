@@ -126,6 +126,10 @@ public sealed partial class ProtectedManualConfigurationTests
         using var certificate = loaded.Snapshot.Certificates["site"].Certificate;
         Assert.Equal(material.Leaf.Thumbprint, certificate.Thumbprint);
         Assert.True(certificate.HasPrivateKey);
+        using var signer = certificate.GetECDsaPrivateKey() ?? throw new InvalidOperationException("Protected manual signing key is absent.");
+        using var verifier = material.Leaf.GetECDsaPublicKey() ?? throw new InvalidOperationException("Synthetic verification key is absent.");
+        var signature = signer.SignData("protected-manual-key"u8, HashAlgorithmName.SHA256);
+        Assert.True(verifier.VerifyData("protected-manual-key"u8, signature, HashAlgorithmName.SHA256));
         Assert.Equal("manual", UpstreamTrustConfigurationTests.Only(loaded.Snapshot.Routes).SiteName);
         Assert.Equal("site", UpstreamTrustConfigurationTests.Only(loaded.Snapshot.Listeners).DefaultCertificateId);
         Assert.False(Directory.Exists(Path.Combine(state.Path, "config")));
