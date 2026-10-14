@@ -15,7 +15,7 @@ public sealed class WindowsPrivateFileTests
     [WindowsFact]
     public void LeaseCreationIsPrivateExclusiveAndNeverTruncatesAnExistingFile()
     {
-        using var directory = new PrivateDirectory();
+        using var directory = new WindowsPrivateTestDirectory();
         var path = Path.Combine(directory.Path, "writer.lock");
         using (var writer = PrivateOwnerFile.AcquireLease(path))
         {
@@ -30,7 +30,7 @@ public sealed class WindowsPrivateFileTests
     [WindowsFact]
     public async Task BroadFileAccessRefusesProviderActivationWithoutCreatingAKeyAsync()
     {
-        using var directory = new PrivateDirectory();
+        using var directory = new WindowsPrivateTestDirectory();
         var path = Path.Combine(directory.Path, ".env");
         var bytes = Encoding.UTF8.GetBytes(PortableConfiguration.Serialize(new GatewayBootstrap { SiteId = "windows-fixture" }));
         var stream = WindowsPrivateFile.Open(path, lease: true);
@@ -53,7 +53,7 @@ public sealed class WindowsPrivateFileTests
     [WindowsFact]
     public void BroadParentAccessIsRefusedBeforeLeaseCreation()
     {
-        using var directory = new PrivateDirectory();
+        using var directory = new WindowsPrivateTestDirectory();
         var path = Path.Combine(directory.Path, "writer.lock");
         var info = new DirectoryInfo(directory.Path);
         var security = info.GetAccessControl();
@@ -66,7 +66,7 @@ public sealed class WindowsPrivateFileTests
     [WindowsFact]
     public void AlternateStreamsAliasesAndDevicesAreNeverOpenedAsPrivateFiles()
     {
-        using var directory = new PrivateDirectory();
+        using var directory = new WindowsPrivateTestDirectory();
         var path = Path.Combine(directory.Path, "absent");
         foreach (var alias in new[] { path + ":stream", path + ".", path + " ", "\\\\?\\" + path })
             Assert.Throws<InvalidDataException>(() => { using var writer = PrivateOwnerFile.AcquireLease(alias); });
@@ -79,7 +79,7 @@ public sealed class WindowsPrivateFileTests
     [WindowsFact]
     public async Task NewCertificateMaterialIsPrivateAndAnExistingDestinationIsNeverOverwrittenAsync()
     {
-        using var directory = new PrivateDirectory();
+        using var directory = new WindowsPrivateTestDirectory();
         var path = Path.Combine(directory.Path, "certificate.pfx");
         Assert.Throws<InvalidDataException>(() => PrivateCertificateFile.Read(path));
         var bytes = Enumerable.Repeat((byte)7, 128).ToArray();
@@ -90,22 +90,4 @@ public sealed class WindowsPrivateFileTests
         Assert.Equal([path], Directory.GetFiles(directory.Path));
     }
 
-    private sealed class PrivateDirectory : IDisposable
-    {
-        internal PrivateDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "drava-windows-private-" + Guid.NewGuid().ToString("N"));
-            using var identity = WindowsIdentity.GetCurrent();
-            var owner = identity.User ?? throw new InvalidOperationException("Windows fixture identity is missing.");
-            var security = new DirectorySecurity();
-            security.SetOwner(owner);
-            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-            security.AddAccessRule(new FileSystemAccessRule(owner, FileSystemRights.FullControl,
-                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-            new DirectoryInfo(Path).Create(security);
-        }
-
-        internal string Path { get; }
-        public void Dispose() => Directory.Delete(Path, recursive: true);
-    }
 }

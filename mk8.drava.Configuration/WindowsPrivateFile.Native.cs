@@ -7,6 +7,11 @@ namespace Mk8.Drava.Configuration;
 [SupportedOSPlatform("windows")]
 internal static partial class WindowsPrivateFile
 {
+    [LibraryImport("kernel32.dll", EntryPoint = "CreateDirectoryW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool CreateDirectoryNative(string path, nint security);
+
     [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static partial SafeFileHandle OpenNative(string path, uint access, uint share, nint security, uint disposition, uint flags, nint template);
