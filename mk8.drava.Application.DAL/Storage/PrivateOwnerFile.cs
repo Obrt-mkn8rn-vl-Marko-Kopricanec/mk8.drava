@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using Mk8.Drava.Application.DAL.Acme;
+using Mk8.Drava.Configuration;
 
 namespace Mk8.Drava.Application.DAL.Storage;
 
@@ -23,12 +24,8 @@ public static partial class PrivateOwnerFile
 
     private static FileStream Open(string path, bool lease)
     {
+        if (OperatingSystem.IsWindows()) return WindowsPrivateFile.Open(path, lease);
         PrivateCertificateFile.ValidatePath(path);
-        if (OperatingSystem.IsWindows())
-        {
-            return new FileStream(path, lease ? FileMode.OpenOrCreate : FileMode.Open, lease ? FileAccess.ReadWrite : FileAccess.Read,
-                lease ? FileShare.None : FileShare.Read);
-        }
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Private owner files require the qualified Windows or Linux profile.");
         return OpenLinux(path, lease);
     }

@@ -4,8 +4,8 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Mk8.Drava.Configuration;
 
-// Linux mechanically reuses the existing qualified private owner-file ABI. Windows retains its
-// existing filesystem trust profile with bounded reads; this does not certify Windows ACLs.
+// Linux reuses the qualified private owner-file ABI. Windows validates actual opened objects;
+// its initialization/durability/runtime qualification remains a separate acceptance gate.
 internal static partial class InstallationDocumentGuard
 {
     public static void Require(string path, long minimumBytes, long maximumBytes)
@@ -62,7 +62,7 @@ internal static partial class InstallationDocumentGuard
 
     private static FileStream Open(string path, string parent)
     {
-        if (OperatingSystem.IsWindows()) return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (OperatingSystem.IsWindows()) return WindowsPrivateFile.Open(path, lease: false);
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Portable collection requires the supported Linux or Windows file profile.");
         using var directory = OpenDirectory(parent);
         return OpenRelativeFile(path, directory);

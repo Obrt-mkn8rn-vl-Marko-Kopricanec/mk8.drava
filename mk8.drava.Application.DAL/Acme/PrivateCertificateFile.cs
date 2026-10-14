@@ -1,3 +1,5 @@
+using Mk8.Drava.Configuration;
+
 namespace Mk8.Drava.Application.DAL.Acme;
 
 public static class PrivateCertificateFile
@@ -13,6 +15,12 @@ public static class PrivateCertificateFile
 
     internal static byte[] ReadProtected(string path, int minimumBytes, int maximumBytes)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            ValidatePath(path);
+            if (!File.Exists(path)) throw new InvalidDataException("Private material is absent or invalid.");
+            return Storage.PrivateOwnerFile.Read(path, minimumBytes, maximumBytes);
+        }
         ValidatePath(path);
         if (!File.Exists(path)) throw new InvalidDataException("Private material is absent or invalid.");
         if (!OperatingSystem.IsWindows() && (File.GetUnixFileMode(path) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None)
@@ -40,7 +48,7 @@ public static class PrivateCertificateFile
         {
             var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None, Options = FileOptions.Asynchronous | FileOptions.WriteThrough };
             if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-            var stream = new FileStream(temporary, options);
+            var stream = OperatingSystem.IsWindows() ? WindowsPrivateFile.CreateNew(temporary) : new FileStream(temporary, options);
             await using (stream.ConfigureAwait(false))
             {
                 await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
@@ -53,6 +61,7 @@ public static class PrivateCertificateFile
 
     internal static void ValidatePath(string path)
     {
+        if (OperatingSystem.IsWindows()) WindowsPrivateFile.RequireParent(path);
         if (!Path.IsPathFullyQualified(path) || new FileInfo(path).LinkTarget is not null || !Directory.Exists(Path.GetDirectoryName(path)))
             throw new InvalidDataException("Certificate material requires a private absolute file path.");
         var parent = Path.GetDirectoryName(path)!;
@@ -60,6 +69,8 @@ public static class PrivateCertificateFile
             if (directory.LinkTarget is not null) throw new InvalidDataException("Private material cannot traverse a symbolic link.");
         if (!OperatingSystem.IsWindows() &&
             (File.GetUnixFileMode(parent) & (UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != UnixFileMode.None)
+        {
             throw new InvalidDataException("Certificate material directory must be private to its owner.");
+        }
     }
 }
