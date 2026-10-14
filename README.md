@@ -7,6 +7,11 @@ protected document and `.installation.key`. Production configuration has no
 command-line locator, process-environment override, development overlay or raw
 JSON/certificate-file fallback.
 
+Current Windows support is incomplete. Site initialization refuses Windows;
+protected policy storage and durable recovery require Linux. Creating Windows
+publish outputs does not enable these operations or establish Windows runtime
+compatibility.
+
 Publish Application and Gateway into separate output roots:
 
 ```sh
