@@ -14,12 +14,12 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
     private Task<string?>? _retirementTask;
     private string? _retainedDirectory;
 
-    public DevelopmentProcess(string assemblyPath, string bootstrapPath, string bootstrapOption = "--portable-service", IReadOnlyDictionary<string, string>? environment = null)
+    public DevelopmentProcess(string assemblyPath, string bootstrapPath, string bootstrapOption = "--portable-service", IReadOnlyDictionary<string, string>? environment = null, bool templateOnly = false)
     {
-        var portable = bootstrapOption is "--portable-service" or "--node-agent" or "--initialize-site";
+        var portable = bootstrapOption is "--portable-service" or "--node-agent" or "--initialize-site" or "--development-registration-sdk";
         if (portable)
         {
-            _outputDirectory = PrepareOutputRoot(assemblyPath, bootstrapPath);
+            _outputDirectory = PrepareOutputRoot(assemblyPath, bootstrapPath, templateOnly);
             assemblyPath = Path.Combine(_outputDirectory, Path.GetFileName(assemblyPath));
         }
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
@@ -45,7 +45,7 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
         _stderr = CaptureAsync(_process.StandardError);
     }
 
-    private static string PrepareOutputRoot(string assemblyPath, string documentPath)
+    private static string PrepareOutputRoot(string assemblyPath, string documentPath, bool templateOnly)
     {
         var root = Directory.CreateTempSubdirectory("drava_role_").FullName;
         try
@@ -62,7 +62,7 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
             }
             var environment = Directory.CreateDirectory(Path.Combine(root, "Environment")).FullName;
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(environment, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            File.Copy(documentPath, Path.Combine(environment, ".env"));
+            File.Copy(documentPath, Path.Combine(environment, templateOnly ? ".env.template" : ".env"));
             var key = Path.Combine(Path.GetDirectoryName(documentPath)!, ".installation.key");
             if (File.Exists(key)) File.Copy(key, Path.Combine(environment, ".installation.key"));
             return root;

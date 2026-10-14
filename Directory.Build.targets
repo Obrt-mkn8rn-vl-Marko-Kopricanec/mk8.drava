@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <DravaPackPortableTemplate Condition="'$(DravaPackPortableTemplate)' == ''">false</DravaPackPortableTemplate>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Update="Environment/**" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" Pack="false" />
+    <None Update="Environment/**" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" Pack="false" />
+    <None Update="Environment/.env.template" Pack="$(DravaPackPortableTemplate)" PackagePath="contentFiles/any/any/Environment/.env.template" PackageCopyToOutput="true" />
+  </ItemGroup>
+  <Target Name="DravaKeepOnlyBasePortableTemplate" AfterTargets="SupprocomSecretsDiscoverPortableTemplates">
+    <ItemGroup>
+      <SupprocomSecretsPortableTemplate Remove="@(SupprocomSecretsPortableTemplate)" Condition="'%(SupprocomSecretsPortableTemplate.Filename)%(SupprocomSecretsPortableTemplate.Extension)' != '.env.template'" />
+    </ItemGroup>
+  </Target>
+  <!-- Supprocom copies the nonsecret template. Active role documents and keys stay installation-local. -->
+  <Target Name="DravaKeepOnlyPortablePublishTemplates" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\', '/').ToUpperInvariant().StartsWith('ENVIRONMENT/')) and !$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\', '/').ToUpperInvariant().Equals('ENVIRONMENT/.ENV.TEMPLATE'))" />
+    </ItemGroup>
+  </Target>
+</Project>

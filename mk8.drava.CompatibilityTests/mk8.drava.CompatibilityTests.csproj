@@ -8,5 +8,6 @@
     <ProjectReference Include="../mk8.drava.Application.DAL/mk8.drava.Application.DAL.csproj" />
     <ProjectReference Include="../mk8.drava.Application.INF/mk8.drava.Application.INF.csproj" />
     <ProjectReference Include="../mk8.drava.Contracts/mk8.drava.Contracts.csproj" />
+    <ProjectReference Include="../mk8.drava.Registration/mk8.drava.Registration.csproj" />
   </ItemGroup>
 </Project>

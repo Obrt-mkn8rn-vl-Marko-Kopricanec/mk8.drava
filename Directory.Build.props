@@ -8,6 +8,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsPackable>false</IsPackable>
     <Deterministic>true</Deterministic>
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
     <Version>0.1.0-alpha.1</Version>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>

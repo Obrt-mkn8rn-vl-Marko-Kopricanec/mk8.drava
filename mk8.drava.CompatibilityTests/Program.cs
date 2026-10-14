@@ -3,6 +3,12 @@ using Mk8.Drava.CompatibilityTests;
 using Mk8.Drava.Application.BLL.Administration.ContractMapping;
 using System.Globalization;
 
+if (args is ["--development-registration-sdk"])
+{
+    await DevelopmentRegistrationSdk.RunAsync().ConfigureAwait(false);
+    return;
+}
+
 if (args is ["--development-policy-crash", var policyDirectory])
 {
     await DevelopmentPolicyCrash.RunAsync(policyDirectory).ConfigureAwait(false);

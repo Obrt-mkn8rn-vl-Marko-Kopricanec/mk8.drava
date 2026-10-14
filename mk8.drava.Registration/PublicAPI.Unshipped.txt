@@ -54,3 +54,5 @@ static Mk8.Drava.Registration.DravaRegistrationOptions.LoadEnrollmentAsync(strin
 static Mk8.Drava.Registration.DravaRegistrationOptions.FromEnrollment(Mk8.Drava.Configuration.NodeEnrollmentProfile! profile, string! serviceId, string! readinessPath) -> Mk8.Drava.Registration.DravaRegistrationOptions!
 Mk8.Drava.Registration.DravaRegistrationOptions.NodeAgentToken.get -> Mk8.Drava.Configuration.SecretText!
 Mk8.Drava.Registration.DravaRegistrationOptions.NodeAgentToken.init -> void
+static Mk8.Drava.Registration.DravaRegistrationOptions.LoadAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Mk8.Drava.Registration.DravaRegistrationOptions!>!
+static Mk8.Drava.Registration.DravaRegistrationExtensions.AddDravaRegistrationAsync(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.Extensions.DependencyInjection.IServiceCollection!>!

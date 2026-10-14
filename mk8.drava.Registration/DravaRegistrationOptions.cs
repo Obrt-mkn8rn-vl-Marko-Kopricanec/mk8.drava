@@ -25,6 +25,13 @@ public sealed record DravaRegistrationOptions
     public bool MulticastDiscovery { get; init; } = true;
     public IReadOnlyList<DiscoveryCandidate> GatewaySeeds { get; init; } = [];
 
+    /// <summary>Loads and validates the consuming application's installation-local protected registration settings.</summary>
+    public static async Task<DravaRegistrationOptions> LoadAsync(CancellationToken cancellationToken)
+    {
+        var options = await PortableConfiguration.LoadAsync<DravaRegistrationOptions>(cancellationToken).ConfigureAwait(false);
+        return options.CopyValidated();
+    }
+
     public static async Task<DravaRegistrationOptions> LoadEnrollmentAsync(string path, string serviceId, string readinessPath, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(serviceId);
