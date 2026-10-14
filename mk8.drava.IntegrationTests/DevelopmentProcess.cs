@@ -85,7 +85,7 @@ internal sealed class DevelopmentProcess : IAsyncDisposable
     public DevelopmentProcessMemory ReadMemory()
     {
         _process.Refresh();
-        return new DevelopmentProcessMemory(_process.Id, _process.WorkingSet64, _process.PrivateMemorySize64);
+        return new DevelopmentProcessMemory(_process.Id, _process.WorkingSet64, _process.PrivateMemorySize64, _process.PeakWorkingSet64);
     }
 
     public void ThrowIfExited()

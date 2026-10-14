@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -69,8 +70,8 @@ public sealed class IpcUploadCostProcessTests(ITestOutputHelper output)
             try { if (sampling is not null) await sampling.ConfigureAwait(true); }
             finally
             {
-                WriteEvidence(output, profile, duration.Elapsed.TotalMilliseconds, results, memory, Volatile.Read(ref originRequests));
-                if (proxy is not null) await proxy.DisposeAsync().ConfigureAwait(true);
+                try { WriteEvidence(output, profile, duration.Elapsed.TotalMilliseconds, results, memory, Volatile.Read(ref originRequests)); }
+                finally { if (proxy is not null) await proxy.DisposeAsync().ConfigureAwait(true); }
             }
         }
     }
@@ -145,11 +146,14 @@ public sealed class IpcUploadCostProcessTests(ITestOutputHelper output)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var value = proxy.ReadMemory();
-                samples.Enqueue(new MemorySample(Stopwatch.GetTimestamp(), value.Application, value.Gateway));
+                samples.Enqueue(new MemorySample(Stopwatch.GetTimestamp(), FinalSample: false, value.Application, value.Gateway));
                 await Task.Delay(25, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        // Join sampling before retirement and retain the final raw reading; Linux RSS/HWM accounting is approximate.
+        var final = proxy.ReadMemory();
+        samples.Enqueue(new MemorySample(Stopwatch.GetTimestamp(), FinalSample: true, final.Application, final.Gateway));
     }
 
     private static void WriteEvidence(ITestOutputHelper output, string profile, double elapsedMilliseconds,
@@ -159,18 +163,21 @@ public sealed class IpcUploadCostProcessTests(ITestOutputHelper output)
         double? Percentile(double fraction) => ordered.Length == 0 ? null : ordered[(int)Math.Ceiling(ordered.Length * fraction) - 1];
         var evidence = new
         {
-            SchemaVersion = 1, Profile = profile, ExpectedRequests = RequestCount, Concurrency, BodyBytes,
+            SchemaVersion = 2, Profile = profile, ExpectedRequests = RequestCount, Concurrency, BodyBytes,
             RequestDeadlineSeconds = 10, PhaseGuardSeconds = 120, WarmupRequests = 1, OriginRequests = originRequests,
             CompletedRequests = samples.Count, SuccessfulRequests = ordered.Length, FailedRequests = samples.Count - ordered.Length,
             ElapsedMilliseconds = elapsedMilliseconds,
             SuccessfulBytesPerSecond = elapsedMilliseconds > 0 ? ordered.Length * BodyBytes * 1000 / elapsedMilliseconds : (double?)null,
             P50Milliseconds = Percentile(.5), P95Milliseconds = Percentile(.95), P99Milliseconds = Percentile(.99),
+            OperatingSystem = RuntimeInformation.OSDescription, Runtime = RuntimeInformation.FrameworkDescription,
+            ProcessArchitecture = RuntimeInformation.ProcessArchitecture.ToString(), AvailableLogicalProcessors = Environment.ProcessorCount,
+            GcAvailableMemoryBytes = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes,
             Samples = samples.OrderBy(static value => value.Index).ToArray(), MemorySamples = memory.ToArray(), MemorySamplingMilliseconds = 25,
-            Qualification = "Shared development host; repeating32KiB pattern, plain HTTP1, one origin; sampled RSS/private bytes, no continuous peak/upper-bound, production SLA, arbitrary payload, pure-IPC isolation or historical-failure cause claim.",
+            Qualification = "Shared development host; repeating32KiB pattern, plain HTTP1, one origin. Raw System.Diagnostics.Process memory readings include startup/warmup; Linux VmRSS/VmData/VmHWM accounting is approximate and reported peaks are not assumed monotonic. Maxima across readings are observed counters, not exact lifetime peaks or memory upper-bounds. No production SLA, arbitrary payload, pure-IPC isolation, Windows qualification or historical-failure cause claim.",
         };
         output.WriteLine("ipc_upload_cost=" + JsonSerializer.Serialize(evidence));
     }
 
     private sealed record RequestSample(int Index, bool Succeeded, long? SerializedBytes, double ElapsedMilliseconds, string? Error);
-    private sealed record MemorySample(long Timestamp, DevelopmentProcessMemory Application, DevelopmentProcessMemory Gateway);
+    private sealed record MemorySample(long Timestamp, bool FinalSample, DevelopmentProcessMemory Application, DevelopmentProcessMemory Gateway);
 }
