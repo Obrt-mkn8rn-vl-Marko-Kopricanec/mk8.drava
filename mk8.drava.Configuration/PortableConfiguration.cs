@@ -40,18 +40,7 @@ public static class PortableConfiguration
         InstallationDocumentGuard.Require(path, 1, InstallationCollectionBounds.MaximumDocumentBytes);
         var keyPath = Path.Combine(file.DirectoryName!, ".installation.key");
         if (File.Exists(keyPath) || Directory.Exists(keyPath) || new FileInfo(keyPath).LinkTarget is not null) InstallationDocumentGuard.Require(keyPath, 32, 64);
-        var options = new SupprocomSecretsOptions
-        {
-            EnvironmentName = "Production",
-            FileOverridesProcessEnvironment = true,
-            StartupCancellationToken = cancellationToken,
-        };
-        options.File.Directory = file.DirectoryName;
-        options.File.ActiveName = file.Name;
-        options.File.Import = SecretFileImport.None;
-        options.File.Recovery = SecretFileRecovery.None;
-        options.File.Protection = SecretFileProtection.InstallationBoundAesGcm;
-        var store = new SupprocomSecretFileStore(options);
+        var store = CreateStore(path, cancellationToken);
         var snapshot = await store.LoadAsync(cancellationToken).ConfigureAwait(false);
         InstallationDocumentGuard.Require(path, 1, InstallationCollectionBounds.MaximumDocumentBytes);
         InstallationDocumentGuard.Require(keyPath, 32, 64);
@@ -60,6 +49,24 @@ public static class PortableConfiguration
             throw new InvalidDataException("The portable collection does not contain the requested role configuration.");
         cancellationToken.ThrowIfCancellationRequested();
         return new PortableRole<T>(BootstrapFile.Parse<T>(System.Text.Encoding.UTF8.GetBytes(value)), store, path, value, snapshot);
+    }
+
+    internal static SupprocomSecretFileStore CreateStore(string path, CancellationToken cancellationToken)
+    {
+        var options = new SupprocomSecretsOptions
+        {
+            EnvironmentName = "Production",
+            FileOverridesProcessEnvironment = true,
+            StartupCancellationToken = cancellationToken,
+        };
+        options.File.Directory = Path.GetDirectoryName(path);
+        options.File.ActiveName = Path.GetFileName(path);
+        // The provider otherwise activates a separate template if the checked active file disappears or becomes empty.
+        options.File.TemplateName = options.File.ActiveName;
+        options.File.Import = SecretFileImport.None;
+        options.File.Recovery = SecretFileRecovery.None;
+        options.File.Protection = SecretFileProtection.InstallationBoundAesGcm;
+        return new SupprocomSecretFileStore(options);
     }
 
     public static string Serialize<T>(T value) => SerializeDocument<T>(BootstrapFile.Serialize(value));

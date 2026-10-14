@@ -100,7 +100,7 @@ public static class PortablePolicyEscrow
                 await ownedFile.FlushAsync(cancellationToken).ConfigureAwait(false);
                 RandomAccess.FlushToDisk(ownedFile.SafeFileHandle);
             }
-            var store = CreateStore(path, cancellationToken);
+            var store = PortableConfiguration.CreateStore(path, cancellationToken);
             await store.LoadAsync(cancellationToken).ConfigureAwait(false);
             if (await store.GetStateAsync(CancellationToken.None).ConfigureAwait(false) != SecretFileProtectionState.Protected)
                 throw new InvalidDataException("Policy escrow protection did not complete.");
@@ -177,21 +177,7 @@ public static class PortablePolicyEscrow
         InstallationDocumentGuard.RequireDurabilitySupport();
         InstallationDocumentGuard.Require(path, 1, InstallationCollectionBounds.MaximumDocumentBytes);
         InstallationDocumentGuard.Require(Path.Combine(Path.GetDirectoryName(path) ?? throw new InvalidDataException("Policy collection parent is missing."), ".installation.key"), 32, 64);
-        return CreateStore(path, cancellationToken);
-    }
-
-    private static SupprocomSecretFileStore CreateStore(string path, CancellationToken cancellationToken)
-    {
-        var options = new SupprocomSecretsOptions
-        {
-            EnvironmentName = "Production", FileOverridesProcessEnvironment = true, StartupCancellationToken = cancellationToken,
-        };
-        options.File.Directory = Path.GetDirectoryName(path);
-        options.File.ActiveName = Path.GetFileName(path);
-        options.File.Import = SecretFileImport.None;
-        options.File.Recovery = SecretFileRecovery.None;
-        options.File.Protection = SecretFileProtection.InstallationBoundAesGcm;
-        return new SupprocomSecretFileStore(options);
+        return PortableConfiguration.CreateStore(path, cancellationToken);
     }
 
     private static void RequireNewEnvironment(string directory)
