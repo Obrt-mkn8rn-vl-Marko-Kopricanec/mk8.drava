@@ -132,7 +132,7 @@ public sealed class PortableRole<T> : IAsyncDisposable where T : class
         if (!_policyDocuments.Archive.IsEmpty) InstallationDocumentGuard.RequireDurabilitySupport();
         RequireDocuments();
         var encoded = BootstrapFile.Serialize(material);
-        await _store.UpdateDocumentAsync(settings => Transform(settings, MaterialKey, encoded), cancellationToken).ConfigureAwait(false);
+        await ProtectedConfigurationOperation.RunAsync(() => _store.UpdateDocumentAsync(settings => Transform(settings, MaterialKey, encoded), cancellationToken)).ConfigureAwait(false);
         RequireDocuments();
         if (!_policyDocuments.Archive.IsEmpty) SynchronizeDocuments();
         lock (_gate) { _encodedMaterial = encoded; _material = material; }
@@ -144,7 +144,7 @@ public sealed class PortableRole<T> : IAsyncDisposable where T : class
         if (!expected.Equals(_policyDocuments.Archive)) throw new InvalidDataException("Protected policy staging used a stale archive snapshot.");
         _archiveRefreshAllowed = false;
         RequireDocuments();
-        await _store.UpdateDocumentAsync(settings => Transform(settings, InstallationCollectionBounds.PolicyArchiveKey, replacement.Reveal()), cancellationToken).ConfigureAwait(false);
+        await ProtectedConfigurationOperation.RunAsync(() => _store.UpdateDocumentAsync(settings => Transform(settings, InstallationCollectionBounds.PolicyArchiveKey, replacement.Reveal()), cancellationToken)).ConfigureAwait(false);
         RequireDocuments();
         SynchronizeDocuments();
         lock (_gate)
@@ -159,7 +159,7 @@ public sealed class PortableRole<T> : IAsyncDisposable where T : class
     {
         if (_store is not ISecretStore reader) throw new InvalidOperationException("Protected role storage cannot refresh its document.");
         RequireDocuments();
-        var snapshot = await reader.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var snapshot = await ProtectedConfigurationOperation.RunAsync(() => reader.LoadAsync(cancellationToken)).ConfigureAwait(false);
         RequireDocuments();
         InstallationCollectionBounds.RequireSettings([.. snapshot.Select(static setting => new SupprocomSecretSetting(setting.Key, setting.Value))]);
         snapshot.TryGetValue(PortableConfiguration.Key<T>(), out var role);

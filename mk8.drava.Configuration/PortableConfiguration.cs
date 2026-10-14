@@ -26,7 +26,10 @@ public static class PortableConfiguration
         return role.Configuration;
     }
 
-    internal static async Task<PortableRole<T>> LoadRoleDocumentAsync<T>(string path, CancellationToken cancellationToken) where T : class
+    internal static Task<PortableRole<T>> LoadRoleDocumentAsync<T>(string path, CancellationToken cancellationToken) where T : class =>
+        ProtectedConfigurationOperation.RunAsync(() => LoadRoleCoreAsync<T>(path, cancellationToken));
+
+    private static async Task<PortableRole<T>> LoadRoleCoreAsync<T>(string path, CancellationToken cancellationToken) where T : class
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         cancellationToken.ThrowIfCancellationRequested();

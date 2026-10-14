@@ -19,7 +19,11 @@ public static class PortablePolicyEscrow
         return documents.PolicyArchive;
     }
 
-    public static async Task<PortableRuntimeDocuments> ReadApplicationRuntimeAsync(string collectionPath, string siteId,
+    public static Task<PortableRuntimeDocuments> ReadApplicationRuntimeAsync(string collectionPath, string siteId,
+        string stateDirectory, bool allowCredentialEscrow, CancellationToken cancellationToken) =>
+        ProtectedConfigurationOperation.RunAsync(() => ReadApplicationRuntimeCoreAsync(collectionPath, siteId, stateDirectory, allowCredentialEscrow, cancellationToken));
+
+    private static async Task<PortableRuntimeDocuments> ReadApplicationRuntimeCoreAsync(string collectionPath, string siteId,
         string stateDirectory, bool allowCredentialEscrow, CancellationToken cancellationToken)
     {
         if (!allowCredentialEscrow) throw new InvalidOperationException("Policy escrow requires explicit credential approval.");
@@ -51,7 +55,11 @@ public static class PortablePolicyEscrow
         return ExportCoreAsync(environmentDirectory, siteId, documents.PolicyArchive, documents.ManualConfiguration, allowCredentialEscrow, cancellationToken);
     }
 
-    private static async Task ExportCoreAsync(string environmentDirectory, string siteId, PortablePolicyArchive archive,
+    private static Task ExportCoreAsync(string environmentDirectory, string siteId, PortablePolicyArchive archive,
+        PortableManualConfigurationDocument? manual, bool allowCredentialEscrow, CancellationToken cancellationToken) =>
+        ProtectedConfigurationOperation.RunAsync(() => ExportProtectedCoreAsync(environmentDirectory, siteId, archive, manual, allowCredentialEscrow, cancellationToken));
+
+    private static async Task ExportProtectedCoreAsync(string environmentDirectory, string siteId, PortablePolicyArchive archive,
         PortableManualConfigurationDocument? manual, bool allowCredentialEscrow, CancellationToken cancellationToken)
     {
         if (!allowCredentialEscrow) throw new InvalidOperationException("Policy escrow requires explicit credential approval.");
@@ -118,7 +126,11 @@ public static class PortablePolicyEscrow
         bool allowCredentialEscrow, CancellationToken cancellationToken) =>
         LoadCoreAsync(environmentDirectory, siteId, includeManual: true, allowCredentialEscrow, cancellationToken);
 
-    private static async Task<PortableRuntimeDocuments> LoadCoreAsync(string environmentDirectory, string siteId,
+    private static Task<PortableRuntimeDocuments> LoadCoreAsync(string environmentDirectory, string siteId,
+        bool includeManual, bool allowCredentialEscrow, CancellationToken cancellationToken) =>
+        ProtectedConfigurationOperation.RunAsync(() => LoadProtectedCoreAsync(environmentDirectory, siteId, includeManual, allowCredentialEscrow, cancellationToken));
+
+    private static async Task<PortableRuntimeDocuments> LoadProtectedCoreAsync(string environmentDirectory, string siteId,
         bool includeManual, bool allowCredentialEscrow, CancellationToken cancellationToken)
     {
         if (!allowCredentialEscrow) throw new InvalidOperationException("Policy escrow requires explicit credential approval.");
