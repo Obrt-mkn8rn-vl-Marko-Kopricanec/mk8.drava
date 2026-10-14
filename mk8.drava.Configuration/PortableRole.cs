@@ -15,6 +15,7 @@ public sealed class PortableRole<T> : IAsyncDisposable where T : class
     private string? _encodedArchive;
     private SecretBytes _material;
     private PortablePolicyDocuments _policyDocuments;
+    private PortableManualConfigurationDocument _manualConfiguration;
     private bool _archiveRefreshAllowed = true;
     private bool _closing;
     private Task? _writeTask;
@@ -35,6 +36,8 @@ public sealed class PortableRole<T> : IAsyncDisposable where T : class
         snapshot.TryGetValue(InstallationCollectionBounds.PolicyArchiveKey, out _encodedArchive);
         snapshot.TryGetValue(InstallationCollectionBounds.PolicySourceKey, out var source);
         _policyDocuments = new PortablePolicyDocuments(source, _encodedArchive);
+        snapshot.TryGetValue(InstallationCollectionBounds.ManualSourceKey, out var manual);
+        _manualConfiguration = new PortableManualConfigurationDocument(manual ?? "");
         _synchronize = synchronize ?? InstallationDocumentGuard.Synchronize;
         _mutations = new PortableRoleMutationQueue();
     }
@@ -70,6 +73,32 @@ public sealed class PortableRole<T> : IAsyncDisposable where T : class
             ObjectDisposedException.ThrowIf(_closing, this);
             return _policyDocuments;
         }
+    }
+
+    public PortableManualConfigurationDocument ReadManualConfiguration()
+    {
+        RequirePolicyRole();
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_closing, this);
+            return _manualConfiguration;
+        }
+    }
+
+    public ValueTask<PortableManualConfigurationDocument> RefreshManualConfigurationAsync(CancellationToken cancellationToken)
+    {
+        RequirePolicyRole();
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_closing, this);
+            return new ValueTask<PortableManualConfigurationDocument>(_mutations.EnqueueAsync(RefreshManualCoreAsync, cancellationToken));
+        }
+    }
+
+    private async Task<PortableManualConfigurationDocument> RefreshManualCoreAsync(CancellationToken cancellationToken)
+    {
+        await RefreshPolicyCoreAsync(cancellationToken).ConfigureAwait(false);
+        lock (_gate) return _manualConfiguration;
     }
 
     // Acquire Application writer ownership before the first refresh. Later refreshes only adopt configured source.
@@ -143,7 +172,9 @@ public sealed class PortableRole<T> : IAsyncDisposable where T : class
         }
         snapshot.TryGetValue(InstallationCollectionBounds.PolicySourceKey, out var source);
         var documents = new PortablePolicyDocuments(source, archive);
-        lock (_gate) { _encodedArchive = archive; _policyDocuments = documents; }
+        snapshot.TryGetValue(InstallationCollectionBounds.ManualSourceKey, out var manual);
+        var manualConfiguration = new PortableManualConfigurationDocument(manual ?? "");
+        lock (_gate) { _encodedArchive = archive; _policyDocuments = documents; _manualConfiguration = manualConfiguration; }
         _archiveRefreshAllowed = false;
         return documents;
     }

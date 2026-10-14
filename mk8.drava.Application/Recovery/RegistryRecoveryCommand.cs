@@ -14,12 +14,12 @@ internal static class RegistryRecoveryCommand
         var restoring = string.Equals(args[0], "--registry-restore", StringComparison.Ordinal);
         if (args.Length != 1) throw new ArgumentException("Registry recovery settings come only from the installation-local Supprocom collection.", nameof(args));
         var request = await PortableConfiguration.LoadAsync<RegistryRecoveryRequest>(cancellationToken).ConfigureAwait(false);
-        if (request.SchemaVersion is not (1 or 2) || (!restoring && request.ExpectedImageSha256.Length != 0))
+        if (request.SchemaVersion is not (1 or 2 or 3) || (!restoring && request.ExpectedImageSha256.Length != 0))
             throw new InvalidDataException("Unsupported or mixed registry recovery request.");
         if (request.SchemaVersion == 1 && (request.ApplicationCollectionPath.Length != 0 || request.AllowCredentialEscrow || request.ExpectedProtectedImage is not null))
             throw new InvalidDataException("Legacy registry recovery cannot include policy escrow inputs.");
         RegistrySnapshotReceipt receipt;
-        if (request.SchemaVersion == 2)
+        if (request.SchemaVersion >= 2)
         {
             if (!request.AllowCredentialEscrow || request.ExpectedImageSha256.Length != 0 ||
                 (restoring ? request.ApplicationCollectionPath.Length != 0 || request.ExpectedProtectedImage is null : request.ApplicationCollectionPath.Length == 0 || request.ExpectedProtectedImage is not null))
@@ -27,7 +27,13 @@ internal static class RegistryRecoveryCommand
                 throw new InvalidDataException("Protected registry recovery requires explicit, operation-specific escrow inputs.");
             }
 
-            receipt = restoring
+            receipt = request.SchemaVersion == 3
+                ? restoring
+                ? await RegistrySnapshot.RestoreRuntimeAsync(request.SourceDirectory, request.DestinationDirectory, request.SiteId, request.MaximumBytes,
+                    request.ExpectedProtectedImage ?? throw new InvalidDataException("Approved runtime receipt is absent."), request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false)
+                : await RegistrySnapshot.CreateRuntimeAsync(request.SourceDirectory, request.DestinationDirectory, request.SiteId, request.MaximumBytes,
+                    request.ApplicationCollectionPath, request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false)
+                : restoring
                 ? await RegistrySnapshot.RestoreProtectedAsync(request.SourceDirectory, request.DestinationDirectory, request.SiteId, request.MaximumBytes,
                     request.ExpectedProtectedImage ?? throw new InvalidDataException("Approved registry receipt is absent."), request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false)
                 : await RegistrySnapshot.CreateProtectedAsync(request.SourceDirectory, request.DestinationDirectory, request.SiteId, request.MaximumBytes,

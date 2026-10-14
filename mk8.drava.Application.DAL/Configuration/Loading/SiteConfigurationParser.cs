@@ -17,6 +17,10 @@ public sealed class SiteConfigurationParser
     {
         WriteIndented = true,
     };
+    private static readonly JsonSerializerOptions ProtectedReadJsonOptions = new(ReadJsonOptions)
+    {
+        RespectNullableAnnotations = true,
+    };
     private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder().WithDuplicateKeyChecking().WithAttemptingUnquotedStringTypeDeserialization().Build();
     private static readonly ISerializer YamlJsonSerializer = new SerializerBuilder().JsonCompatible().Build();
     public async ValueTask<SiteOptions?> ReadSiteFileAsync(string path, SiteConfigurationFormat format, CancellationToken cancellationToken)
@@ -38,6 +42,32 @@ public sealed class SiteConfigurationParser
     {
         var site = ReadSiteText(text, format) ?? throw new JsonException("Site configuration did not contain a JSON object.");
         return JsonSerializer.Serialize(site, WriteJsonOptions);
+    }
+
+    internal static SiteOptions? ReadProtectedSiteText(string text, SiteConfigurationFormat format)
+    {
+        var json = format == SiteConfigurationFormat.Json ? text : ConvertYamlToJson(text);
+        RejectRemovedHttp3Properties(json);
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        RejectNullCollectionMembers(document.RootElement);
+        return JsonSerializer.Deserialize<SiteOptions>(json, ProtectedReadJsonOptions);
+    }
+
+    // Nullable annotations cover properties; the serializer does not enforce collection element annotations.
+    private static void RejectNullCollectionMembers(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.Null) throw new JsonException("Protected site collection contains an absent member.");
+                RejectNullCollectionMembers(item);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject()) RejectNullCollectionMembers(property.Value);
+        }
     }
 
     private static string ConvertYamlToJson(string yaml)

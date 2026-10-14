@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Data.Sqlite;
 using Mk8.Drava.Application.BLL.ControlPlane.Backup;
 using Mk8.Drava.Application.BLL.NoConf;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.DAL.Installation;
 using Mk8.Drava.Application.DAL.NoConf;
+using Mk8.Drava.Application.DAL.Configuration.Loading;
 using Mk8.Drava.Application.DAL.Storage;
 using Mk8.Drava.Configuration;
 
@@ -26,14 +28,32 @@ public static partial class RegistrySnapshot
 
     public static ValueTask<RegistrySnapshotReceipt> RestoreProtectedAsync(string sourceDirectory, string destinationDirectory,
         string siteId, long maximumBytes, RegistrySnapshotReceipt expected, bool allowCredentialEscrow, CancellationToken cancellationToken)
+        => RestoreProtectedCoreAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expected, includeManual: false, allowCredentialEscrow, cancellationToken);
+
+    public static ValueTask<RegistrySnapshotReceipt> CreateRuntimeAsync(string sourceDirectory, string destinationDirectory,
+        string siteId, long maximumBytes, string applicationCollectionPath, bool allowCredentialEscrow, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(applicationCollectionPath);
+        RequirePolicyApproval(allowCredentialEscrow);
+        return CopyAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expectedSha256: null,
+            new PolicySnapshotInput(applicationCollectionPath, Expected: null, allowCredentialEscrow, IncludeManual: true), cancellationToken);
+    }
+
+    public static ValueTask<RegistrySnapshotReceipt> RestoreRuntimeAsync(string sourceDirectory, string destinationDirectory,
+        string siteId, long maximumBytes, RegistrySnapshotReceipt expected, bool allowCredentialEscrow, CancellationToken cancellationToken)
+        => RestoreProtectedCoreAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expected, includeManual: true, allowCredentialEscrow, cancellationToken);
+
+    private static ValueTask<RegistrySnapshotReceipt> RestoreProtectedCoreAsync(string sourceDirectory, string destinationDirectory,
+        string siteId, long maximumBytes, RegistrySnapshotReceipt expected, bool includeManual, bool allowCredentialEscrow, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(expected);
         RequirePolicyApproval(allowCredentialEscrow);
         RequirePolicyReceipt(expected, siteId);
         var escrow = expected.PolicyEscrow ?? throw new InvalidDataException("Policy restore requires approved escrow.");
+        if (escrow.SchemaVersion != (includeManual ? 2 : 1)) throw new InvalidDataException("Requested runtime inputs and approved escrow schema differ.");
         var approved = expected with { PolicyEscrow = escrow with { References = Array.AsReadOnly(escrow.References.ToArray()) } };
         return CopyAsync(sourceDirectory, destinationDirectory, siteId, maximumBytes, expected.DatabaseSha256,
-            new PolicySnapshotInput(CollectionPath: null, approved, allowCredentialEscrow), cancellationToken);
+            new PolicySnapshotInput(CollectionPath: null, approved, allowCredentialEscrow, includeManual), cancellationToken);
     }
 
     // The caller owns a private, unpublished workspace and its freshly protected Application role.
@@ -55,6 +75,53 @@ public static partial class RegistrySnapshot
     {
         RequirePolicyApproval(input.AllowCredentialEscrow);
         await RequireReferenceImageAsync(sourceDirectory, cancellationToken).ConfigureAwait(false);
+        await RequireApprovedAuthorityAsync(sourceDirectory, siteId, input, cancellationToken).ConfigureAwait(false);
+        PortablePolicyArchive archive;
+        PortableManualConfigurationDocument? manual = null;
+        if (input.CollectionPath is { } collectionPath)
+        {
+            if (input.IncludeManual)
+            {
+                var documents = await PortablePolicyEscrow.ReadApplicationRuntimeAsync(collectionPath, siteId, sourceDirectory,
+                    input.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+                archive = documents.PolicyArchive;
+                manual = documents.ManualConfiguration;
+            }
+            else
+            {
+                archive = await PortablePolicyEscrow.ReadApplicationArchiveAsync(collectionPath, siteId, sourceDirectory,
+                input.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            var expected = input.Expected ?? throw new InvalidDataException("Policy restore requires an approved receipt.");
+            var escrow = expected.PolicyEscrow ?? throw new InvalidDataException("Approved policy escrow is absent.");
+            var environment = Path.Combine(sourceDirectory, "policy");
+            RequirePolicyInventory(environment);
+            await RequirePolicyFileAsync(Path.Combine(environment, ".env"), escrow.ArchiveBytes, escrow.ArchiveSha256, MaximumPolicyCollectionBytes, cancellationToken).ConfigureAwait(false);
+            await RequirePolicyFileAsync(Path.Combine(environment, ".installation.key"), escrow.KeyBytes, escrow.KeySha256, 64, cancellationToken).ConfigureAwait(false);
+            var database = new FileInfo(Path.Combine(sourceDirectory, "registry.sqlite"));
+            if (database.Length != expected.DatabaseBytes) throw new InvalidDataException("Protected registry image length differs from its approved receipt.");
+            if (input.IncludeManual)
+            {
+                var documents = await PortablePolicyEscrow.LoadRuntimeAsync(environment, siteId, input.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+                archive = documents.PolicyArchive;
+                manual = documents.ManualConfiguration;
+                if (DescribeManual(manual) != escrow.ManualConfiguration) throw new InvalidDataException("Protected manual input differs from its approved receipt.");
+            }
+            else
+            {
+                archive = await PortablePolicyEscrow.LoadAsync(environment, siteId, input.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        if (manual is not null) PortableManualConfigurationSource.ValidateDocument(manual, siteId);
+        return new CapturedPolicyStore(PortablePolicyArchiveCodec.Read(archive, siteId), manual);
+    }
+
+    private static async Task RequireApprovedAuthorityAsync(string sourceDirectory, string siteId,
+        PolicySnapshotInput input, CancellationToken cancellationToken)
+    {
         var connection = Connection(Path.Combine(sourceDirectory, "registry.sqlite"), SqliteOpenMode.ReadOnly);
         await using (connection.ConfigureAwait(false))
         {
@@ -71,25 +138,6 @@ public static partial class RegistrySnapshot
                     throw new InvalidDataException("Protected registry image authority differs from its approved receipt.");
             }
         }
-        PortablePolicyArchive archive;
-        if (input.CollectionPath is { } collectionPath)
-        {
-            archive = await PortablePolicyEscrow.ReadApplicationArchiveAsync(collectionPath, siteId, sourceDirectory,
-                input.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            var expected = input.Expected ?? throw new InvalidDataException("Policy restore requires an approved receipt.");
-            var escrow = expected.PolicyEscrow ?? throw new InvalidDataException("Approved policy escrow is absent.");
-            var environment = Path.Combine(sourceDirectory, "policy");
-            RequirePolicyInventory(environment);
-            await RequirePolicyFileAsync(Path.Combine(environment, ".env"), escrow.ArchiveBytes, escrow.ArchiveSha256, MaximumPolicyCollectionBytes, cancellationToken).ConfigureAwait(false);
-            await RequirePolicyFileAsync(Path.Combine(environment, ".installation.key"), escrow.KeyBytes, escrow.KeySha256, 64, cancellationToken).ConfigureAwait(false);
-            var database = new FileInfo(Path.Combine(sourceDirectory, "registry.sqlite"));
-            if (database.Length != expected.DatabaseBytes) throw new InvalidDataException("Protected registry image length differs from its approved receipt.");
-            archive = await PortablePolicyEscrow.LoadAsync(environment, siteId, input.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
-        }
-        return new CapturedPolicyStore(PortablePolicyArchiveCodec.Read(archive, siteId));
     }
 
     private static async Task RequireReferenceImageAsync(string directory, CancellationToken cancellationToken)
@@ -116,10 +164,13 @@ public static partial class RegistrySnapshot
         foreach (var reference in references) payloads.TryAdd(reference.Digest, store.Snapshot.Resolve(reference));
         var archive = PortablePolicyArchiveCodec.Encode(new PolicyPayloadSnapshot(siteId, payloads));
         var environment = workspace.CreateDirectory("policy");
-        await PortablePolicyEscrow.ExportAsync(environment, siteId, archive, allowCredentialEscrow: true, cancellationToken).ConfigureAwait(false);
+        if (store.ManualConfiguration is { } manual)
+            await PortablePolicyEscrow.ExportRuntimeAsync(environment, siteId, new PortableRuntimeDocuments(archive, manual), allowCredentialEscrow: true, cancellationToken).ConfigureAwait(false);
+        else await PortablePolicyEscrow.ExportAsync(environment, siteId, archive, allowCredentialEscrow: true, cancellationToken).ConfigureAwait(false);
         var (collectionBytes, collectionSha256) = await DescribePolicyFileAsync(Path.Combine(environment, ".env"), cancellationToken).ConfigureAwait(false);
         var (keyBytes, keySha256) = await DescribePolicyFileAsync(Path.Combine(environment, ".installation.key"), cancellationToken).ConfigureAwait(false);
-        return new PolicyEscrowReceipt(1, collectionBytes, collectionSha256, keyBytes, keySha256, Array.AsReadOnly(references));
+        return new PolicyEscrowReceipt(store.ManualConfiguration is null ? 1 : 2, collectionBytes, collectionSha256, keyBytes, keySha256, Array.AsReadOnly(references))
+        { ManualConfiguration = store.ManualConfiguration is { } input ? DescribeManual(input) : null };
     }
 
     private static void RequirePolicyReceipt(RegistrySnapshotReceipt expected, string siteId)
@@ -128,7 +179,7 @@ public static partial class RegistrySnapshot
             throw new InvalidDataException("Protected registry receipt authority is invalid.");
         RegistryNames.RequireFingerprint(expected.DatabaseSha256);
         var policy = expected.PolicyEscrow;
-        if (policy is null || policy.SchemaVersion != 1 || policy.ArchiveBytes is < 1 or > MaximumPolicyCollectionBytes
+        if (policy is null || policy.SchemaVersion is not (1 or 2) || policy.ArchiveBytes is < 1 or > MaximumPolicyCollectionBytes
             || policy.KeyBytes is < 32 or > 64 || policy.References is null || policy.References.Count != Math.Min(expected.PolicyRevision, 64))
         {
             throw new InvalidDataException("Protected policy receipt schema or bounds are invalid.");
@@ -136,6 +187,13 @@ public static partial class RegistrySnapshot
 
         RegistryNames.RequireFingerprint(policy.ArchiveSha256);
         RegistryNames.RequireFingerprint(policy.KeySha256);
+        if (policy.SchemaVersion == 1 ? policy.ManualConfiguration is not null : policy.ManualConfiguration is null)
+            throw new InvalidDataException("Runtime recovery schema and manual input receipt differ.");
+        if (policy.ManualConfiguration is { } manual)
+        {
+            if (manual.Utf8Bytes is < 0 or > 4 * 1024 * 1024) throw new InvalidDataException("Protected manual receipt exceeds its document bound.");
+            RegistryNames.RequireFingerprint(manual.Sha256);
+        }
         foreach (var reference in policy.References)
         {
             if (reference is null) throw new InvalidDataException("Protected policy receipt contains an absent reference.");
@@ -181,11 +239,19 @@ public static partial class RegistrySnapshot
         if (!allowCredentialEscrow) throw new InvalidOperationException("Protected policy recovery requires explicit credential escrow approval.");
     }
 
-    internal sealed record PolicySnapshotInput(string? CollectionPath, RegistrySnapshotReceipt? Expected, bool AllowCredentialEscrow);
+    private static ManualConfigurationReceipt DescribeManual(PortableManualConfigurationDocument document)
+    {
+        var bytes = Encoding.UTF8.GetBytes(document.Reveal());
+        try { return new ManualConfigurationReceipt(bytes.Length, Convert.ToHexString(SHA256.HashData(bytes))); }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
 
-    private sealed class CapturedPolicyStore(PolicyPayloadSnapshot snapshot) : IPolicyPayloadStore
+    internal sealed record PolicySnapshotInput(string? CollectionPath, RegistrySnapshotReceipt? Expected, bool AllowCredentialEscrow, bool IncludeManual = false);
+
+    private sealed class CapturedPolicyStore(PolicyPayloadSnapshot snapshot, PortableManualConfigurationDocument? manual = null) : IPolicyPayloadStore
     {
         internal PolicyPayloadSnapshot Snapshot { get; } = snapshot;
+        internal PortableManualConfigurationDocument? ManualConfiguration { get; } = manual;
 
         public ValueTask<PolicyPayloadSnapshot> ReadSnapshotAsync(CancellationToken cancellationToken)
         {

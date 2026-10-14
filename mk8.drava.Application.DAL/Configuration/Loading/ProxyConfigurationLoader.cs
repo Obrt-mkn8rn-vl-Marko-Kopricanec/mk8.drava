@@ -12,8 +12,17 @@ namespace Mk8.Drava.Application.DAL.Configuration.Loading;
 public sealed partial class ProxyConfigurationLoader(IMdravaDataDirectoryProvider dataDirectoryProvider, ProxyDataDirectoryBootstrapper bootstrapper,
     SiteConfigurationParser siteParser, IProxyAdminUrlPolicy adminUrlPolicy, IProxyEndpointAddressPolicy endpointAddressPolicy,
     IProxyRelativeStoragePathPolicy relativeStoragePathPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy, IProxyTrustedProxyPolicy trustedProxyPolicy,
-    ILogger<ProxyConfigurationLoader> logger, TimeProvider timeProvider, IUpstreamTrustMaterialSource? upstreamTrust = null) : IProxyConfigurationLoader, IProxyRestoreConfigurationValidator
+    ILogger<ProxyConfigurationLoader> logger, TimeProvider timeProvider, IUpstreamTrustMaterialSource? upstreamTrust,
+    IProxyManualConfigurationSource? manualSource) : IProxyConfigurationLoader, IProxyRestoreConfigurationValidator
 {
+    public ProxyConfigurationLoader(IMdravaDataDirectoryProvider dataDirectoryProvider, ProxyDataDirectoryBootstrapper bootstrapper,
+        SiteConfigurationParser siteParser, IProxyAdminUrlPolicy adminUrlPolicy, IProxyEndpointAddressPolicy endpointAddressPolicy,
+        IProxyRelativeStoragePathPolicy relativeStoragePathPolicy, IProxyUrlSyntaxPolicy urlSyntaxPolicy, IProxyTrustedProxyPolicy trustedProxyPolicy,
+        ILogger<ProxyConfigurationLoader> logger, TimeProvider timeProvider, IUpstreamTrustMaterialSource? upstreamTrust = null)
+        : this(dataDirectoryProvider, bootstrapper, siteParser, adminUrlPolicy, endpointAddressPolicy, relativeStoragePathPolicy,
+            urlSyntaxPolicy, trustedProxyPolicy, logger, timeProvider, upstreamTrust, manualSource: null)
+    {
+    }
     private readonly IMdravaDataDirectoryProvider _dataDirectoryProvider = dataDirectoryProvider;
     private readonly ProxyDataDirectoryBootstrapper _bootstrapper = bootstrapper;
     private readonly SiteConfigurationParser _siteParser = siteParser;
@@ -24,6 +33,7 @@ public sealed partial class ProxyConfigurationLoader(IMdravaDataDirectoryProvide
     private readonly IProxyTrustedProxyPolicy _trustedProxyPolicy = trustedProxyPolicy;
     private readonly ILogger<ProxyConfigurationLoader> _logger = logger;
     private readonly TimeProvider _timeProvider = timeProvider;
+    private readonly IProxyManualConfigurationSource? _manualSource = manualSource;
     private int _nextVersion;
 
     public async ValueTask<ProxyConfigurationLoadResult> LoadAsync(CancellationToken cancellationToken)
@@ -49,6 +59,7 @@ public sealed partial class ProxyConfigurationLoader(IMdravaDataDirectoryProvide
 
     private async ValueTask<ProxyConfigurationLoadResult> LoadCoreAsync(bool allocateVersion, bool ensureLayout, CancellationToken cancellationToken)
     {
+        if (_manualSource is not null) return await LoadProtectedAsync(allocateVersion, cancellationToken).ConfigureAwait(false);
         var sourceDirectory = _dataDirectoryProvider.GetSitesConfigDirectory();
         var operationalConfigPath = _dataDirectoryProvider.GetProxyOperationalConfigPath();
         var attemptedAtUtc = _timeProvider.GetUtcNow();
@@ -96,10 +107,12 @@ public sealed partial class ProxyConfigurationLoader(IMdravaDataDirectoryProvide
     }
 
     private ProxyConfigurationLoadResult BuildRuntimeResult(ProxyOptions options, ProxyOperationalOptions operationalOptions, bool allocateVersion,
-        DateTimeOffset attemptedAtUtc, string sourceDirectory, IReadOnlyList<string> siteFiles, ProxyConfigurationDiscovery discovery, int wouldBeVersion)
+        DateTimeOffset attemptedAtUtc, string sourceDirectory, IReadOnlyList<string> siteFiles, ProxyConfigurationDiscovery discovery, int wouldBeVersion,
+        ProxyManualConfigurationInput? protectedInput = null)
     {
         List<ProxyConfigurationFileError> errors = [];
-        var certificates = LoadCertificates(operationalOptions, _dataDirectoryProvider.GetDataDirectory(), errors);
+        var certificates = protectedInput is null ? LoadCertificates(operationalOptions, _dataDirectoryProvider.GetDataDirectory(), errors)
+            : LoadProtectedCertificates(operationalOptions, protectedInput, errors);
         if (errors.Count > 0)
         {
             DisposeCertificates(certificates);
@@ -109,7 +122,10 @@ public sealed partial class ProxyConfigurationLoader(IMdravaDataDirectoryProvide
         ProxyConfigurationSnapshot snapshot;
         try
         {
-            snapshot = ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(options, operationalOptions, ProxyAdminSecurityTokenPolicy.Resolve(operationalOptions.Admin, Environment.GetEnvironmentVariable), certificates, wouldBeVersion, _timeProvider.GetUtcNow(), sourceDirectory, siteFiles, discovery, upstreamTrust);
+            var token = protectedInput is null ? ProxyAdminSecurityTokenPolicy.Resolve(operationalOptions.Admin, Environment.GetEnvironmentVariable)
+                : ProxyAdminSecurityTokenPolicy.Resolve(operationalOptions.Admin, static _ => null);
+            snapshot = ProxyConfigurationRuntimeMapper.ToRuntimeSnapshot(options, operationalOptions, token, certificates, wouldBeVersion, _timeProvider.GetUtcNow(), sourceDirectory, siteFiles, discovery, upstreamTrust);
+            if (protectedInput is not null) snapshot = snapshot.WithAdminSecurity(protectedInput.Administrator);
         }
         catch (Exception exception) when (exception is InvalidDataException or ArgumentException)
         {

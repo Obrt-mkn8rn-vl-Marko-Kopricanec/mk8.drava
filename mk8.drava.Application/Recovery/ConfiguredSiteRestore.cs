@@ -6,12 +6,19 @@ using Mk8.Drava.Application.DAL.Registry;
 using Mk8.Drava.Application.DAL.NoConf;
 using Mk8.Drava.Application.DAL.Storage;
 using Mk8.Drava.Configuration;
+using Mk8.Drava.Application.DAL.Configuration.Loading;
+using Mk8.Drava.Application.DAL.Configuration.Paths;
+using Mk8.Drava.Application.BLL.Configuration;
+using Mk8.Drava.Application.BLL.ControlPlane.ConfigurationManagement;
+using Mk8.Drava.Application.INF.Configuration;
+using Mk8.Drava.Application.INF.Proxy.Forwarding;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Mk8.Drava.Application.Recovery;
 
 // Preparation never starts listeners, generates service credentials, restores leases or performs DNS/ACME writes.
 // Each new role receives its own provider-managed installation protection key.
-internal static class ConfiguredSiteRestore
+internal static partial class ConfiguredSiteRestore
 {
     public static async ValueTask<ConfiguredSiteRestoreResult> PrepareAsync(ConfiguredSiteRestoreRequest input, CancellationToken cancellationToken)
     {
@@ -27,11 +34,13 @@ internal static class ConfiguredSiteRestore
         if (result.Receipt.SchemaVersion != request.SchemaVersion)
             throw new InvalidDataException("Configured restore request and approved recovery schema differ.");
         Directory.Move(Path.Combine(recoveredPath, "registry"), Path.Combine(workspace.StagingDirectory, "application"));
-        PortablePolicyArchive? archive = null;
-        if (request.SchemaVersion == 2)
+        PortableRuntimeDocuments? documents = null;
+        if (request.SchemaVersion >= 2)
         {
             var policyDirectory = Path.Combine(workspace.StagingDirectory, "application", "policy");
-            archive = await PortablePolicyEscrow.LoadAsync(policyDirectory, request.Application.SiteId, request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+            documents = request.SchemaVersion == 3
+                ? await PortablePolicyEscrow.LoadRuntimeAsync(policyDirectory, request.Application.SiteId, request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false)
+                : new PortableRuntimeDocuments(await PortablePolicyEscrow.LoadAsync(policyDirectory, request.Application.SiteId, request.AllowCredentialEscrow, cancellationToken).ConfigureAwait(false), PortableManualConfigurationDocument.Empty);
             Directory.Delete(policyDirectory, recursive: true);
         }
         workspace.CreateDirectory("gateway");
@@ -45,7 +54,14 @@ internal static class ConfiguredSiteRestore
             File.Move(Path.Combine(recoveredPath, "files", file.Name), target, overwrite: false);
         }
         Directory.Delete(recoveredPath, recursive: true);
-        var prepared = await WriteRoleDocumentsAsync(workspace, request, result, archive, directories, cancellationToken).ConfigureAwait(false);
+        var manual = request.SchemaVersion == 3 ? documents?.ManualConfiguration : null;
+        var legacyManual = ImportApprovedManual(workspace, request);
+        if (legacyManual is not null)
+        {
+            if (request.SchemaVersion == 3) throw new InvalidDataException("Restore mixes protected manual inputs with legacy configuration placements.");
+            manual = legacyManual;
+        }
+        var prepared = await WriteRoleDocumentsAsync(workspace, request, result, documents, manual, directories, cancellationToken).ConfigureAwait(false);
         foreach (var directory in directories.OrderByDescending(static path => path.Length)) PrivateOwnerFile.SynchronizeDirectory(directory);
         cancellationToken.ThrowIfCancellationRequested();
         workspace.Publish();
@@ -58,7 +74,8 @@ internal static class ConfiguredSiteRestore
     }
 
     private static async ValueTask<ConfiguredSiteRestoreResult> WriteRoleDocumentsAsync(PrivateSiteWorkspace workspace,
-        ConfiguredSiteRestoreRequest request, SiteRecoveryResult result, PortablePolicyArchive? archive, HashSet<string> directories, CancellationToken cancellationToken)
+        ConfiguredSiteRestoreRequest request, SiteRecoveryResult result, PortableRuntimeDocuments? documents,
+        PortableManualConfigurationDocument? manual, HashSet<string> directories, CancellationToken cancellationToken)
     {
         const string applicationDocument = "roles/application/Environment/.env";
         const string gatewayDocument = "roles/gateway/Environment/.env";
@@ -69,7 +86,17 @@ internal static class ConfiguredSiteRestore
         var gatewayEnvironment = workspace.CreateDirectory(Path.Combine("roles", "gateway", "Environment"));
         directories.Add(applicationEnvironment);
         directories.Add(gatewayEnvironment);
-        await workspace.WriteAsync(applicationDocument, Encoding.UTF8.GetBytes(PortableConfiguration.Serialize(request.Application)), cancellationToken).ConfigureAwait(false);
+        var applicationSettings = new List<Supprocom.Secrets.SupprocomSecretSetting>
+        {
+            new("Drava:ApplicationBootstrap", BootstrapFile.Serialize(request.Application)),
+        };
+        if (manual is not null)
+        {
+            applicationSettings.Add(new Supprocom.Secrets.SupprocomSecretSetting(
+            PortableManualConfigurationSource.CollectionKey, manual.Reveal()));
+        }
+
+        await workspace.WriteAsync(applicationDocument, Encoding.UTF8.GetBytes(Supprocom.Secrets.SupprocomSecretDocument.Serialize(applicationSettings)), cancellationToken).ConfigureAwait(false);
         await workspace.WriteAsync(gatewayDocument, Encoding.UTF8.GetBytes(PortableConfiguration.Serialize(request.Gateway)), cancellationToken).ConfigureAwait(false);
         // Protect before recording bytes. Loading the published role must not change its receipt.
         var applicationPath = Path.Combine(workspace.StagingDirectory, applicationDocument);
@@ -78,22 +105,23 @@ internal static class ConfiguredSiteRestore
         var applicationRole = await PortableConfiguration.LoadRoleDocumentAsync<ApplicationBootstrap>(applicationPath, cancellationToken).ConfigureAwait(false);
         await using (applicationRole.ConfigureAwait(false))
         {
-            if (archive is not null)
+            if (documents is not null)
             {
                 var references = result.Receipt.Registry.PolicyEscrow?.References ?? throw new InvalidDataException("Recovered policy reference inventory is absent.");
                 var payloads = new PortablePolicyPayloadStore(applicationRole);
-                await payloads.RestoreAsync(archive, references, cancellationToken).ConfigureAwait(false);
+                await payloads.RestoreAsync(documents.PolicyArchive, references, cancellationToken).ConfigureAwait(false);
                 registryReceipt = await RegistrySnapshot.ValidatePreparedProtectedAsync(Path.Combine(workspace.StagingDirectory, "application"),
                     request.Application.SiteId, request.MaximumRegistryBytes,
                     await payloads.ReadSnapshotAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
             }
+            if (manual is not null) await ValidateManualRoleAsync(applicationRole, cancellationToken).ConfigureAwait(false);
         }
         _ = await PortableConfiguration.LoadDocumentAsync<GatewayBootstrap>(gatewayPath, cancellationToken).ConfigureAwait(false);
         var applicationBytes = await File.ReadAllBytesAsync(applicationPath, cancellationToken).ConfigureAwait(false);
         var gatewayBytes = await File.ReadAllBytesAsync(gatewayPath, cancellationToken).ConfigureAwait(false);
         var receipt = new ConfiguredSiteRestoreReceipt(request.SchemaVersion, request.ExpectedManifestSha256, registryReceipt,
             result.Receipt.Files, request.Placements, Convert.ToHexString(SHA256.HashData(applicationBytes)), Convert.ToHexString(SHA256.HashData(gatewayBytes)))
-        { PolicyReferences = result.Receipt.Registry.PolicyEscrow?.References };
+        { PolicyReferences = result.Receipt.Registry.PolicyEscrow?.References, ManualConfiguration = manual is null ? null : DescribeManualImport(manual) };
         var receiptBytes = Encoding.UTF8.GetBytes(BootstrapFile.Serialize(receipt));
         await workspace.WriteAsync("recovery.json", receiptBytes, cancellationToken).ConfigureAwait(false);
         foreach (var name in new[] { applicationDocument, gatewayDocument, "roles/application/Environment/.installation.key", "roles/gateway/Environment/.installation.key", "recovery.json" })
@@ -104,9 +132,21 @@ internal static class ConfiguredSiteRestore
         return new ConfiguredSiteRestoreResult(receipt, Convert.ToHexString(SHA256.HashData(receiptBytes)));
     }
 
+    private static async Task ValidateManualRoleAsync(PortableRole<ApplicationBootstrap> role, CancellationToken cancellationToken)
+    {
+        var paths = new Mk8.Drava.Application.DAL.Configuration.Paths.ApplicationDataDirectoryProvider(role.Configuration.StateDirectory);
+        var loader = new ProxyConfigurationLoader(paths, new ProxyDataDirectoryBootstrapper(paths), new SiteConfigurationParser(),
+            new ProxyAdminUrlPolicy(), new ProxyEndpointAddressPolicy(), new ProxyRelativeStoragePathPolicy(), new ProxyUrlSyntaxPolicy(),
+            new ProxyForwardedHeadersAddressPolicy(), NullLogger<ProxyConfigurationLoader>.Instance, TimeProvider.System,
+            new PortableUpstreamTrustMaterialSource(role.Configuration), new PortableManualConfigurationSource(role));
+        var result = await loader.ValidateAsync(cancellationToken).ConfigureAwait(false);
+        if (result is not ProxyConfigurationLoadResult.ValidatedResult)
+            throw new InvalidDataException("Recovered protected manual inputs fail current startup validation.");
+    }
+
     private static Dictionary<string, string> Validate(ConfiguredSiteRestoreRequest request)
     {
-        if (request.SchemaVersion is not (1 or 2) || (request.SchemaVersion == 2 && !request.AllowCredentialEscrow) || !Path.IsPathFullyQualified(request.DestinationDirectory) ||
+        if (request.SchemaVersion is not (1 or 2 or 3) || (request.SchemaVersion >= 2 && !request.AllowCredentialEscrow) || !Path.IsPathFullyQualified(request.DestinationDirectory) ||
             !string.Equals(Path.GetFullPath(request.DestinationDirectory), request.DestinationDirectory, StringComparison.Ordinal))
         {
             throw new InvalidDataException("Configured restore requires an approved supported schema and a canonical new destination.");

@@ -13,7 +13,7 @@ using Xunit;
 
 namespace Mk8.Drava.UnitTests;
 
-public sealed class ConfiguredSiteRestoreTests
+public sealed partial class ConfiguredSiteRestoreTests
 {
     private const long MaximumRegistryBytes = 16 * 1024 * 1024;
     // Loopback and finite unused ports describe an offline configuration fixture; no listener or certificate is created.

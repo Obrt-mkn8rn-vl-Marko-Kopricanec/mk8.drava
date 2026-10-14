@@ -10,6 +10,7 @@ internal static class InstallationCollectionBounds
     internal const int MaximumPolicySourceBytes = 512 * 1024;
     internal const string PolicyArchiveKey = "Drava:PolicyArchive:ApplicationBootstrap";
     internal const string PolicySourceKey = "Drava:PolicySource:ApplicationBootstrap";
+    internal const string ManualSourceKey = "Drava:ManualSource:ApplicationBootstrap";
     private const int ProtectionBytes = 29; // Pinned package: version1, nonce12, tag16.
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 

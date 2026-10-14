@@ -9,8 +9,17 @@ public static class PortablePolicyEscrow
 {
     private const string MetadataKey = "Drava:PolicyEscrow:Metadata";
     private const string ArchiveKey = "Drava:PolicyEscrow:Archive";
+    private const string ManualKey = "Drava:PolicyEscrow:ManualSource";
 
     public static async Task<PortablePolicyArchive> ReadApplicationArchiveAsync(string collectionPath, string siteId,
+        string stateDirectory, bool allowCredentialEscrow, CancellationToken cancellationToken)
+    {
+        var documents = await ReadApplicationRuntimeAsync(collectionPath, siteId, stateDirectory, allowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+        if (!documents.ManualConfiguration.IsEmpty) throw new InvalidDataException("Policy-only backup cannot omit protected manual configuration; use runtime recovery.");
+        return documents.PolicyArchive;
+    }
+
+    public static async Task<PortableRuntimeDocuments> ReadApplicationRuntimeAsync(string collectionPath, string siteId,
         string stateDirectory, bool allowCredentialEscrow, CancellationToken cancellationToken)
     {
         if (!allowCredentialEscrow) throw new InvalidOperationException("Policy escrow requires explicit credential approval.");
@@ -28,11 +37,22 @@ public static class PortablePolicyEscrow
             throw new InvalidDataException("Policy escrow source differs from the caller's stopped Application owner.");
         }
 
-        return role.ReadPolicyDocuments().Archive;
+        return new PortableRuntimeDocuments(role.ReadPolicyDocuments().Archive, role.ReadManualConfiguration());
     }
 
-    public static async Task ExportAsync(string environmentDirectory, string siteId, PortablePolicyArchive archive,
+    public static Task ExportAsync(string environmentDirectory, string siteId, PortablePolicyArchive archive,
+        bool allowCredentialEscrow, CancellationToken cancellationToken) =>
+        ExportCoreAsync(environmentDirectory, siteId, archive, manual: null, allowCredentialEscrow, cancellationToken);
+
+    public static Task ExportRuntimeAsync(string environmentDirectory, string siteId, PortableRuntimeDocuments documents,
         bool allowCredentialEscrow, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(documents);
+        return ExportCoreAsync(environmentDirectory, siteId, documents.PolicyArchive, documents.ManualConfiguration, allowCredentialEscrow, cancellationToken);
+    }
+
+    private static async Task ExportCoreAsync(string environmentDirectory, string siteId, PortablePolicyArchive archive,
+        PortableManualConfigurationDocument? manual, bool allowCredentialEscrow, CancellationToken cancellationToken)
     {
         if (!allowCredentialEscrow) throw new InvalidOperationException("Policy escrow requires explicit credential approval.");
         ArgumentException.ThrowIfNullOrWhiteSpace(environmentDirectory);
@@ -42,10 +62,22 @@ public static class PortablePolicyEscrow
         cancellationToken.ThrowIfCancellationRequested();
         var path = Path.Combine(environmentDirectory, ".env");
         var key = Path.Combine(environmentDirectory, ".installation.key");
-        var document = SupprocomSecretDocument.Serialize([
-            new SupprocomSecretSetting(MetadataKey, BootstrapFile.Serialize(new EscrowMetadata { SiteId = siteId })),
-            new SupprocomSecretSetting(ArchiveKey, archive.Reveal()),
-        ]);
+        var settings = new List<SupprocomSecretSetting>
+        {
+            new(MetadataKey, BootstrapFile.Serialize(new EscrowMetadata { SchemaVersion = manual is null ? 1 : 2, SiteId = siteId })),
+            new(ArchiveKey, archive.Reveal()),
+        };
+        if (manual is not null)
+        {
+            settings.Add(new SupprocomSecretSetting(ManualKey, manual.Reveal()));
+            // Use live-purpose keys for the existing partition quotas; the export key has a separate bound below.
+            InstallationCollectionBounds.RequireSettings([
+                new SupprocomSecretSetting(InstallationCollectionBounds.PolicyArchiveKey, archive.Reveal()),
+                new SupprocomSecretSetting(InstallationCollectionBounds.ManualSourceKey, manual.Reveal()),
+                settings[0],
+            ]);
+        }
+        var document = SupprocomSecretDocument.Serialize(settings);
         var bytes = Encoding.UTF8.GetBytes(document);
         var complete = false;
         FileStream? ownedFile = null;
@@ -78,6 +110,17 @@ public static class PortablePolicyEscrow
     public static async Task<PortablePolicyArchive> LoadAsync(string environmentDirectory, string siteId,
         bool allowCredentialEscrow, CancellationToken cancellationToken)
     {
+        var documents = await LoadCoreAsync(environmentDirectory, siteId, includeManual: false, allowCredentialEscrow, cancellationToken).ConfigureAwait(false);
+        return documents.PolicyArchive;
+    }
+
+    public static Task<PortableRuntimeDocuments> LoadRuntimeAsync(string environmentDirectory, string siteId,
+        bool allowCredentialEscrow, CancellationToken cancellationToken) =>
+        LoadCoreAsync(environmentDirectory, siteId, includeManual: true, allowCredentialEscrow, cancellationToken);
+
+    private static async Task<PortableRuntimeDocuments> LoadCoreAsync(string environmentDirectory, string siteId,
+        bool includeManual, bool allowCredentialEscrow, CancellationToken cancellationToken)
+    {
         if (!allowCredentialEscrow) throw new InvalidOperationException("Policy escrow requires explicit credential approval.");
         ArgumentException.ThrowIfNullOrWhiteSpace(environmentDirectory);
         RequireSite(siteId);
@@ -87,12 +130,23 @@ public static class PortablePolicyEscrow
             throw new InvalidDataException("Policy escrow refuses an unprotected archive.");
         var snapshot = await store.LoadAsync(cancellationToken).ConfigureAwait(false);
         InstallationDocumentGuard.Require(path, 1, InstallationCollectionBounds.MaximumDocumentBytes);
-        if (snapshot.Count != 2 || !snapshot.TryGetValue(MetadataKey, out var metadata) || !snapshot.TryGetValue(ArchiveKey, out var archive))
+        if (snapshot.Count != (includeManual ? 3 : 2) || !snapshot.TryGetValue(MetadataKey, out var metadata) || !snapshot.TryGetValue(ArchiveKey, out var archive))
             throw new InvalidDataException("Policy escrow contains missing or unexpected material.");
         var envelope = BootstrapFile.Parse<EscrowMetadata>(Encoding.UTF8.GetBytes(metadata));
-        if (envelope.SchemaVersion != 1 || !string.Equals(envelope.SiteId, siteId, StringComparison.Ordinal))
+        if (envelope.SchemaVersion != (includeManual ? 2 : 1) || !string.Equals(envelope.SiteId, siteId, StringComparison.Ordinal))
             throw new InvalidDataException("Policy escrow schema or site identity differs from the caller.");
-        return new PortablePolicyArchive(archive);
+        var manual = PortableManualConfigurationDocument.Empty;
+        if (includeManual)
+        {
+            if (!snapshot.TryGetValue(ManualKey, out var value)) throw new InvalidDataException("Runtime recovery is missing its protected manual configuration.");
+            manual = new PortableManualConfigurationDocument(value);
+            InstallationCollectionBounds.RequireSettings([
+                new SupprocomSecretSetting(InstallationCollectionBounds.PolicyArchiveKey, archive),
+                new SupprocomSecretSetting(InstallationCollectionBounds.ManualSourceKey, value),
+                new SupprocomSecretSetting(MetadataKey, metadata),
+            ]);
+        }
+        return new PortableRuntimeDocuments(new PortablePolicyArchive(archive), manual);
     }
 
     private static FileStream OpenNew(string path)

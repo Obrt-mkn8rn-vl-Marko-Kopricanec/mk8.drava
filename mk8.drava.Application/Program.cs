@@ -78,6 +78,7 @@ internal static class Program
         builder.Services.AddSingleton(bootstrap);
         builder.Services.AddSingleton<IUpstreamTrustMaterialSource>(upstreamTrust);
         builder.Services.AddProxyApplication(builder.Configuration);
+        builder.Services.AddSingleton<IProxyManualConfigurationSource>(new PortableManualConfigurationSource(role));
         var availability = new DestinationAvailabilityStore(TimeProvider.System);
         builder.Services.RemoveAll<DestinationAvailabilityStore>();
         builder.Services.AddSingleton(availability);

@@ -8,4 +8,5 @@ internal sealed record ConfiguredSiteRestoreReceipt(int SchemaVersion, string So
     string ApplicationBootstrapSha256, string GatewayBootstrapSha256)
 {
     public IReadOnlyList<PolicyPayloadReference>? PolicyReferences { get; init; }
+    public ManualConfigurationReceipt? ManualConfiguration { get; init; }
 }

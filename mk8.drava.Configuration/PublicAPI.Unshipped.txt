@@ -583,3 +583,22 @@ Mk8.Drava.Configuration.PortablePolicyEscrow
 static Mk8.Drava.Configuration.PortablePolicyEscrow.ReadApplicationArchiveAsync(string! collectionPath, string! siteId, string! stateDirectory, bool allowCredentialEscrow, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Mk8.Drava.Configuration.PortablePolicyArchive!>!
 static Mk8.Drava.Configuration.PortablePolicyEscrow.ExportAsync(string! environmentDirectory, string! siteId, Mk8.Drava.Configuration.PortablePolicyArchive! archive, bool allowCredentialEscrow, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 static Mk8.Drava.Configuration.PortablePolicyEscrow.LoadAsync(string! environmentDirectory, string! siteId, bool allowCredentialEscrow, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Mk8.Drava.Configuration.PortablePolicyArchive!>!
+Mk8.Drava.Configuration.PortableManualConfigurationDocument
+Mk8.Drava.Configuration.PortableManualConfigurationDocument.PortableManualConfigurationDocument(string! document) -> void
+static Mk8.Drava.Configuration.PortableManualConfigurationDocument.Empty.get -> Mk8.Drava.Configuration.PortableManualConfigurationDocument!
+Mk8.Drava.Configuration.PortableManualConfigurationDocument.IsEmpty.get -> bool
+Mk8.Drava.Configuration.PortableManualConfigurationDocument.Reveal() -> string!
+Mk8.Drava.Configuration.PortableManualConfigurationDocument.Equals(Mk8.Drava.Configuration.PortableManualConfigurationDocument? other) -> bool
+override Mk8.Drava.Configuration.PortableManualConfigurationDocument.Equals(object? obj) -> bool
+override Mk8.Drava.Configuration.PortableManualConfigurationDocument.GetHashCode() -> int
+override Mk8.Drava.Configuration.PortableManualConfigurationDocument.ToString() -> string!
+Mk8.Drava.Configuration.PortableRole<T>.ReadManualConfiguration() -> Mk8.Drava.Configuration.PortableManualConfigurationDocument!
+Mk8.Drava.Configuration.PortableRole<T>.RefreshManualConfigurationAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Mk8.Drava.Configuration.PortableManualConfigurationDocument!>
+Mk8.Drava.Configuration.PortableRuntimeDocuments
+Mk8.Drava.Configuration.PortableRuntimeDocuments.PortableRuntimeDocuments(Mk8.Drava.Configuration.PortablePolicyArchive! policyArchive, Mk8.Drava.Configuration.PortableManualConfigurationDocument! manualConfiguration) -> void
+Mk8.Drava.Configuration.PortableRuntimeDocuments.PolicyArchive.get -> Mk8.Drava.Configuration.PortablePolicyArchive!
+Mk8.Drava.Configuration.PortableRuntimeDocuments.ManualConfiguration.get -> Mk8.Drava.Configuration.PortableManualConfigurationDocument!
+override Mk8.Drava.Configuration.PortableRuntimeDocuments.ToString() -> string!
+static Mk8.Drava.Configuration.PortablePolicyEscrow.ReadApplicationRuntimeAsync(string! collectionPath, string! siteId, string! stateDirectory, bool allowCredentialEscrow, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Mk8.Drava.Configuration.PortableRuntimeDocuments!>!
+static Mk8.Drava.Configuration.PortablePolicyEscrow.ExportRuntimeAsync(string! environmentDirectory, string! siteId, Mk8.Drava.Configuration.PortableRuntimeDocuments! documents, bool allowCredentialEscrow, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+static Mk8.Drava.Configuration.PortablePolicyEscrow.LoadRuntimeAsync(string! environmentDirectory, string! siteId, bool allowCredentialEscrow, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Mk8.Drava.Configuration.PortableRuntimeDocuments!>!

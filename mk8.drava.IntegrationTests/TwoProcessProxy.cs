@@ -9,6 +9,7 @@ using Mk8.Drava.Configuration;
 using Mk8.Drava.Application.INF.Publication;
 using Mk8.Drava.Application.BLL.Registry;
 using Mk8.Drava.Application.BLL.Configuration;
+using Mk8.Drava.Application.DAL.Configuration.Loading;
 using Mk8.Drava.Application.DAL.Registry;
 using Mk8.Drava.Application.DAL.Acme;
 using Mk8.Drava.Application.DAL.Publication;
@@ -126,11 +127,33 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         await WaitUntilBoundAsync().ConfigureAwait(false);
     }
 
-    public Task WriteManualRouteAsync(int upstreamPort, int? listenerPort = null) => File.WriteAllTextAsync(Path.Combine(_directory, "app", "config", "sites", "service.json"), JsonSerializer.Serialize(new
+    public Task WriteManualRouteAsync(int upstreamPort, int? listenerPort = null) => WriteProtectedManualRouteAsync(JsonSerializer.Serialize(new
     {
         name = "test", host = "app.test", listeners = new[] { new { name = "http", address = "127.0.0.1", port = listenerPort ?? Port } },
         pathPrefix = "/", upstreams = new[] { new { name = "test", address = "127.0.0.1", port = upstreamPort } },
     }));
+
+    private async Task WriteProtectedManualRouteAsync(string site)
+    {
+        var store = new SupprocomSecretFileStore(new SupprocomSecretFileOptions
+        {
+            Directory = Path.GetDirectoryName(ApplicationBootstrapPath), ActiveName = Path.GetFileName(ApplicationBootstrapPath),
+            Protection = SecretFileProtection.InstallationBoundAesGcm, Import = SecretFileImport.None, Recovery = SecretFileRecovery.None,
+        }, "Production");
+        await store.UpdateDocumentAsync(settings =>
+        {
+            var current = settings.Single(static item => string.Equals(item.Key, PortableManualConfigurationSource.CollectionKey, StringComparison.OrdinalIgnoreCase));
+            var envelope = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(current.Value)
+                ?? throw new InvalidDataException("Synthetic protected manual envelope is absent.");
+            envelope["sites"] = JsonSerializer.SerializeToElement(new[] { new { name = "service.json", format = "json", document = site } });
+            return
+            [
+                .. settings.Where(static item => !string.Equals(item.Key, PortableManualConfigurationSource.CollectionKey, StringComparison.OrdinalIgnoreCase))
+,
+                new SupprocomSecretSetting(PortableManualConfigurationSource.CollectionKey, JsonSerializer.Serialize(envelope)),
+            ];
+        }, CancellationToken.None).ConfigureAwait(false);
+    }
 
     private TwoProcessProxy(string directory, int port, IpcEndpoint ipc, DevelopmentProcess? application, DevelopmentProcess gateway)
     {
@@ -146,7 +169,7 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000", Justification = "The factory transfers both process instances to the returned IAsyncDisposable fixture. Every failed construction/start path disposes them; successful fixture disposal kills and joins both child processes before deleting state.")]
-    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null, DevelopmentFlowTimeoutSettings? flowTimeouts = null, bool observeUploadTiming = false, bool observeForwarding = false, PrivateHttp2Settings? privateHttp2 = null, IReadOnlyList<UpstreamTrustMaterial>? upstreamTrust = null)
+    public static async Task<TwoProcessProxy> StartAsync(int upstreamPort, string host = "app.test", bool enrolledSite = false, bool manualRoute = true, int? dnsPort = null, bool discovery = false, bool administration = false, bool relayNode = false, bool startApplication = true, DevelopmentLifecycleSettings? lifecycleSettings = null, bool upstreamHttp2 = false, bool manualCache = false, bool upstreamHttp3 = false, IReadOnlyList<GatewayRequestBodyLimit>? requestBodyLimits = null, long? routeBodyLimit = null, int? responseHeadTimeoutMs = null, UpstreamTlsOptions? verifiedUpstreamTls = null, DevelopmentFlowTimeoutSettings? flowTimeouts = null, bool observeUploadTiming = false, bool observeForwarding = false, PrivateHttp2Settings? privateHttp2 = null, IReadOnlyList<UpstreamTrustMaterial>? upstreamTrust = null, IReadOnlyDictionary<string, string>? processEnvironment = null)
     {
         if (upstreamHttp2 && upstreamHttp3) throw new ArgumentException("Development upstream protocol must be unambiguous.", nameof(upstreamHttp3));
         if (flowTimeouts is not null && (!manualRoute || upstreamHttp2 || upstreamHttp3 || verifiedUpstreamTls is not null ||
@@ -170,11 +193,11 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
         var administratorToken = administration ? new SecretText(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))) : SecretText.Empty;
         var relayAddress = relayNode ? LocalRelayAddress() : null;
         var (applicationPath, gatewayPath) = await WriteBootstrapAsync(directory, state, gatewayState, ipc, port, tlsPort, registrationPort, managementPort, upstreamPort, host, enrolledSite, manualRoute, dnsPort, discovery, relayAddress, lifecycleSettings ?? new DevelopmentLifecycleSettings(), upstreamHttp2, manualCache, upstreamHttp3, requestBodyLimits, routeBodyLimit, responseHeadTimeoutMs, verifiedUpstreamTls, flowTimeouts, privateHttp2, observeForwarding, observeUploadTiming, ipcToken, administratorToken, upstreamTrust).ConfigureAwait(false);
-        var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath) : null;
+        var application = startApplication ? new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Application"), applicationPath, environment: processEnvironment) : null;
         DevelopmentProcess? gateway = null;
         try
         {
-            gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), gatewayPath);
+            gateway = new DevelopmentProcess(DevelopmentBinaryPaths.ForProject("mk8.drava.Gateway"), gatewayPath, environment: processEnvironment);
             var result = new TwoProcessProxy(directory, port, ipc, application, gateway) { IpcToken = ipcToken, AdministratorToken = administratorToken, TlsPort = tlsPort, RegistrationPort = registrationPort, ManagementPort = managementPort,
                 EnrolledNodeId = relayNode ? "remote" : "local", NodeRelayAddress = relayAddress ?? "127.0.0.1", };
             try { await result.WaitUntilBoundAsync().ConfigureAwait(false); return result; }
@@ -230,9 +253,29 @@ internal sealed class TwoProcessProxy : IAsyncDisposable
             await WriteFlowSettingsAsync(state, sites, host, port, upstreamPort, flowTimeouts).ConfigureAwait(false);
         var applicationPath = Path.Combine(directory, "application.json");
         var gatewayPath = Path.Combine(directory, "gateway.json");
-        await PortableFixtureFile.WriteAsync(applicationPath, PortableConfiguration.Serialize(applicationBootstrap)).ConfigureAwait(false);
+        var manual = await CaptureGeneratedManualFixtureAsync(state, sites).ConfigureAwait(false);
+        await PortableFixtureFile.WriteAsync(applicationPath, SupprocomSecretDocument.Serialize([
+            new SupprocomSecretSetting("Drava:ApplicationBootstrap", BootstrapFile.Serialize(applicationBootstrap)),
+            new SupprocomSecretSetting(PortableManualConfigurationSource.CollectionKey, manual.Reveal()),
+        ])).ConfigureAwait(false);
         await PortableFixtureFile.WriteAsync(gatewayPath, PortableConfiguration.Serialize(gatewayBootstrap)).ConfigureAwait(false);
         return (applicationPath, gatewayPath);
+    }
+
+    private static async Task<PortableManualConfigurationDocument> CaptureGeneratedManualFixtureAsync(string state, string sitesDirectory)
+    {
+        // These files were generated by this disposable fixture, never discovered from an installed site.
+        var operationalPath = Path.Combine(state, "config", "proxy.json");
+        var operational = File.Exists(operationalPath)
+            ? await File.ReadAllTextAsync(operationalPath, CancellationToken.None).ConfigureAwait(false) : "{}";
+        var sites = new List<ProxyManualSiteInput>();
+        foreach (var path in Directory.EnumerateFiles(sitesDirectory, "*.json"))
+        {
+            sites.Add(new ProxyManualSiteInput(Path.GetFileName(path), ProxyManualSiteFormat.Json,
+                await File.ReadAllTextAsync(path, CancellationToken.None).ConfigureAwait(false)));
+        }
+
+        return PortableManualConfigurationSource.Encode("development", operational, sites, []);
     }
 
     private static async Task WriteFlowSettingsAsync(string state, string sites, string host, int port, int upstreamPort, DevelopmentFlowTimeoutSettings settings)
