@@ -8,7 +8,7 @@ using Mk8.Drava.Transport.Protocol.V1;
 namespace Mk8.Drava.Transport.Relay;
 
 // One transport reader demultiplexes credits and bytes; credits return only after the caller consumes a whole frame.
-internal sealed class RelayDuplexStreamCore : RelayDuplexStream
+internal sealed partial class RelayDuplexStreamCore : RelayDuplexStream
 {
     private readonly IAsyncStreamReader<RelayFrame> _reader;
     private readonly RelayFrameWriter _writer;
@@ -22,14 +22,12 @@ internal sealed class RelayDuplexStreamCore : RelayDuplexStream
     private readonly BodyDigest _receivedDigest = new();
     private readonly BodyDigest _sentDigest = new();
     private readonly TaskCompletionSource _remoteEnd = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TaskCompletionSource _resourcesEnd = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _pump;
     private ByteString? _current;
     private int _offset;
     private int _inFlight;
     private int _sentEnd;
     private int _disposed;
-    private int _resourcesDisposed;
     private int _sentClose;
     private Exception? _failure;
 
@@ -58,13 +56,24 @@ internal sealed class RelayDuplexStreamCore : RelayDuplexStream
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException("Relay reads must be asynchronous.");
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException("Relay writes must be asynchronous.");
     public override void Flush() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-    public override Task FlushAsync(CancellationToken cancellationToken) { cancellationToken.ThrowIfCancellationRequested(); Flush(); return Task.CompletedTask; }
+    public override Task FlushAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        return Task.CompletedTask;
+    }
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        EnterOperation();
+        try { return await ReadCoreAsync(buffer, cancellationToken).ConfigureAwait(false); }
+        finally { ExitOperation(); }
+    }
+
+    private async ValueTask<int> ReadCoreAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+    {
         if (buffer.IsEmpty) return 0;
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
         await _reading.WaitAsync(linked.Token).ConfigureAwait(false);
@@ -93,7 +102,13 @@ internal sealed class RelayDuplexStreamCore : RelayDuplexStream
 
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        EnterOperation();
+        try { await WriteCoreAsync(buffer, cancellationToken).ConfigureAwait(false); }
+        finally { ExitOperation(); }
+    }
+
+    private async ValueTask WriteCoreAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+    {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
         await _writing.WaitAsync(linked.Token).ConfigureAwait(false);
         try
@@ -114,24 +129,41 @@ internal sealed class RelayDuplexStreamCore : RelayDuplexStream
 
     public override async Task CompleteWritesAsync(CancellationToken cancellationToken)
     {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
-        await _writing.WaitAsync(linked.Token).ConfigureAwait(false);
+        EnterOperation();
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+            await CompleteWritesCoreAsync(linked.Token).ConfigureAwait(false);
+        }
+        finally { ExitOperation(); }
+    }
+
+    private async Task CompleteWritesCoreAsync(CancellationToken cancellationToken)
+    {
+        await _writing.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (Interlocked.Exchange(ref _sentEnd, 1) != 0) return;
-            await _writer.WriteAsync(new RelayFrame { Complete = _sentDigest.Complete() }, linked.Token).ConfigureAwait(false);
+            await _writer.WriteAsync(new RelayFrame { Complete = _sentDigest.Complete() }, cancellationToken).ConfigureAwait(false);
         }
         finally { _writing.Release(); }
     }
 
     public override async Task FinishAsync(CancellationToken cancellationToken)
     {
-        await CompleteWritesAsync(cancellationToken).ConfigureAwait(false);
-        await _remoteEnd.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-        ThrowFailure();
-        if (Volatile.Read(ref _inFlight) != 0) throw new InvalidOperationException("Relay half-close requires consumed inbound bytes.");
-        if (Interlocked.Exchange(ref _sentClose, 1) != 0) return;
-        await _writer.WriteAsync(new RelayFrame { HalfClose = new HalfClose() }, cancellationToken).ConfigureAwait(false);
+        EnterOperation();
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
+            await CompleteWritesCoreAsync(linked.Token).ConfigureAwait(false);
+            await _remoteEnd.Task.WaitAsync(linked.Token).ConfigureAwait(false);
+            ThrowFailure();
+            if (Volatile.Read(ref _inFlight) != 0) throw new InvalidOperationException("Relay half-close requires consumed inbound bytes.");
+            if (Interlocked.Exchange(ref _sentClose, 1) != 0) return;
+            await _writer.WriteAsync(new RelayFrame { HalfClose = new HalfClose() }, linked.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && _failure is not null) { ThrowFailure(); throw; }
+        finally { ExitOperation(); }
     }
 
     private async Task PumpAsync(CancellationToken cancellationToken)
@@ -163,13 +195,13 @@ internal sealed class RelayDuplexStreamCore : RelayDuplexStream
             }
             if (!ended || !closed) throw new EndOfStreamException("Relay transport ended without verified completion and half-close.");
         }
-        catch (Exception exception) when (exception is InvalidDataException or IOException or RpcException or OperationCanceledException)
+        catch (Exception exception)
         {
             Volatile.Write(ref _failure, exception is RpcException ? new IOException("Authenticated relay transport failed.", exception) : exception);
             _body.Writer.TryComplete(_failure);
             _remoteEnd.TrySetResult();
-            await _lifetime.CancelAsync().ConfigureAwait(false);
-            _cancelTransport();
+            // The shared cancellation task is retained and joined by disposal, including callback failures.
+            _ = RequestCancellationAsync();
             throw;
         }
     }
@@ -201,31 +233,4 @@ internal sealed class RelayDuplexStreamCore : RelayDuplexStream
 
     private static Consumed.Types.Direction Opposite(Consumed.Types.Direction direction) =>
         direction == Consumed.Types.Direction.Request ? Consumed.Types.Direction.Response : Consumed.Types.Direction.Request;
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing && Interlocked.Exchange(ref _disposed, 1) == 0) { _lifetime.Cancel(); _cancelTransport(); }
-        base.Dispose(disposing);
-    }
-
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD003", Justification = "The pump and asynchronous resource-completion source are created and owned by this stream. Disposal cancels and joins them before disposing stream synchronization and hash state; the stream never captures a UI context.")]
-    public override async ValueTask DisposeAsync()
-    {
-        Dispose();
-        try { await _pump.ConfigureAwait(false); }
-        catch (Exception exception) when (exception is InvalidDataException or IOException or RpcException or OperationCanceledException) { }
-        if (Interlocked.Exchange(ref _resourcesDisposed, 1) == 0)
-        {
-            try
-            {
-                await _reading.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                await _writing.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                _receivedDigest.Dispose(); _sentDigest.Dispose(); _reading.Dispose(); _writing.Dispose(); _lifetime.Dispose();
-            }
-            finally { _resourcesEnd.TrySetResult(); }
-        }
-        else await _resourcesEnd.Task.ConfigureAwait(false);
-        await base.DisposeAsync().ConfigureAwait(false);
-        GC.SuppressFinalize(this);
-    }
 }
