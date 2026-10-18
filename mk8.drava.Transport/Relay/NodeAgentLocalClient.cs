@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Google.Protobuf;
@@ -32,22 +33,31 @@ public sealed class NodeAgentLocalClient : IDisposable
     public static async ValueTask<NodeAgentDescriptor?> ReadDescriptorAsync(RegistrationSiteTrust trust, string nodeId, string fingerprint, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(trust);
+        cancellationToken.ThrowIfCancellationRequested();
         var path = trust.NodeAgentDescriptorPath;
         if (path.Length == 0) return null;
-        if (!File.Exists(path)) return null;
-        RequirePrivateFile(path);
-        var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, bufferSize: 4096, useAsync: true);
-        await using var inputLifetime = input.ConfigureAwait(false);
-        if (input.Length is < 1 or > 16 * 1024) throw new InvalidDataException("Local node descriptor exceeds its bound.");
-        var bytes = new byte[checked((int)input.Length)];
-        await input.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
-        var descriptor = Decode(bytes);
-        if (!string.Equals(descriptor.SiteId, trust.SiteId, StringComparison.Ordinal) || !string.Equals(descriptor.NodeId, nodeId, StringComparison.Ordinal) ||
-            !string.Equals(descriptor.CertificateFingerprint, fingerprint, StringComparison.Ordinal))
+        var admitted = false;
+        try
         {
-            throw new InvalidDataException("Local agent does not match node enrollment.");
+            var input = InstallationDocumentGuard.OpenRead(path, 1, 16 * 1024);
+            await using var inputLifetime = input.ConfigureAwait(false);
+            admitted = true;
+            var length = input.Length;
+            if (length is < 1 or > 16 * 1024) throw new InvalidDataException("Local node descriptor exceeds its bound.");
+            var bytes = new byte[checked((int)length)];
+            await input.ReadExactlyAsync(bytes, cancellationToken).ConfigureAwait(false);
+            if (await input.ReadAsync(new byte[1], cancellationToken).ConfigureAwait(false) != 0)
+                throw new InvalidDataException("Local node descriptor changed while reading.");
+            var descriptor = Decode(bytes);
+            if (!string.Equals(descriptor.SiteId, trust.SiteId, StringComparison.Ordinal) || !string.Equals(descriptor.NodeId, nodeId, StringComparison.Ordinal) ||
+                !string.Equals(descriptor.CertificateFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("Local agent does not match node enrollment.");
+            }
+            return descriptor;
         }
-        return descriptor;
+        // Only failure to open a missing file permits direct registration.
+        catch (IOException exception) when (!admitted && IsMissingFile(exception)) { return null; }
     }
 
     public async ValueTask<NodeRelayEndpoint> ApplyAsync(RegistrationCommand command, CancellationToken cancellationToken)
@@ -82,23 +92,8 @@ public sealed class NodeAgentLocalClient : IDisposable
         }
     }
 
-    private static void RequirePrivateFile(string path)
-    {
-        var file = new FileInfo(path);
-        if (!Path.IsPathFullyQualified(path) || !file.Exists || file.LinkTarget is not null || file.Length is < 1 or > 16 * 1024) throw new InvalidDataException("Invalid private local agent file.");
-        var directory = file.Directory;
-        while (directory is not null)
-        {
-            if (directory.LinkTarget is not null) throw new InvalidDataException("Agent file cannot traverse a symbolic link.");
-            directory = directory.Parent;
-        }
-        if (!OperatingSystem.IsWindows())
-        {
-            const UnixFileMode denied = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
-            if ((File.GetUnixFileMode(path) & denied) != UnixFileMode.None || (File.GetUnixFileMode(file.DirectoryName!) & denied) != UnixFileMode.None)
-                throw new InvalidDataException("Local agent file and directory must be private.");
-        }
-    }
+    private static bool IsMissingFile(IOException exception) => exception.InnerException is Win32Exception error &&
+        (error.NativeErrorCode == 2 || (OperatingSystem.IsWindows() && error.NativeErrorCode == 3));
 
     public void Dispose() => _channel.Dispose();
 }

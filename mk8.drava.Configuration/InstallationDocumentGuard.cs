@@ -10,9 +10,16 @@ internal static partial class InstallationDocumentGuard
 {
     public static void Require(string path, long minimumBytes, long maximumBytes)
     {
+        using var stream = OpenRead(path, minimumBytes, maximumBytes);
+    }
+
+    // Collection and private installation-state readers retain the same object that passed admission.
+    internal static FileStream OpenRead(string path, long minimumBytes, long maximumBytes)
+    {
         var parent = RequireLocation(path);
-        using var stream = Open(path, parent);
-        RequireLength(stream, minimumBytes, maximumBytes);
+        var stream = Open(path, parent);
+        try { RequireLength(stream, minimumBytes, maximumBytes); return stream; }
+        catch { stream.Dispose(); throw; }
     }
 
     internal static void RequireDurabilitySupport()
@@ -43,7 +50,7 @@ internal static partial class InstallationDocumentGuard
 
     private static string RequireLocation(string path)
     {
-        if (!Path.IsPathFullyQualified(path) || !string.Equals(Path.GetFullPath(path), path, StringComparison.Ordinal) ||
+        if (!Path.IsPathFullyQualified(path) || Path.GetFileName(path).Length == 0 || !string.Equals(Path.GetFullPath(path), path, StringComparison.Ordinal) ||
             new FileInfo(path).LinkTarget is not null)
         {
             throw new InvalidDataException("Portable collection requires a canonical absolute non-symbolic file.");

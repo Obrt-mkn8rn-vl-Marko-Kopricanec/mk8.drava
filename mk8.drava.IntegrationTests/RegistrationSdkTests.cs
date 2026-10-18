@@ -36,17 +36,22 @@ public sealed class RegistrationSdkTests(ITestOutputHelper output)
         output.WriteLine("sdk_fixture: {0}", proxy.EvidenceId);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         using var registrationEvents = new DevelopmentRegistrationEvents();
-        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
-        var sdkOptions = customLifetimes ? Options(proxy) with { PendingRetrySeconds = 1, RenewJitterPercent = 0, ShutdownDeadlineMilliseconds = 1500, AgentDrainDeadlineMilliseconds = 500 } : Options(proxy);
+        var multipleBindings = !automaticDiscovery && !customLifetimes;
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            if (multipleBindings) options.Listen(IPAddress.Parse("127.0.0.2"), 0);
+            options.Listen(IPAddress.Loopback, 0);
+        });
+        var declared = Options(proxy) with { AdvertiseAddress = "127.0.0.1" };
+        var sdkOptions = customLifetimes ? declared with { PendingRetrySeconds = 1, RenewJitterPercent = 0, ShutdownDeadlineMilliseconds = 1500, AgentDrainDeadlineMilliseconds = 500 } : declared;
         builder.Services.AddDravaRegistration(automaticDiscovery ? sdkOptions with { MulticastDiscovery = true, GatewaySeeds = [] } : sdkOptions);
         var application = builder.Build();
         await using var applicationLifetime = application.ConfigureAwait(true);
         application.Run(context => context.Response.WriteAsync(string.Equals(context.Request.Path.Value, "/ready", StringComparison.Ordinal) ? "ready" : "sdk-body", context.RequestAborted));
         await application.StartAsync(CancellationToken.None).ConfigureAwait(true);
         var bound = application.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>() ?? throw new InvalidOperationException("Backend is not bound.");
-#pragma warning disable HLQ005 // Assert.Single verifies the exact bound-address cardinality; First would weaken this contract.
-        Assert.True(new Uri(Assert.Single(bound.Addresses)).Port > 0);
-#pragma warning restore HLQ005
+        Assert.Equal(multipleBindings ? 2 : 1, bound.Addresses.Count);
+        Assert.All(bound.Addresses, static address => Assert.True(new Uri(address).Port > 0));
         var state = application.Services.GetRequiredService<DravaRegistrationState>();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         while (state.Status?.Phase != RegistrationPhase.Ready) await Task.Delay(100, timeout.Token).ConfigureAwait(true);

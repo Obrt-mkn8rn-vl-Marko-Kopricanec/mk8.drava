@@ -68,6 +68,12 @@ retry/shutdown settings in that protected value. An omitted `instanceId` generat
 a fresh runtime instance identity. The readiness path must be served by the actual
 bound application before registration can become ready.
 
+With multiple listeners, the SDK selects an endpoint matching the configured
+advertised address and upstream protocol. Wildcard bindings require an address
+in the same IP family; an IPv6 wildcard alone does not prove IPv4 availability.
+Declare an IPv4 listener when advertising an IPv4 address. HTTP/2 upstreams require
+a bound HTTPS endpoint.
+
 Await configuration and validation before building or starting the host:
 
 ```csharp
@@ -80,6 +86,12 @@ explicit prepared snapshots. They are not fallback providers for the awaited
 protected loader. SDK configuration is captured at startup; changing accepted
 settings requires an owned restart. Registration readiness, route publication,
 certificate trust, DNS verification, leases and graceful drain still apply.
+
+The host's stopping signal immediately clears the SDK's ready observation. Concurrent stop calls
+join one renewal/drain/cleanup operation; cancelling a caller's wait leaves that
+operation owned by the service. The shutdown deadline limits new drain work, while
+already-started operations must settle before their transports can be disposed.
+Await host shutdown or asynchronous disposal to join that cleanup.
 
 The repository remains under development. Checkpoint tests do not establish
 Review acceptance, platform/native compatibility, peer adoption or authority to

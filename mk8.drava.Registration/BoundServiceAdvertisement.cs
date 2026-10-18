@@ -12,9 +12,14 @@ internal static class BoundServiceAdvertisement
         var endpoints = server.Features.Get<IServerAddressesFeature>() ?? throw new InvalidDataException("Registration requires an actual bound server endpoint.");
         foreach (var value in endpoints.Addresses)
         {
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var bound) || bound.Port is < 1 or > 65535 || bound.Scheme is not "http" and not "https") continue;
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var bound) || bound.Port is < 1 or > 65535 || bound.Scheme is not "http" and not "https" ||
+                bound.UserInfo.Length != 0 || !string.Equals(bound.AbsolutePath, "/", StringComparison.Ordinal) || bound.Query.Length != 0 || bound.Fragment.Length != 0)
+            {
+                continue;
+            }
             if (string.Equals(options.UpstreamProtocol, "http2", StringComparison.Ordinal) && !string.Equals(bound.Scheme, "https", StringComparison.Ordinal)) continue;
             var address = ResolveAddress(bound, options.AdvertiseAddress, outboundAddress);
+            if (address is null) continue;
             return new ServiceAdvertisement
             {
                 DeploymentId = options.DeploymentId, Address = address.ToString(), Port = bound.Port, Scheme = bound.Scheme,
@@ -24,16 +29,21 @@ internal static class BoundServiceAdvertisement
         throw new InvalidDataException("No actual bound server endpoint matches the registered upstream protocol.");
     }
 
-    private static IPAddress ResolveAddress(Uri bound, string advertised, IPAddress? outbound)
+    private static IPAddress? ResolveAddress(Uri bound, string advertised, IPAddress? outbound)
     {
-        var literal = IPAddress.TryParse(bound.Host.Trim('[', ']'), out var parsed) ? parsed : bound.IsLoopback ? IPAddress.Loopback : throw new InvalidDataException("Bound service requires a literal address.");
+        var literal = IPAddress.TryParse(bound.Host.Trim('[', ']'), out var parsed) ? parsed : bound.IsLoopback ? IPAddress.Loopback : null;
+        if (literal is null) return null;
         var wildcard = literal.Equals(IPAddress.Any) || literal.Equals(IPAddress.IPv6Any);
         if (advertised.Length > 0)
         {
             var requested = IPAddress.Parse(advertised);
-            if (!wildcard && !requested.Equals(literal)) throw new InvalidDataException("Advertised address differs from the actual bound service.");
-            return requested;
+            return Matches(literal, requested, wildcard) ? requested : null;
         }
-        return wildcard ? outbound ?? throw new InvalidDataException("Wildcard service binding requires a verified outbound interface address.") : literal;
+        return wildcard ? outbound is not null && Matches(literal, outbound, wildcard) ? outbound : null : literal;
     }
+
+    // The addresses feature does not prove that an IPv6 wildcard socket accepts IPv4.
+    private static bool Matches(IPAddress bound, IPAddress requested, bool wildcard) =>
+        !requested.Equals(IPAddress.Any) && !requested.Equals(IPAddress.IPv6Any) && !requested.IsIPv4MappedToIPv6 &&
+        bound.AddressFamily == requested.AddressFamily && (wildcard || requested.Equals(bound));
 }
