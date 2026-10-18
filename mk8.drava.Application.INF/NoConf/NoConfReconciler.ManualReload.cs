@@ -11,7 +11,7 @@ public sealed partial class NoConfReconciler
     {
         ArgumentNullException.ThrowIfNull(baseline);
         ArgumentNullException.ThrowIfNull(activate);
-        await _compilationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await EnterCompilationAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             EnsureBaseline();
@@ -38,6 +38,6 @@ public sealed partial class NoConfReconciler
             Volatile.Write(ref _failure, "");
             return snapshot;
         }
-        finally { _compilationGate.Release(); }
+        finally { ExitCompilation(); }
     }
 }

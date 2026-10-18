@@ -10,7 +10,7 @@ using Mk8.Drava.Application.INF.Runtime;
 
 namespace Mk8.Drava.Application.INF.NoConf;
 
-public sealed partial class NoConfReconciler : BackgroundService
+public sealed partial class NoConfReconciler : BackgroundService, IAsyncDisposable
 {
     private readonly RegistryCoordinator _registry;
     private readonly IPolicyRepository _policies;
@@ -74,7 +74,9 @@ public sealed partial class NoConfReconciler : BackgroundService
 
     public async ValueTask InitializeAsync(CancellationToken cancellationToken)
     {
+        ThrowIfStopping();
         await CompileLatestAsync(cancellationToken).ConfigureAwait(false);
+        ThrowIfStopping();
         if (Compiled is null || !_registry.StorageHealthy)
             throw new InvalidOperationException("Initial noconf policy and route compilation did not complete.");
     }
@@ -82,7 +84,7 @@ public sealed partial class NoConfReconciler : BackgroundService
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false);
-        await base.StartAsync(cancellationToken).ConfigureAwait(false);
+        await StartExecutionAsync(cancellationToken).ConfigureAwait(false);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -115,7 +117,7 @@ public sealed partial class NoConfReconciler : BackgroundService
 
     private async ValueTask CompileLatestAsync(CancellationToken cancellationToken)
     {
-        await _compilationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (!await TryEnterCompilationAsync(cancellationToken).ConfigureAwait(false)) return;
         try
         {
             EnsureBaseline();
@@ -149,19 +151,13 @@ public sealed partial class NoConfReconciler : BackgroundService
             if (Failure.Length == 0) InvalidPolicy(_logger, exception);
             Volatile.Write(ref _failure, "Noconf revision rejected; the last accepted snapshot is retained.");
         }
-        finally { _compilationGate.Release(); }
+        finally { ExitCompilation(); }
     }
 
     private void EnsureBaseline()
     {
         _baseline ??= _store.Snapshot;
         _version = Math.Max(_version, _store.Snapshot.Version);
-    }
-
-    public override void Dispose()
-    {
-        base.Dispose();
-        _compilationGate.Dispose();
     }
 
     private void InvalidateChangedProofs(CompiledNoConfSnapshot applied, RegistryState state, bool retainUnchangedPublication = false)

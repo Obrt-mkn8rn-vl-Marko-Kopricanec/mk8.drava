@@ -9,7 +9,7 @@ public sealed partial class NoConfReconciler
 {
     public async ValueTask<NoConfPolicyView> ReadPolicyViewAsync(bool includeHistory, CancellationToken cancellationToken)
     {
-        await _compilationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await EnterCompilationAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             RequireAuthority();
@@ -17,14 +17,14 @@ public sealed partial class NoConfReconciler
             var history = includeHistory ? await ReadHistoryAsync(cancellationToken).ConfigureAwait(false) : [];
             return new NoConfPolicyView(_acceptedPolicy, _appliedPolicyRevision, _store.Snapshot.Version, _registry.State.Revision, Failure, Compiled, history);
         }
-        finally { _compilationGate.Release(); }
+        finally { ExitCompilation(); }
     }
 
     public async ValueTask<bool> UpdatePolicyAsync(long expectedRevision, string? json, bool importFile, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(expectedRevision);
         if (importFile == (json is not null)) throw new InvalidDataException("Select one policy source.");
-        await _compilationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await EnterCompilationAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             RequireAuthority();
@@ -34,14 +34,14 @@ public sealed partial class NoConfReconciler
             var policy = importFile ? await _policySource.ReadAsync(cancellationToken).ConfigureAwait(false) ?? new NoConfPolicy() : NoConfPolicyFile.Parse(json ?? throw new InvalidDataException("Policy is missing."));
             return await AcceptPolicyAsync(policy, importFile ? "file" : "control", cancellationToken).ConfigureAwait(false);
         }
-        finally { _compilationGate.Release(); }
+        finally { ExitCompilation(); }
     }
 
     public async ValueTask<bool> RollbackPolicyAsync(long expectedRevision, long targetRevision, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(expectedRevision);
         ArgumentOutOfRangeException.ThrowIfLessThan(targetRevision, 1);
-        await _compilationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await EnterCompilationAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             RequireAuthority();
@@ -53,7 +53,7 @@ public sealed partial class NoConfReconciler
                 if (revision.Revision == targetRevision) return await AcceptPolicyAsync(NoConfPolicyFile.Parse(revision.CanonicalJson), "control", cancellationToken).ConfigureAwait(false);
             throw new InvalidDataException("Rollback target is not in retained policy history.");
         }
-        finally { _compilationGate.Release(); }
+        finally { ExitCompilation(); }
     }
 
     private async ValueTask<bool> AcceptPolicyAsync(NoConfPolicy policy, string source, CancellationToken cancellationToken)
